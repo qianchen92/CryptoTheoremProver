@@ -19,6 +19,9 @@ variable {G : Type u} [AddGroup G] [Fintype G]
 def ofValue (n : G) : CostGroup G :=
   ⟨n, 0⟩
 
+def nsmulCost (k : Nat) : Nat :=
+  Nat.clog 2 k
+
 noncomputable def sample (dist : PMF G) : PMF (CostGroup G) :=
   do
     let n ← dist
@@ -40,7 +43,7 @@ instance : Sub (CostGroup G) where
 
 instance : SMul Nat (CostGroup G) where
   smul k a :=
-    ⟨k • a.val, a.opCount + Nat.clog 2 k⟩
+    ⟨k • a.val, a.opCount + nsmulCost k⟩
 
 instance : HMul Nat (CostGroup G) (CostGroup G) where
   hMul k a := k • a
@@ -117,13 +120,13 @@ theorem opCount_eq_zero_of_mem_support_sample {dist : PMF G} {x : CostGroup G}
   (k • a).val = k • a.val := rfl
 
 @[simp] theorem nsmul_opCount (k : Nat) (a : CostGroup G) :
-  (k • a).opCount = a.opCount + Nat.clog 2 k := rfl
+  (k • a).opCount = a.opCount + nsmulCost k := rfl
 
 @[simp] theorem scalar_mul_val (k : Nat) (a : CostGroup G) :
   (k * a).val = k • a.val := rfl
 
 @[simp] theorem scalar_mul_opCount (k : Nat) (a : CostGroup G) :
-  (k * a).opCount = a.opCount + Nat.clog 2 k := rfl
+  (k * a).opCount = a.opCount + nsmulCost k := rfl
 
 end CostGroup
 end Crypto.Core.TracedStructure
