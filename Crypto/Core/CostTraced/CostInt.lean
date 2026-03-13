@@ -1,34 +1,34 @@
 namespace Crypto.Core.TracedStructure
 
-structure TracedInt where
+structure CostInt where
   val : Int
   addCount : Nat
   mulCount : Nat
 deriving Repr, DecidableEq
 
-namespace TracedInt
+namespace CostInt
 
-def ofValue (n : Int) : TracedInt :=
+def ofValue (n : Int) : CostInt :=
   ⟨n, 0, 0⟩
 
-instance : Neg TracedInt where
+instance : Neg CostInt where
   neg a := ⟨-a.val, a.addCount, a.mulCount⟩
 
-instance : Add TracedInt where
+instance : Add CostInt where
   add a b :=
     ⟨a.val + b.val, a.addCount + b.addCount + 1, a.mulCount + b.mulCount⟩
 
-instance : Zero TracedInt where
+instance : Zero CostInt where
   zero := ofValue 0
 
-instance : One TracedInt where
+instance : One CostInt where
   one := ofValue 1
 
-instance : Mul TracedInt where
+instance : Mul CostInt where
   mul a b :=
     ⟨a.val * b.val, a.addCount + b.addCount, a.mulCount + b.mulCount + 1⟩
 
-instance : Sub TracedInt where
+instance : Sub CostInt where
   sub a b :=
   ⟨a.val - b.val, a.addCount + b.addCount + 1, a.mulCount + b.mulCount⟩
 
@@ -38,53 +38,53 @@ instance : Sub TracedInt where
 
 @[simp] theorem init_mulCount (n : Int) : (ofValue n).mulCount = 0 := rfl
 
-@[simp] theorem zero_val : (0 : TracedInt).val = 0 := rfl
+@[simp] theorem zero_val : (0 : CostInt).val = 0 := rfl
 
-@[simp] theorem zero_addCount : (0 : TracedInt).addCount = 0 := rfl
+@[simp] theorem zero_addCount : (0 : CostInt).addCount = 0 := rfl
 
-@[simp] theorem zero_mulCount : (0 : TracedInt).mulCount = 0 := rfl
+@[simp] theorem zero_mulCount : (0 : CostInt).mulCount = 0 := rfl
 
-@[simp] theorem one_val : (1 : TracedInt).val = 1 := rfl
+@[simp] theorem one_val : (1 : CostInt).val = 1 := rfl
 
-@[simp] theorem one_addCount : (1 : TracedInt).addCount = 0 := rfl
+@[simp] theorem one_addCount : (1 : CostInt).addCount = 0 := rfl
 
-@[simp] theorem one_mulCount : (1 : TracedInt).mulCount = 0 := rfl
+@[simp] theorem one_mulCount : (1 : CostInt).mulCount = 0 := rfl
 
-@[simp] theorem neg_val (a : TracedInt) :
+@[simp] theorem neg_val (a : CostInt) :
   (-a).val = -a.val := rfl
 
-@[simp] theorem neg_addCount (a : TracedInt) :
+@[simp] theorem neg_addCount (a : CostInt) :
   (-a).addCount = a.addCount := rfl
 
-@[simp] theorem neg_mulCount (a : TracedInt) :
+@[simp] theorem neg_mulCount (a : CostInt) :
   (-a).mulCount = a.mulCount := rfl
 
-@[simp] theorem add_val (a b : TracedInt) :
+@[simp] theorem add_val (a b : CostInt) :
     (a + b).val = a.val + b.val := rfl
 
-@[simp] theorem mul_val (a b : TracedInt) :
+@[simp] theorem mul_val (a b : CostInt) :
     (a * b).val = a.val * b.val := rfl
 
-@[simp] theorem sub_val (a b : TracedInt) :
+@[simp] theorem sub_val (a b : CostInt) :
   (a - b).val = a.val - b.val := rfl
 
-@[simp] theorem add_addCount (a b : TracedInt) :
+@[simp] theorem add_addCount (a b : CostInt) :
     (a + b).addCount = a.addCount + b.addCount + 1 := rfl
 
-@[simp] theorem mul_mulCount (a b : TracedInt) :
+@[simp] theorem mul_mulCount (a b : CostInt) :
     (a * b).mulCount = a.mulCount + b.mulCount + 1 := rfl
 
-@[simp] theorem sub_addCount (a b : TracedInt) :
+@[simp] theorem sub_addCount (a b : CostInt) :
   (a - b).addCount = a.addCount + b.addCount + 1 := rfl
 
-@[simp] theorem add_mulCount (a b : TracedInt) :
+@[simp] theorem add_mulCount (a b : CostInt) :
     (a + b).mulCount = a.mulCount + b.mulCount := rfl
 
-@[simp] theorem mul_addCount (a b : TracedInt) :
+@[simp] theorem mul_addCount (a b : CostInt) :
     (a * b).addCount = a.addCount + b.addCount := rfl
 
-@[simp] theorem sub_mulCount (a b : TracedInt) :
+@[simp] theorem sub_mulCount (a b : CostInt) :
   (a - b).mulCount = a.mulCount + b.mulCount := rfl
 
-end TracedInt
+end CostInt
 end Crypto.Core.TracedStructure
