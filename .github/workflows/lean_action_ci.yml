@@ -2,14 +2,17 @@ name: Lean Action CI
 
 on:
   push:
-  pull_request:
+    branches: [main]
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read # Read access to repository contents
-  pages: write # Write access to GitHub Pages
-  id-token: write # Write access to ID tokens
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -17,5 +20,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
       - uses: leanprover/lean-action@v1
       - uses: leanprover-community/docgen-action@v1
+
+      - name: Inspect generated docs
+        run: |
+          echo "=== find index.html ==="
+          find . -name index.html
+          echo "=== list docbuild ==="
+          ls -R docbuild || true
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docbuild
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
