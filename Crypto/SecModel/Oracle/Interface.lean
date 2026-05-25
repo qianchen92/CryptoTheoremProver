@@ -1,17 +1,18 @@
-import Crypto.SecModel.Core
+import Crypto.Foundation.SecurityParameter
+import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 
 namespace Crypto.SecModel.Oracle
 
-open Crypto.SecModel
 universe uQuery uResponse
 
+/-- A stateful probabilistic oracle indexed by the security parameter. -/
 structure OracleFn (Query : Type uQuery) (Response : Type uResponse) where
   State : Type
   init : State
-  query : SecPar → State → Query → PMF (Response × State)
+  query : Crypto.SecPar → State → Query → PMF (Response × State)
 
 abbrev PolyDegreeOracleFn :=
-  SecPar → Polynomial Nat → PMF Nat
+  Crypto.SecPar → Polynomial Nat → PMF Nat
 
 end Crypto.SecModel.Oracle

@@ -1,7 +1,7 @@
 # Crypto
 
-## Complexity Traced structure
+## Costed protocol core
 
-We give the algebraic structure that tacks the complexity. For now we support adding operation cost for add, multiply, scaler product. 
+We give algebraic structures for cryptographic protocols that automatically accumulate operation costs.
 
-To use this, you need to import Crypto.Core.CostStructure
+To use this, import `Crypto.Core.Basic`.

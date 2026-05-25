@@ -1,26 +1,31 @@
 import Crypto.SecModel.Adversary.PPT
-import Crypto.SecModel.Oracle.Oracle
+import Crypto.SecModel.Oracle.Interface
 
 namespace Crypto.SecModel.Adversary
 
-open Crypto.SecModel
+open Crypto.Complexity
+
 universe uIn uOut uQuery uResponse
 
-abbrev OracleFn := Crypto.SecModel.Oracle.OracleFn
-abbrev PolyDegreeOracleFn := Crypto.SecModel.Oracle.PolyDegreeOracleFn
-
+/-- A semantic probabilistic adversary with oracle access. -/
 structure ProbabilisticOracleAdversary
     (Input : Type uIn) (Output : Type uOut)
     (Query : Type uQuery) (Response : Type uResponse) where
-  run : SecPar → OracleFn Query Response → PolyDegreeOracleFn → Input → PMF Output
+  run :
+    Crypto.SecPar →
+    Crypto.SecModel.Oracle.OracleFn Query Response →
+    Crypto.SecModel.Oracle.PolyDegreeOracleFn →
+    Input →
+    PMF Output
 
+/-- A polynomial-time oracle adversary with a polynomial query bound. -/
 structure PPTOracleAdversary
     (Input : Type uIn) (Output : Type uOut)
     (Query : Type uQuery) (Response : Type uResponse)
     extends ProbabilisticOracleAdversary Input Output Query Response where
-  runtime : SecPar → Nat
+  runtime : Crypto.SecPar → Nat
   runtime_isPoly : IsPolyBounded runtime
-  queryBound : SecPar → Nat
+  queryBound : Crypto.SecPar → Nat
   queryBound_isPoly : IsPolyBounded queryBound
 
 abbrev DistinguishingOracleAdversary
