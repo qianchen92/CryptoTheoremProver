@@ -1,7 +1,9 @@
-import Crypto.Complexity.Asymptotics
+import Crypto.Foundation.Asymptotics
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Complexity
+
+open Crypto.Foundation
 
 universe uIn uOut
 
