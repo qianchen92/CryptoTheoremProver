@@ -1,21 +1,29 @@
 # Crypto
 
-`Crypto` is an experimental Lean library for formalizing cryptographic
-constructions, security games, complexity bounds, assumptions, and reductions.
+`Crypto` is an experimental Lean library for building reusable, machine-checked
+cryptographic security proofs. The project aims to provide a small but coherent
+foundation for defining cryptographic schemes, security games, oracle access,
+PPT machines, asymptotic bounds, assumptions, reductions, and proof patterns.
 
-The current organization is intentionally layered. Lower layers contain general
-semantic infrastructure; higher layers define cryptographic objects and their
-security notions. This keeps primitive-specific definitions from leaking into
-the reusable core, while still allowing concrete constructions to share one
-game, oracle, cost, and asymptotic vocabulary.
+The library is organized around game-based security proofs. Core semantic
+notions such as randomized computations, games, oracles, cost models, and
+algebraic operations live in reusable lower layers. Cryptographic primitives,
+protocols, and assumptions build on those layers without duplicating the common
+machinery. This keeps primitive-specific definitions local while still allowing
+different constructions to share the same vocabulary for games, complexity, and
+advantages.
+
+The current codebase is intentionally minimal. It prioritizes stable boundaries
+and clear interfaces over a large catalog of primitives. The symmetric
+encryption hierarchy already includes syntax, correctness, and a one-time
+left-or-right security game; additional primitives and proof libraries can be
+added on top of the same framework.
 
 ## Organization
 
-The overall architecture is reasonable for the library's current stage: it
-separates foundational notions, executable/game semantics, complexity models,
-security notions, assumptions, primitives, protocols, and proof organization.
-Some top-level areas are still placeholders, but the boundaries are useful and
-should be preserved as the library grows.
+The project is intentionally layered. Lower layers contain general semantic
+infrastructure; higher layers define cryptographic objects, assumptions,
+protocols, and proof organization.
 
 ```text
 Crypto/
@@ -75,7 +83,7 @@ security games, reductions, and construction-specific definitions.
 
 ### `Crypto.Complexity`
 
-Semantic complexity notions used by adversaries and constructions.
+Semantic complexity notions used by constructions and security games.
 
 - `Machine` defines deterministic, probabilistic, timed, and PPT machines.
 - `CostBound` connects core costed computations to polynomial bounds.
@@ -92,7 +100,8 @@ Generic security notions that are not tied to one primitive.
   boolean games.
 - `Indistinguishability` states negligible distinguishing advantage.
 - `Hybrid` records finite hybrid sequences.
-- `Reduction` records adversary transformations.
+- `Reduction` records transformations between machine families or other
+  proof-relevant types.
 
 Primitive-specific games should live under the corresponding primitive; shared
 game combinators and proof patterns belong here.
@@ -103,7 +112,7 @@ Computational assumptions, organized by family.
 
 For example, discrete-logarithm assumptions belong under `Assumption.DL`. This
 area is currently skeletal, but it is the right place for assumption statements
-and their associated adversary/game interfaces.
+and their associated machine/game interfaces.
 
 ### `Crypto.Primitive`
 
@@ -116,8 +125,10 @@ The current encryption hierarchy contains:
 - `Primitive.Encryption.SymmetricEncryption.Correctness`
 - `Primitive.Encryption.SymmetricEncryption.OneTime`
 
-This placement is appropriate: the symmetric-encryption interface and one-time
-left-or-right security game are specific to that primitive, while the generic
+The main interface is
+`Crypto.Primitive.Encryption.SymmetricEncryption.Scheme Key Message Ciphertext`.
+Correctness and one-time left-or-right security live in the same namespace
+because they are definitions about symmetric-encryption schemes. The generic
 notions they use remain in `Core`, `Complexity`, and `Security`.
 
 ### `Crypto.Protocol`
@@ -158,7 +169,7 @@ back into higher layers.
 
 - Put universal mathematical or asymptotic vocabulary in `Foundation`.
 - Put reusable game, oracle, computation, cost, or algebra semantics in `Core`.
-- Put adversary and machine models in `Complexity`.
+- Put machine models, including PPT and oracle PPT machines, in `Complexity`.
 - Put generic advantage, indistinguishability, hybrid, and reduction notions in
   `Security`.
 - Put assumption families in `Assumption/<family>/`.
