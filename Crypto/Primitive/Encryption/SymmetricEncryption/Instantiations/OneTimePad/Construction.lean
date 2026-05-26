@@ -1,5 +1,5 @@
-import Crypto.Core.Algebra.Group
-import Crypto.Core.Distribution
+import Crypto.Infrastructure.Computation.Algebra.Group
+import Crypto.Infrastructure.Computation.Distribution
 import Crypto.Primitive.Encryption.SymmetricEncryption.Syntax
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
@@ -14,7 +14,7 @@ def publicParam
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)]
     (sec : Crypto.SecPar) :
-    Crypto.Core.Algebra.Group.AdditiveGroupParam where
+    Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam where
   Carrier := GroupFamily sec
   addGroup := inferInstance
   fintype := inferInstance
@@ -26,12 +26,12 @@ noncomputable def scheme
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] :
     Scheme
-      (fun _ => Crypto.Core.Algebra.Group.AdditiveGroupParam.{uGroup})
+      (fun _ => Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.{uGroup})
       (fun pp => pp.Carrier)
       (fun pp => pp.Carrier)
       (fun pp => pp.Carrier) where
   setup := fun sec => PMF.pure (publicParam GroupFamily sec)
-  keygen := fun pp => Crypto.Core.Distribution.uniformPMF pp.Carrier
+  keygen := fun pp => Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier
   encrypt := fun _pp key message => PMF.pure (key + message)
   decrypt := fun _pp key ciphertext => -key + ciphertext
 

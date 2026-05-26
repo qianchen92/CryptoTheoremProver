@@ -1,7 +1,7 @@
-import Crypto.Foundation.Asymptotics
-import Crypto.Complexity.PPT
+import Crypto.Infrastructure.Asymptotic.Bounds
+import Crypto.Infrastructure.Complexity.PPT
 import Crypto.Primitive.Encryption.SymmetricEncryption.Syntax
-import Crypto.Security.Advantage
+import Crypto.Infrastructure.GameBased.Advantage
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption
@@ -22,7 +22,7 @@ def oneTimeOracleSpec
     (Message : {sec : Crypto.SecPar} → Param sec → Type uMessage)
     (Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext)
     (sec : Crypto.SecPar) (pp : Param sec) :
-    Crypto.Core.Oracle.OracleSpec where
+    Crypto.Infrastructure.Computation.Oracle.OracleSpec where
   Name := OneTimeOracle
   Query
     | OneTimeOracle.challenge => ChallengeQuery (Message pp)
@@ -37,7 +37,8 @@ noncomputable def oneTimeEncryptionOracle
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext)
     (sec : Crypto.SecPar) (pp : Param sec) (b : Bool) :
-    Crypto.Core.Oracle.OracleEnv (oneTimeOracleSpec Message Ciphertext sec pp) where
+    Crypto.Infrastructure.Computation.Oracle.OracleEnv
+      (oneTimeOracleSpec Message Ciphertext sec pp) where
   State := Bool
   init := false
   query
@@ -58,9 +59,9 @@ noncomputable def oneTimeGame
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext)
-    (A : Crypto.Complexity.OraclePPTMachine
+    (A : Crypto.Infrastructure.Complexity.OraclePPTMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext))
-    (b : Bool) : Crypto.Core.Game Bool :=
+    (b : Bool) : Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
     PMF.bind (E.setup sec) fun pp =>
       A.run sec pp (oneTimeEncryptionOracle E sec pp b)
@@ -72,9 +73,9 @@ noncomputable def OneTimeAdvantage
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext)
-    (A : Crypto.Complexity.OraclePPTMachine
+    (A : Crypto.Infrastructure.Complexity.OraclePPTMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext)) : Crypto.SecPar → Real :=
-  Crypto.Security.Advantage (oneTimeGame E A false) (oneTimeGame E A true)
+  Crypto.Infrastructure.GameBased.Advantage (oneTimeGame E A false) (oneTimeGame E A true)
 
 /-- One-time security against PPT oracle adversaries. -/
 def OneTimeSecure
@@ -83,8 +84,8 @@ def OneTimeSecure
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext) : Prop :=
-  ∀ A : Crypto.Complexity.OraclePPTMachine
+  ∀ A : Crypto.Infrastructure.Complexity.OraclePPTMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
-    Crypto.Foundation.IsNegligible (OneTimeAdvantage E A)
+    Crypto.Infrastructure.Asymptotic.IsNegligible (OneTimeAdvantage E A)
 
 end Crypto.Primitive.Encryption.SymmetricEncryption

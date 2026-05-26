@@ -1,4 +1,4 @@
-import Crypto.Foundation.SecurityParameter
+import Crypto.Infrastructure.Asymptotic.SecurityParameter
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption

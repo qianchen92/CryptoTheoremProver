@@ -5,8 +5,8 @@ cryptographic security proofs. The project aims to provide a small but coherent
 foundation for defining cryptographic schemes, security games, oracle access,
 PPT machines, asymptotic bounds, assumptions, reductions, and proof patterns.
 
-The library is organized around game-based security proofs. Core semantic
-notions such as randomized computations, games, oracles, cost models, and
+The library is organized around game-based security proofs. Shared computation
+semantics such as randomized computations, games, oracles, cost models, and
 algebraic operations live in reusable lower layers. Cryptographic primitives,
 protocols, and assumptions build on those layers without duplicating the common
 machinery. This keeps primitive-specific definitions local while still allowing
@@ -28,52 +28,61 @@ protocols, and proof organization.
 ```text
 Crypto/
   Basic.lean
-  Foundation/
-    SecurityParameter.lean
-    Asymptotics.lean
-  Core/
-    Cost/
-    Algebra/
-    Oracle/
-    Computation.lean
-    Game.lean
-  Complexity/
-    Machine.lean
-    CostBound.lean
-    PPT.lean
-  Security/
-    Advantage.lean
-    Indistinguishability.lean
-    Hybrid.lean
-    Reduction.lean
+  Infrastructure/
+    Basic.lean
+    Asymptotic/
+      SecurityParameter.lean
+      Bounds.lean
+    Computation/
+      Cost/
+      Algebra/
+      Oracle/
+      Distribution.lean
+      Randomized.lean
+      Game.lean
+    Complexity/
+      Machine.lean
+      CostBound.lean
+      PPT.lean
+    GameBased/
+      Advantage.lean
+      Indistinguishability.lean
+      Hybrid.lean
+      Reduction.lean
+    ProofPattern/
   Assumption/
     DL/
   Primitive/
     Encryption/
       SymmetricEncryption/
   Protocol/
-  Proof/
 ```
 
-### `Crypto.Foundation`
+### `Crypto.Infrastructure`
 
-Foundational definitions with minimal project dependencies.
+Reusable infrastructure shared by assumptions, primitives, and protocols.
+This layer contains asymptotic vocabulary, randomized computations, games,
+oracles, cost models, machine models, and generic game-based proof concepts.
+
+### `Crypto.Infrastructure.Asymptotic`
+
+Asymptotic vocabulary with minimal project dependencies.
 
 - `SecPar` is the shared security parameter.
 - `IsPolyBounded` and `IsNegligible` define the asymptotic vocabulary used by
   complexity and security definitions.
 
-Files in this layer should not depend on cryptographic primitives, security
-games, or machine models.
+Files in this layer should not depend on cryptographic primitives,
+game-based security definitions, or machine models.
 
-### `Crypto.Core`
+### `Crypto.Infrastructure.Computation`
 
 Reusable semantic infrastructure for cryptographic formalization.
 
-- `Core.Cost` defines cost models and costed randomized computations.
-- `Core.Algebra` contains algebraic structures and costed algebraic operations.
-- `Core.Oracle` defines oracle interfaces and stateful oracle environments.
-- `Computation` packages security-parameter-indexed randomized computations
+- `Computation.Cost` defines cost models and costed randomized computations.
+- `Computation.Algebra` contains algebraic structures and costed operations.
+- `Computation.Oracle` defines oracle interfaces and stateful environments.
+- `Randomized` packages security-parameter-indexed randomized computations
   with cost information.
 - `Game` packages security experiments as security-parameter-indexed
   distributions.
@@ -81,7 +90,7 @@ Reusable semantic infrastructure for cryptographic formalization.
 This layer should remain primitive-agnostic. It is the shared substrate for
 security games, reductions, and construction-specific definitions.
 
-### `Crypto.Complexity`
+### `Crypto.Infrastructure.Complexity`
 
 Semantic complexity notions used by constructions and security games.
 
@@ -90,10 +99,11 @@ Semantic complexity notions used by constructions and security games.
 - `PPT` adds oracle PPT machines with security-parameter-indexed oracle specs,
   polynomial runtime, and uniform polynomial query bounds.
 
-This layer may depend on `Foundation` and `Core`, but should not depend on
-specific primitives or assumptions.
+This layer may depend on `Crypto.Infrastructure.Asymptotic` and
+`Crypto.Infrastructure.Computation`, but should not depend on specific
+primitives or assumptions.
 
-### `Crypto.Security`
+### `Crypto.Infrastructure.GameBased`
 
 Generic security notions that are not tied to one primitive.
 
@@ -133,18 +143,19 @@ The main interface is
 and `Ciphertext` are then indexed by those public parameters. Correctness and
 one-time left-or-right security live in the same namespace because they are
 definitions about symmetric-encryption schemes. The generic notions they use
-remain in `Core`, `Complexity`, and `Security`. The current instantiations
-include a group-based one-time pad whose setup exposes the finite nonempty
-additive group chosen for the security parameter.
+remain in `Infrastructure.Computation`, `Infrastructure.Complexity`, and
+`Infrastructure.GameBased`. The current instantiations include a group-based
+one-time pad whose setup exposes the finite nonempty additive group chosen for
+the security parameter.
 
 ### `Crypto.Protocol`
 
 Protocol-level definitions that compose primitives or model interactive
 protocols. This namespace is currently reserved for future protocol
-formalizations. Protocol code may depend on primitives, assumptions, security,
-complexity, and core infrastructure as needed.
+formalizations. Protocol code may depend on primitives, assumptions,
+game-based security, complexity, and computation infrastructure as needed.
 
-### `Crypto.Proof`
+### `Crypto.Infrastructure.ProofPattern`
 
 Reusable proof infrastructure and proof organization. This namespace is
 currently reserved for shared proof patterns, automation, and library-level
@@ -159,31 +170,35 @@ definition.
 The intended dependency direction is:
 
 ```text
-Foundation
-  -> Core
-  -> Complexity / Security
+Infrastructure.Asymptotic
+  -> Infrastructure.Computation
+  -> Infrastructure.Complexity / Infrastructure.GameBased
   -> Assumption / Primitive
-  -> Protocol / Proof
+  -> Protocol / Infrastructure.ProofPattern
 ```
 
-This is a guideline rather than a total order. For example, `Security` and
-`Complexity` both depend on `Core`, and primitive-specific security games may
-depend on both `Security` and `Complexity`. Avoid dependencies from lower layers
-back into higher layers.
+This is a guideline rather than a total order. For example,
+`Infrastructure.GameBased` and `Infrastructure.Complexity` both depend on
+`Infrastructure.Computation`, and primitive-specific security games may depend
+on both game-based and complexity infrastructure. Avoid dependencies from lower
+layers back into higher layers.
 
 ## Adding New Material
 
-- Put universal mathematical or asymptotic vocabulary in `Foundation`.
-- Put reusable game, oracle, computation, cost, or algebra semantics in `Core`.
-- Put machine models, including PPT and oracle PPT machines, in `Complexity`.
+- Put infrastructure code under `Infrastructure`.
+- Put security-parameter and asymptotic vocabulary in `Infrastructure.Asymptotic`.
+- Put reusable game, oracle, computation, cost, or algebra semantics in
+  `Infrastructure.Computation`.
+- Put machine models, including PPT and oracle PPT machines, in
+  `Infrastructure.Complexity`.
 - Put generic advantage, indistinguishability, hybrid, and reduction notions in
-  `Security`.
+  `Infrastructure.GameBased`.
 - Put assumption families in `Assumption/<family>/`.
 - Put primitive-specific syntax, correctness, and security games in
   `Primitive/<kind>/<primitive>/`, with `Syntax.lean` and `UC.lean` as direct
   files and `Properties/` and `Instantiations/` as subdirectories.
 - Put composed or interactive protocols in `Protocol`.
-- Put shared proof utilities in `Proof`.
+- Put shared proof utilities in `Infrastructure.ProofPattern`.
 
 When adding polymorphic Lean declarations, use descriptive universe names such
 as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,
@@ -194,5 +209,6 @@ as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,
 The library is early-stage. The current hierarchy is sound as a working
 architecture, but several namespaces are intentionally sparse. The next useful
 refinements are to fill out assumption interfaces, add more primitive families,
-and move common proof patterns into `Crypto.Security` or `Crypto.Proof` once
-they repeat across multiple constructions.
+and move common proof patterns into `Crypto.Infrastructure.GameBased` or
+`Crypto.Infrastructure.ProofPattern` once they repeat across multiple
+constructions.
