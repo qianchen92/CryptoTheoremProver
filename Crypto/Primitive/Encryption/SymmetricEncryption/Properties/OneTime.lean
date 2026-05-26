@@ -1,5 +1,5 @@
 import Crypto.Infrastructure.Asymptotic.Bounds
-import Crypto.Infrastructure.Complexity.PPT
+import Crypto.Infrastructure.Complexity.Machine
 import Crypto.Primitive.Encryption.SymmetricEncryption.Syntax
 import Crypto.Infrastructure.GameBased.Advantage
 import Mathlib.Probability.ProbabilityMassFunction.Monad
@@ -59,7 +59,7 @@ noncomputable def oneTimeGame
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext)
-    (A : Crypto.Infrastructure.Complexity.OraclePPTMachine
+    (A : Crypto.Infrastructure.Complexity.OracleMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext))
     (b : Bool) : Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
@@ -73,9 +73,20 @@ noncomputable def OneTimeAdvantage
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext)
-    (A : Crypto.Infrastructure.Complexity.OraclePPTMachine
+    (A : Crypto.Infrastructure.Complexity.OracleMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext)) : Crypto.SecPar → Real :=
   Crypto.Infrastructure.GameBased.Advantage (oneTimeGame E A false) (oneTimeGame E A true)
+
+/-- Perfect one-time security against unbounded oracle machines. -/
+def PerfectOneTimeSecure
+    {Param : Crypto.SecPar → Type uParam}
+    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
+    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
+    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
+    (E : Scheme Param Key Message Ciphertext) : Prop :=
+  ∀ A : Crypto.Infrastructure.Complexity.OracleMachine
+      Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
+    OneTimeAdvantage E A = fun _ => 0
 
 /-- One-time security against PPT oracle adversaries. -/
 def OneTimeSecure
@@ -86,6 +97,18 @@ def OneTimeSecure
     (E : Scheme Param Key Message Ciphertext) : Prop :=
   ∀ A : Crypto.Infrastructure.Complexity.OraclePPTMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
-    Crypto.Infrastructure.Asymptotic.IsNegligible (OneTimeAdvantage E A)
+    Crypto.Infrastructure.Asymptotic.IsNegligible (OneTimeAdvantage E A.toOracleMachine)
+
+/-- Perfect one-time security implies PPT one-time security. -/
+theorem PerfectOneTimeSecure.toOneTimeSecure
+    {Param : Crypto.SecPar → Type uParam}
+    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
+    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
+    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
+    {E : Scheme Param Key Message Ciphertext} :
+    PerfectOneTimeSecure E → OneTimeSecure E := by
+  intro hPerfect A
+  rw [hPerfect A.toOracleMachine]
+  exact Crypto.Infrastructure.Asymptotic.isNegligible_zero
 
 end Crypto.Primitive.Encryption.SymmetricEncryption

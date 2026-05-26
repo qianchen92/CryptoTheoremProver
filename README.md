@@ -15,9 +15,10 @@ advantages.
 
 The current codebase is intentionally minimal. It prioritizes stable boundaries
 and clear interfaces over a large catalog of primitives. The symmetric
-encryption hierarchy already includes syntax, correctness, and a one-time
-left-or-right security game; additional primitives and proof libraries can be
-added on top of the same framework.
+encryption hierarchy already includes syntax, correctness, one-time
+left-or-right security, and a group-based one-time pad with correctness and
+perfect one-time security proofs. Additional primitives and proof libraries can
+be added on top of the same framework.
 
 ## Organization
 
@@ -43,7 +44,6 @@ Crypto/
     Complexity/
       Machine.lean
       CostBound.lean
-      PPT.lean
     GameBased/
       Advantage.lean
       Indistinguishability.lean
@@ -94,9 +94,10 @@ security games, reductions, and construction-specific definitions.
 
 Semantic complexity notions used by constructions and security games.
 
-- `Machine` defines deterministic, probabilistic, timed, and PPT machines.
+- `Machine` defines deterministic, probabilistic, timed, PPT, oracle, and
+  oracle PPT machines.
 - `CostBound` connects core costed computations to polynomial bounds.
-- `PPT` adds oracle PPT machines with security-parameter-indexed oracle specs,
+- Oracle PPT machines carry security-parameter-indexed oracle specs,
   polynomial runtime, and uniform polynomial query bounds.
 
 This layer may depend on `Crypto.Infrastructure.Asymptotic` and
@@ -142,11 +143,17 @@ The main interface is
 `setup` samples public parameters from the security parameter; `Key`, `Message`,
 and `Ciphertext` are then indexed by those public parameters. Correctness and
 one-time left-or-right security live in the same namespace because they are
-definitions about symmetric-encryption schemes. The generic notions they use
-remain in `Infrastructure.Computation`, `Infrastructure.Complexity`, and
-`Infrastructure.GameBased`. The current instantiations include a group-based
-one-time pad whose setup exposes the finite nonempty additive group chosen for
-the security parameter.
+definitions about symmetric-encryption schemes. `OneTimeSecure` is the PPT
+notion, while `PerfectOneTimeSecure` quantifies over unbounded oracle machines
+and requires exact zero advantage. The generic notions they use remain in
+`Infrastructure.Computation`, `Infrastructure.Complexity`, and
+`Infrastructure.GameBased`.
+
+The current instantiations include a group-based one-time pad. Its setup
+exposes the finite nonempty additive group chosen for the security parameter;
+the construction encrypts by addition and decrypts by subtraction. The library
+proves both correctness and perfect one-time security for this construction,
+and derives PPT one-time security from the perfect theorem.
 
 ### `Crypto.Protocol`
 
@@ -189,7 +196,7 @@ layers back into higher layers.
 - Put security-parameter and asymptotic vocabulary in `Infrastructure.Asymptotic`.
 - Put reusable game, oracle, computation, cost, or algebra semantics in
   `Infrastructure.Computation`.
-- Put machine models, including PPT and oracle PPT machines, in
+- Put machine models, including PPT, oracle, and oracle PPT machines, in
   `Infrastructure.Complexity`.
 - Put generic advantage, indistinguishability, hybrid, and reduction notions in
   `Infrastructure.GameBased`.
@@ -209,6 +216,7 @@ as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,
 The library is early-stage. The current hierarchy is sound as a working
 architecture, but several namespaces are intentionally sparse. The next useful
 refinements are to fill out assumption interfaces, add more primitive families,
-and move common proof patterns into `Crypto.Infrastructure.GameBased` or
+connect costed implementations to concrete constructions, and move common proof
+patterns into `Crypto.Infrastructure.GameBased` or
 `Crypto.Infrastructure.ProofPattern` once they repeat across multiple
 constructions.

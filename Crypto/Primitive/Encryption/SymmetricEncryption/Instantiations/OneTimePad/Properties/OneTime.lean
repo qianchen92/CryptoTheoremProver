@@ -71,7 +71,7 @@ theorem oneTimeGame_false_eq_true
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)]
-    (A : Crypto.Infrastructure.Complexity.OraclePPTMachine
+    (A : Crypto.Infrastructure.Complexity.OracleMachine
       (fun _ => AdditiveGroupParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
@@ -81,12 +81,12 @@ theorem oneTimeGame_false_eq_true
   exact congrArg (A.run sec (publicParam GroupFamily sec))
     (oneTimeEncryptionOracle_false_eq_true GroupFamily sec)
 
-/-- Every oracle PPT machine has zero one-time advantage against the group one-time pad. -/
+/-- Every oracle machine has zero one-time advantage against the group one-time pad. -/
 theorem oneTimeAdvantage_eq_zero
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)]
-    (A : Crypto.Infrastructure.Complexity.OraclePPTMachine
+    (A : Crypto.Infrastructure.Complexity.OracleMachine
       (fun _ => AdditiveGroupParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
@@ -95,14 +95,21 @@ theorem oneTimeAdvantage_eq_zero
   simp [OneTimeAdvantage, Crypto.Infrastructure.GameBased.Advantage,
     Crypto.Infrastructure.GameBased.AcceptProb, oneTimeGame_false_eq_true GroupFamily A]
 
-/-- One-time security of the group one-time pad. -/
+/-- Perfect one-time security of the group one-time pad. -/
+theorem perfectOneTimeSecure
+    (GroupFamily : Crypto.SecPar → Type uGroup)
+    [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
+    [∀ sec, Nonempty (GroupFamily sec)] :
+    PerfectOneTimeSecure (scheme GroupFamily) := by
+  intro A
+  exact oneTimeAdvantage_eq_zero GroupFamily A
+
+/-- PPT one-time security of the group one-time pad. -/
 theorem oneTimeSecure
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] :
     OneTimeSecure (scheme GroupFamily) := by
-  intro A
-  rw [oneTimeAdvantage_eq_zero GroupFamily A]
-  exact Crypto.Infrastructure.Asymptotic.isNegligible_zero
+  exact PerfectOneTimeSecure.toOneTimeSecure (perfectOneTimeSecure GroupFamily)
 
 end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
