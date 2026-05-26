@@ -26,7 +26,7 @@ structure PPTMachine (Input : Type uIn) (Output : Type uOut)
   runtime_isPoly : IsPolyBounded runtime
 
 /-- A probabilistic machine with adaptive access to an oracle environment. -/
-structure OracleMachine
+structure ProbabilisticOracleMachine
     (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
     (Spec :
       (sec : Crypto.SecPar) →
@@ -39,17 +39,26 @@ structure OracleMachine
       (Spec sec input) →
     PMF (Output sec)
 
-/-- A probabilistic polynomial-time machine with adaptive access to an oracle environment. -/
-structure OraclePPTMachine
+/-- An oracle machine equipped with uniform runtime and per-oracle query bounds. -/
+structure TimedOracleMachine
     (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
     (Spec :
       (sec : Crypto.SecPar) →
       Input sec →
       Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse})
-    extends OracleMachine Input Output Spec where
+    extends ProbabilisticOracleMachine Input Output Spec where
   runtime : Crypto.SecPar → Nat
-  runtime_isPoly : IsPolyBounded runtime
   queryBound : (sec : Crypto.SecPar) → (input : Input sec) → (Spec sec input).Name → Nat
+
+/-- A probabilistic polynomial-time oracle machine. -/
+structure PPTOracleMachine
+    (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
+    (Spec :
+      (sec : Crypto.SecPar) →
+      Input sec →
+      Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse})
+    extends TimedOracleMachine Input Output Spec where
+  runtime_isPoly : IsPolyBounded runtime
   queryBound_polyBound : Crypto.SecPar → Nat
   queryBound_polyBound_isPoly : IsPolyBounded queryBound_polyBound
   queryBound_le_polyBound :

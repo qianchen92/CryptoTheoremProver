@@ -59,7 +59,7 @@ noncomputable def oneTimeGame
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext)
-    (A : Crypto.Infrastructure.Complexity.OracleMachine
+    (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext))
     (b : Bool) : Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
@@ -73,7 +73,7 @@ noncomputable def OneTimeAdvantage
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext)
-    (A : Crypto.Infrastructure.Complexity.OracleMachine
+    (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext)) : Crypto.SecPar → Real :=
   Crypto.Infrastructure.GameBased.Advantage (oneTimeGame E A false) (oneTimeGame E A true)
 
@@ -84,7 +84,7 @@ def PerfectOneTimeSecure
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext) : Prop :=
-  ∀ A : Crypto.Infrastructure.Complexity.OracleMachine
+  ∀ A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
     OneTimeAdvantage E A = fun _ => 0
 
@@ -95,9 +95,10 @@ def OneTimeSecure
     {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
     {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
     (E : Scheme Param Key Message Ciphertext) : Prop :=
-  ∀ A : Crypto.Infrastructure.Complexity.OraclePPTMachine
+  ∀ A : Crypto.Infrastructure.Complexity.PPTOracleMachine
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
-    Crypto.Infrastructure.Asymptotic.IsNegligible (OneTimeAdvantage E A.toOracleMachine)
+    Crypto.Infrastructure.Asymptotic.IsNegligible
+      (OneTimeAdvantage E A.toProbabilisticOracleMachine)
 
 /-- Perfect one-time security implies PPT one-time security. -/
 theorem PerfectOneTimeSecure.toOneTimeSecure
@@ -108,7 +109,7 @@ theorem PerfectOneTimeSecure.toOneTimeSecure
     {E : Scheme Param Key Message Ciphertext} :
     PerfectOneTimeSecure E → OneTimeSecure E := by
   intro hPerfect A
-  rw [hPerfect A.toOracleMachine]
+  rw [hPerfect A.toProbabilisticOracleMachine]
   exact Crypto.Infrastructure.Asymptotic.isNegligible_zero
 
 end Crypto.Primitive.Encryption.SymmetricEncryption

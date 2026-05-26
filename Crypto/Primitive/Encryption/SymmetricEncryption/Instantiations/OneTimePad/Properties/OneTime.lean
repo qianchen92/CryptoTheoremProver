@@ -71,7 +71,7 @@ theorem oneTimeGame_false_eq_true
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)]
-    (A : Crypto.Infrastructure.Complexity.OracleMachine
+    (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
       (fun _ => AdditiveGroupParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
@@ -86,7 +86,7 @@ theorem oneTimeAdvantage_eq_zero
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)]
-    (A : Crypto.Infrastructure.Complexity.OracleMachine
+    (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
       (fun _ => AdditiveGroupParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
