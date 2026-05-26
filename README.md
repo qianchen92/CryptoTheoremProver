@@ -87,7 +87,8 @@ Semantic complexity notions used by constructions and security games.
 
 - `Machine` defines deterministic, probabilistic, timed, and PPT machines.
 - `CostBound` connects core costed computations to polynomial bounds.
-- `PPT` adds oracle PPT machines with polynomial runtime and query bounds.
+- `PPT` adds oracle PPT machines with security-parameter-indexed oracle specs,
+  polynomial runtime, and uniform polynomial query bounds.
 
 This layer may depend on `Foundation` and `Core`, but should not depend on
 specific primitives or assumptions.
@@ -127,10 +128,14 @@ The current encryption hierarchy contains:
 - `Primitive.Encryption.SymmetricEncryption.Instantiations`
 
 The main interface is
-`Crypto.Primitive.Encryption.SymmetricEncryption.Scheme Key Message Ciphertext`.
-Correctness and one-time left-or-right security live in the same namespace
-because they are definitions about symmetric-encryption schemes. The generic
-notions they use remain in `Core`, `Complexity`, and `Security`.
+`Crypto.Primitive.Encryption.SymmetricEncryption.Scheme Param Key Message Ciphertext`.
+`setup` samples public parameters from the security parameter; `Key`, `Message`,
+and `Ciphertext` are then indexed by those public parameters. Correctness and
+one-time left-or-right security live in the same namespace because they are
+definitions about symmetric-encryption schemes. The generic notions they use
+remain in `Core`, `Complexity`, and `Security`. The current instantiations
+include a group-based one-time pad whose setup exposes the finite nonempty
+additive group chosen for the security parameter.
 
 ### `Crypto.Protocol`
 

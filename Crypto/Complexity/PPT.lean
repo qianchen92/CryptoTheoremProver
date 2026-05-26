@@ -10,16 +10,21 @@ universe uIn uOut uOracle uQuery uResponse uState
 
 /-- A probabilistic polynomial-time machine with adaptive access to an oracle environment. -/
 structure OraclePPTMachine
-    (Input : Type uIn) (Output : Type uOut)
-    (Spec : Crypto.Core.Oracle.OracleSpec.{uOracle, uQuery, uResponse}) where
+    (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
+    (Spec :
+      (sec : Crypto.SecPar) →
+      Input sec →
+      Crypto.Core.Oracle.OracleSpec.{uOracle, uQuery, uResponse}) where
   run :
-    Crypto.SecPar →
-    Crypto.Core.Oracle.OracleEnv.{uOracle, uQuery, uResponse, uState} Spec →
-    Input →
-    PMF Output
+    (sec : Crypto.SecPar) →
+    (input : Input sec) →
+    Crypto.Core.Oracle.OracleEnv.{uOracle, uQuery, uResponse, uState} (Spec sec input) →
+    PMF (Output sec)
   runtime : Crypto.SecPar → Nat
   runtime_isPoly : IsPolyBounded runtime
-  queryBound : Spec.Name → Crypto.SecPar → Nat
-  queryBound_isPoly : ∀ name, IsPolyBounded (queryBound name)
+  queryBound : (sec : Crypto.SecPar) → (input : Input sec) → (Spec sec input).Name → Nat
+  queryBound_polyBound : Crypto.SecPar → Nat
+  queryBound_polyBound_isPoly : IsPolyBounded queryBound_polyBound
+  queryBound_le_polyBound : ∀ sec input name, queryBound sec input name ≤ queryBound_polyBound sec
 
 end Crypto.Complexity
