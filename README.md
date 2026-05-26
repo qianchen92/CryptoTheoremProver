@@ -122,8 +122,9 @@ security definitions.
 The current encryption hierarchy contains:
 
 - `Primitive.Encryption.SymmetricEncryption.Syntax`
-- `Primitive.Encryption.SymmetricEncryption.Correctness`
-- `Primitive.Encryption.SymmetricEncryption.OneTime`
+- `Primitive.Encryption.SymmetricEncryption.UC`
+- `Primitive.Encryption.SymmetricEncryption.Properties`
+- `Primitive.Encryption.SymmetricEncryption.Instantiations`
 
 The main interface is
 `Crypto.Primitive.Encryption.SymmetricEncryption.Scheme Key Message Ciphertext`.
@@ -174,7 +175,8 @@ back into higher layers.
   `Security`.
 - Put assumption families in `Assumption/<family>/`.
 - Put primitive-specific syntax, correctness, and security games in
-  `Primitive/<kind>/<primitive>/`.
+  `Primitive/<kind>/<primitive>/`, with `Syntax.lean` and `UC.lean` as direct
+  files and `Properties/` and `Instantiations/` as subdirectories.
 - Put composed or interactive protocols in `Protocol`.
 - Put shared proof utilities in `Proof`.
 
