@@ -63,7 +63,8 @@ theorem oneTimeEncryptionOracle_false_eq_true
   funext name _querySec used query
   cases name
   cases used
-  · simpa [publicParam] using challengeDistribution_eq (GroupFamily sec) query.1 query.2
+  · simpa [publicParam, PMF.pure_bind] using
+      challengeDistribution_eq (GroupFamily sec) query.1 query.2
   · rfl
 
 /-- The two one-time games of the group one-time pad are identical. -/
@@ -77,7 +78,16 @@ theorem oneTimeGame_false_eq_true
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
     oneTimeGame (scheme GroupFamily) A false = oneTimeGame (scheme GroupFamily) A true := by
   funext sec
-  simp only [oneTimeGame, scheme, PMF.pure_bind]
+  change
+    PMF.bind (PMF.pure (publicParam GroupFamily sec))
+      (fun pp => PMF.bind
+        (A.run sec pp (oneTimeEncryptionOracle (scheme GroupFamily) sec pp false))
+        fun output => PMF.pure output) =
+    PMF.bind (PMF.pure (publicParam GroupFamily sec))
+      (fun pp => PMF.bind
+        (A.run sec pp (oneTimeEncryptionOracle (scheme GroupFamily) sec pp true))
+        fun output => PMF.pure output)
+  rw [PMF.pure_bind, PMF.pure_bind, PMF.bind_pure, PMF.bind_pure]
   exact congrArg (A.run sec (publicParam GroupFamily sec))
     (oneTimeEncryptionOracle_false_eq_true GroupFamily sec)
 

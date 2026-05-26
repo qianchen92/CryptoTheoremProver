@@ -30,9 +30,12 @@ noncomputable def scheme
       (fun pp => pp.Carrier)
       (fun pp => pp.Carrier)
       (fun pp => pp.Carrier) where
-  setup := fun sec => PMF.pure (publicParam GroupFamily sec)
+  setup := fun sec => do
+    return publicParam GroupFamily sec
   keygen := fun pp => Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier
-  encrypt := fun _pp key message => PMF.pure (key + message)
+  encrypt := fun _pp key message => do
+    let ciphertext := key + message
+    return ciphertext
   decrypt := fun _pp key ciphertext => -key + ciphertext
 
 end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad

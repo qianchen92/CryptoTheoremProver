@@ -44,13 +44,13 @@ noncomputable def oneTimeEncryptionOracle
   query
     | OneTimeOracle.challenge, _querySec, used, query =>
         if used then
-          PMF.pure ((none : ChallengeResponse (Ciphertext pp)), true)
+          return ((none : ChallengeResponse (Ciphertext pp)), true)
         else
           let m0 := query.1
           let m1 := query.2
-          PMF.bind (E.keygen pp) fun key =>
-            PMF.bind (E.encrypt pp key (if b then m1 else m0)) fun ciphertext =>
-              PMF.pure (some ciphertext, true)
+          PMF.bind (E.keygen pp) fun key => do
+            let ciphertext ← E.encrypt pp key (if b then m1 else m0)
+            return ((some ciphertext : ChallengeResponse (Ciphertext pp)), true)
 
 /-- The one-time indistinguishability game for a fixed challenge bit. -/
 noncomputable def oneTimeGame
@@ -63,8 +63,9 @@ noncomputable def oneTimeGame
       Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext))
     (b : Bool) : Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
-    PMF.bind (E.setup sec) fun pp =>
-      A.run sec pp (oneTimeEncryptionOracle E sec pp b)
+    PMF.bind (E.setup sec) fun pp => do
+      let output ← A.run sec pp (oneTimeEncryptionOracle E sec pp b)
+      return output
 
 /-- One-time left-or-right distinguishing advantage. -/
 noncomputable def OneTimeAdvantage

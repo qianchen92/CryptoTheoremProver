@@ -1,4 +1,5 @@
 import Crypto.Primitive.Encryption.SymmetricEncryption.Syntax
+import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption
 
@@ -13,10 +14,10 @@ def Correct
     (E : Scheme Param Key Message Ciphertext) : Prop :=
   ∀ (sec : Crypto.SecPar)
     (pp : Param sec)
-    (message : Message pp) (key : Key pp) (ciphertext : Ciphertext pp),
+    (message : Message pp) (key : Key pp),
     pp ∈ (E.setup sec).support →
     key ∈ (E.keygen pp).support →
-    ciphertext ∈ (E.encrypt pp key message).support →
-    E.decrypt pp key ciphertext = message
+    (PMF.bind (E.encrypt pp key message) fun ciphertext => do
+      return E.decrypt pp key ciphertext) = PMF.pure message
 
 end Crypto.Primitive.Encryption.SymmetricEncryption
