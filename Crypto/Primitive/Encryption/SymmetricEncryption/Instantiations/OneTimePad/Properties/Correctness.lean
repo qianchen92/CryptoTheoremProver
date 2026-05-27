@@ -12,7 +12,7 @@ theorem correct
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] :
-    Correct (scheme GroupFamily) := by
+    Correct (scheme (Family.ofGroupFamily GroupFamily)) := by
   intro _sec _pp message key _hpp _hkey
   change (PMF.bind (PMF.pure (key + message)) fun ciphertext =>
     PMF.pure (-key + ciphertext)) = PMF.pure message

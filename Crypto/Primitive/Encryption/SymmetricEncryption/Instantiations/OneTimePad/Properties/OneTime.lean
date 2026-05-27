@@ -56,8 +56,8 @@ theorem oneTimeEncryptionOracle_false_eq_true
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] (sec : Crypto.SecPar) :
-    oneTimeEncryptionOracle (scheme GroupFamily) sec (publicParam GroupFamily sec) false =
-    oneTimeEncryptionOracle (scheme GroupFamily) sec (publicParam GroupFamily sec) true := by
+    oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec (publicParam GroupFamily sec) false =
+    oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec (publicParam GroupFamily sec) true := by
   dsimp [oneTimeEncryptionOracle, scheme]
   congr
   funext name _querySec used query
@@ -76,17 +76,17 @@ theorem oneTimeSecurityGame_false_eq_true
       (fun _ => AdditiveGroupParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
-    oneTimeSecurityGame (scheme GroupFamily) A false =
-      oneTimeSecurityGame (scheme GroupFamily) A true := by
+    oneTimeSecurityGame (scheme (Family.ofGroupFamily GroupFamily)) A false =
+      oneTimeSecurityGame (scheme (Family.ofGroupFamily GroupFamily)) A true := by
   funext sec
   change
     PMF.bind (PMF.pure (publicParam GroupFamily sec))
       (fun pp => PMF.bind
-        (A.run sec pp (oneTimeEncryptionOracle (scheme GroupFamily) sec pp false))
+        (A.run sec pp (oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec pp false))
         fun output => PMF.pure output) =
     PMF.bind (PMF.pure (publicParam GroupFamily sec))
       (fun pp => PMF.bind
-        (A.run sec pp (oneTimeEncryptionOracle (scheme GroupFamily) sec pp true))
+        (A.run sec pp (oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec pp true))
         fun output => PMF.pure output)
   rw [PMF.pure_bind, PMF.pure_bind, PMF.bind_pure, PMF.bind_pure]
   exact congrArg (A.run sec (publicParam GroupFamily sec))
@@ -101,7 +101,7 @@ theorem oneTimeAdvantage_eq_zero
       (fun _ => AdditiveGroupParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
-    OneTimeAdvantage (scheme GroupFamily) A = fun _ => 0 := by
+    OneTimeAdvantage (scheme (Family.ofGroupFamily GroupFamily)) A = fun _ => 0 := by
   funext sec
   simp [OneTimeAdvantage, Crypto.Infrastructure.GameBased.Advantage,
     Crypto.Infrastructure.GameBased.AcceptProb, oneTimeSecurityGame_false_eq_true GroupFamily A]
@@ -111,7 +111,7 @@ theorem perfectOneTimeSecure
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] :
-    PerfectOneTimeSecure (scheme GroupFamily) := by
+    PerfectOneTimeSecure (scheme (Family.ofGroupFamily GroupFamily)) := by
   intro A
   exact oneTimeAdvantage_eq_zero GroupFamily A
 
@@ -120,7 +120,7 @@ theorem oneTimeSecure
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] :
-    OneTimeSecure (scheme GroupFamily) := by
+    OneTimeSecure (scheme (Family.ofGroupFamily GroupFamily)) := by
   exact PerfectOneTimeSecure.toOneTimeSecure (perfectOneTimeSecure GroupFamily)
 
 end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
