@@ -1,4 +1,5 @@
 import Crypto.Infrastructure.GameBased.Advantage
 import Crypto.Infrastructure.GameBased.Indistinguishability
+import Crypto.Infrastructure.GameBased.Search
 import Crypto.Infrastructure.GameBased.Reduction
 import Crypto.Infrastructure.GameBased.Hybrid
