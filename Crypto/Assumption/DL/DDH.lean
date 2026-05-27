@@ -22,6 +22,10 @@ structure PublicParam where
   mulScalar : Mul Scalar
   smul : SMul Scalar Carrier
   generator : Carrier
+  generator_generates : ∀ x : Carrier, ∃ a : Scalar, a • generator = x
+  compatibleScalarAction :
+    ∀ secretKey nonce : Scalar,
+      secretKey • (nonce • generator) = nonce • (secretKey • generator)
 
 attribute [instance] PublicParam.addGroup
 attribute [instance] PublicParam.fintypeCarrier
@@ -52,14 +56,14 @@ def realChallenge
   right := rightExp • pp.generator
   shared := (leftExp * rightExp) • pp.generator
 
-/-- A random DDH tuple where the third group element uses an independent exponent. -/
+/-- A random DDH tuple where the third group element is uniform in the group. -/
 def randomChallenge
     (pp : PublicParam.{uScalar, uGroup})
-    (leftExp rightExp sharedExp : pp.Scalar) : ChallengeInput.{uScalar, uGroup} where
+    (leftExp rightExp : pp.Scalar) (shared : pp.Carrier) : ChallengeInput.{uScalar, uGroup} where
   param := pp
   left := leftExp • pp.generator
   right := rightExp • pp.generator
-  shared := sharedExp • pp.generator
+  shared := shared
 
 /-- The real DDH challenge distribution. -/
 noncomputable def realSample
@@ -79,9 +83,9 @@ noncomputable def randomSample
     PMF.bind (F.setup sec) fun pp =>
       PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun leftExp =>
         PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun rightExp =>
-          PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
-            fun sharedExp =>
-              PMF.pure (randomChallenge pp leftExp rightExp sharedExp)
+          PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier)
+            fun shared =>
+              PMF.pure (randomChallenge pp leftExp rightExp shared)
 
 /-- The distinguishing problem induced by a DDH family. -/
 noncomputable def ddhProblem

@@ -7,15 +7,9 @@ universe uScalar uGroup
 
 open Crypto.Primitive.Encryption.AsymmetricEncryption
 
-/-- The scalar action condition needed for ElGamal decryption to reconstruct the shared secret. -/
-def CompatibleScalarAction : Prop :=
-  ∀ (pp : PublicParam.{uScalar, uGroup}) (secretKey nonce : pp.Scalar),
-    secretKey • (nonce • pp.generator) = nonce • (secretKey • pp.generator)
-
-/-- Correctness of ElGamal under the compatible scalar action condition. -/
+/-- Correctness of ElGamal under the scalar action law carried by public parameters. -/
 theorem correct
-    (F : Crypto.Assumption.DL.DDH.Family.{uScalar, uGroup})
-    (hCompatible : CompatibleScalarAction.{uScalar, uGroup}) :
+    (F : Crypto.Assumption.DL.DDH.Family.{uScalar, uGroup}) :
     Correct (scheme F) := by
   intro _sec pp publicKey secretKey message _hpp hkey
   change (publicKey, secretKey) ∈
@@ -40,6 +34,6 @@ theorem correct
         PMF.pure (ciphertext.2 - sampledSecretKey • ciphertext.1)) =
     PMF.pure message
   rw [PMF.bind_bind]
-  simp [hCompatible pp sampledSecretKey]
+  simp [pp.compatibleScalarAction sampledSecretKey]
 
 end Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal

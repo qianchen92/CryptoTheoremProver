@@ -53,74 +53,78 @@ theorem challengeDistribution_eq
 
 /-- The false and true challenge oracles of the group one-time pad are extensionally equal. -/
 theorem oneTimeEncryptionOracle_false_eq_true
-    (GroupFamily : Crypto.SecPar → Type uGroup)
-    [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
-    [∀ sec, Nonempty (GroupFamily sec)] (sec : Crypto.SecPar) :
-    oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec (publicParam GroupFamily sec) false =
-    oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec (publicParam GroupFamily sec) true := by
+    (F : Family.{uGroup}) (sec : Crypto.SecPar) (pp : PublicParam.{uGroup}) :
+    oneTimeEncryptionOracle (scheme F) sec pp false =
+    oneTimeEncryptionOracle (scheme F) sec pp true := by
   dsimp [oneTimeEncryptionOracle, scheme]
   congr
   funext name _querySec used query
   cases name
   cases used
-  · simpa [publicParam, PMF.pure_bind] using
-      challengeDistribution_eq (GroupFamily sec) query.1 query.2
+  · simpa using challengeDistribution_eq pp.Carrier query.1 query.2
   · rfl
 
 /-- The two one-time security games of the group one-time pad are identical. -/
 theorem oneTimeSecurityGame_false_eq_true
-    (GroupFamily : Crypto.SecPar → Type uGroup)
-    [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
-    [∀ sec, Nonempty (GroupFamily sec)]
+    (F : Family.{uGroup})
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      (fun _ => AdditiveGroupParam.{uGroup})
+      (fun _ => PublicParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
-    oneTimeSecurityGame (scheme (Family.ofGroupFamily GroupFamily)) A false =
-      oneTimeSecurityGame (scheme (Family.ofGroupFamily GroupFamily)) A true := by
+    oneTimeSecurityGame (scheme F) A false =
+      oneTimeSecurityGame (scheme F) A true := by
   funext sec
   change
-    PMF.bind (PMF.pure (publicParam GroupFamily sec))
+    PMF.bind (F.setup sec)
       (fun pp => PMF.bind
-        (A.run sec pp (oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec pp false))
+        (A.run sec pp (oneTimeEncryptionOracle (scheme F) sec pp false))
         fun output => PMF.pure output) =
-    PMF.bind (PMF.pure (publicParam GroupFamily sec))
+    PMF.bind (F.setup sec)
       (fun pp => PMF.bind
-        (A.run sec pp (oneTimeEncryptionOracle (scheme (Family.ofGroupFamily GroupFamily)) sec pp true))
+        (A.run sec pp (oneTimeEncryptionOracle (scheme F) sec pp true))
         fun output => PMF.pure output)
-  rw [PMF.pure_bind, PMF.pure_bind, PMF.bind_pure, PMF.bind_pure]
-  exact congrArg (A.run sec (publicParam GroupFamily sec))
-    (oneTimeEncryptionOracle_false_eq_true GroupFamily sec)
+  simp only [PMF.bind_pure]
+  congr
+  funext pp
+  exact congrArg (A.run sec pp) (oneTimeEncryptionOracle_false_eq_true F sec pp)
 
 /-- Every oracle machine has zero one-time advantage against the group one-time pad. -/
 theorem oneTimeAdvantage_eq_zero
-    (GroupFamily : Crypto.SecPar → Type uGroup)
-    [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
-    [∀ sec, Nonempty (GroupFamily sec)]
+    (F : Family.{uGroup})
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      (fun _ => AdditiveGroupParam.{uGroup})
+      (fun _ => PublicParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
-    OneTimeAdvantage (scheme (Family.ofGroupFamily GroupFamily)) A = fun _ => 0 := by
+    OneTimeAdvantage (scheme F) A = fun _ => 0 := by
   funext sec
   simp [OneTimeAdvantage, Crypto.Infrastructure.GameBased.Advantage,
-    Crypto.Infrastructure.GameBased.AcceptProb, oneTimeSecurityGame_false_eq_true GroupFamily A]
+    Crypto.Infrastructure.GameBased.AcceptProb, oneTimeSecurityGame_false_eq_true F A]
 
 /-- Perfect one-time security of the group one-time pad. -/
-theorem perfectOneTimeSecure
-    (GroupFamily : Crypto.SecPar → Type uGroup)
-    [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
-    [∀ sec, Nonempty (GroupFamily sec)] :
-    PerfectOneTimeSecure (scheme (Family.ofGroupFamily GroupFamily)) := by
+theorem perfectOneTimeSecure (F : Family.{uGroup}) :
+    PerfectOneTimeSecure (scheme F) := by
   intro A
-  exact oneTimeAdvantage_eq_zero GroupFamily A
+  exact oneTimeAdvantage_eq_zero F A
 
 /-- PPT one-time security of the group one-time pad. -/
-theorem oneTimeSecure
+theorem oneTimeSecure (F : Family.{uGroup}) :
+    OneTimeSecure (scheme F) := by
+  exact PerfectOneTimeSecure.toOneTimeSecure (perfectOneTimeSecure F)
+
+/-- Perfect one-time security of the one-time-pad family induced by a type-level group family. -/
+theorem perfectOneTimeSecure_ofGroupFamily
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] :
-    OneTimeSecure (scheme (Family.ofGroupFamily GroupFamily)) := by
-  exact PerfectOneTimeSecure.toOneTimeSecure (perfectOneTimeSecure GroupFamily)
+    PerfectOneTimeSecure (scheme (Family.ofGroupFamily GroupFamily)) :=
+  perfectOneTimeSecure (Family.ofGroupFamily GroupFamily)
+
+/-- PPT one-time security of the one-time-pad family induced by a type-level group family. -/
+theorem oneTimeSecure_ofGroupFamily
+    (GroupFamily : Crypto.SecPar → Type uGroup)
+    [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
+    [∀ sec, Nonempty (GroupFamily sec)] :
+    OneTimeSecure (scheme (Family.ofGroupFamily GroupFamily)) :=
+  oneTimeSecure (Family.ofGroupFamily GroupFamily)
 
 end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad

@@ -22,6 +22,7 @@ structure PublicParam where
   mulScalar : Mul Scalar
   smul : SMul Scalar Carrier
   generator : Carrier
+  generator_generates : ∀ x : Carrier, ∃ a : Scalar, a • generator = x
 
 attribute [instance] PublicParam.addGroup
 attribute [instance] PublicParam.fintypeCarrier
