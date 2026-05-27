@@ -7,6 +7,6 @@ universe uOutcome
 /-- A finite hybrid sequence of games indexed by natural numbers. -/
 structure Hybrid (Outcome : Type uOutcome) where
   length : Nat
-  game : Nat → Crypto.Infrastructure.Computation.Game Outcome
+  securityGame : Nat → Crypto.Infrastructure.Computation.Game Outcome
 
 end Crypto.Infrastructure.GameBased

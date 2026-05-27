@@ -25,3 +25,22 @@
   - `uValue`, `uMapped` for value and mapped-value types.
   - `uScalar`, `uModule`, `uGroup` for algebraic scalar/module/group types.
 - When adding a new polymorphic definition, choose universe names from the domain vocabulary of that definition and keep them consistent across the declaration, namespace variables, and related theorems.
+
+## Lean Declaration Names
+
+- Use fixed suffixes for game-based declarations.
+- Oracle specifications use lower-camel-case property names ending in
+  `OracleSpec`, such as `oneTimeOracleSpec` and `indCPAOracleSpec`.
+- Security games use lower-camel-case property names ending in `SecurityGame`,
+  such as `oneTimeSecurityGame` and `indCPASecurityGame`. Generic infrastructure
+  combinators use `securityGame`, `leftSecurityGame`, and `rightSecurityGame`.
+- Advantages use upper-camel-case property names ending in `Advantage`, such as
+  `OneTimeAdvantage` and `INDCPAAdvantage`.
+- Reusable problem instances use lower-camel-case property names ending in
+  `Problem`, such as `oneTimeProblem`, `indCPAProblem`, `dLogProblem`, and
+  `ddhProblem`.
+- Security predicates should use the established cryptographic notion name,
+  such as `OneTimeSecure`, `INDCPASecure`, or `Assumption` inside a specific
+  assumption namespace.
+- Keep the generic computation type named `Game`; reserve the `SecurityGame`
+  suffix for concrete or template game-based security experiments.

@@ -16,10 +16,10 @@ inductive OneTimeOracle where
   | challenge
 
 def oneTimeOracleSpec
-    {Param : Crypto.SecPar → Type uParam}
-    (Message : {sec : Crypto.SecPar} → Param sec → Type uMessage)
-    (Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext)
-    (sec : Crypto.SecPar) (pp : Param sec) :
+    {Param : Type uParam}
+    (Message : Param → Type uMessage)
+    (Ciphertext : Param → Type uCiphertext)
+    (_sec : Crypto.SecPar) (pp : Param) :
     Crypto.Infrastructure.Computation.Oracle.OracleSpec where
   Name := OneTimeOracle
   Query
@@ -29,12 +29,12 @@ def oneTimeOracleSpec
 
 /-- A one-use left-or-right encryption oracle. -/
 noncomputable def oneTimeEncryptionOracle
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    (E : Scheme Param Key Message Ciphertext)
-    (sec : Crypto.SecPar) (pp : Param sec) (b : Bool) :
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme Crypto.SecPar Param Key Message Ciphertext)
+    (sec : Crypto.SecPar) (pp : Param) (b : Bool) :
     Crypto.Infrastructure.Computation.Oracle.OracleEnv
       (oneTimeOracleSpec Message Ciphertext sec pp) where
   State := Bool
@@ -52,70 +52,72 @@ noncomputable def oneTimeEncryptionOracle
 
 /-- The oracle distinguishing problem induced by one-time left-or-right encryption. -/
 noncomputable def oneTimeProblem
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    (E : Scheme Param Key Message Ciphertext) :
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme Crypto.SecPar Param Key Message Ciphertext) :
     Crypto.Infrastructure.GameBased.OracleDistinguishing.Problem
-      Param (oneTimeOracleSpec Message Ciphertext) where
+      (fun _ => Param) (oneTimeOracleSpec Message Ciphertext) where
   setup := E.setup
   leftEnv := fun sec pp => oneTimeEncryptionOracle E sec pp false
   rightEnv := fun sec pp => oneTimeEncryptionOracle E sec pp true
 
-/-- The one-time indistinguishability game for a fixed challenge bit. -/
-noncomputable def oneTimeGame
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    (E : Scheme Param Key Message Ciphertext)
+/-- The one-time indistinguishability security game for a fixed challenge bit. -/
+noncomputable def oneTimeSecurityGame
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme Crypto.SecPar Param Key Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext))
+      (fun _ => Param) (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext))
     (b : Bool) : Crypto.Infrastructure.Computation.Game Bool :=
   if b then
-    Crypto.Infrastructure.GameBased.OracleDistinguishing.rightGame (oneTimeProblem E) A
+    Crypto.Infrastructure.GameBased.OracleDistinguishing.rightSecurityGame (oneTimeProblem E) A
   else
-    Crypto.Infrastructure.GameBased.OracleDistinguishing.leftGame (oneTimeProblem E) A
+    Crypto.Infrastructure.GameBased.OracleDistinguishing.leftSecurityGame (oneTimeProblem E) A
 
 /-- One-time left-or-right distinguishing advantage. -/
 noncomputable def OneTimeAdvantage
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    (E : Scheme Param Key Message Ciphertext)
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme Crypto.SecPar Param Key Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext)) : Crypto.SecPar → Real :=
-  Crypto.Infrastructure.GameBased.Advantage (oneTimeGame E A false) (oneTimeGame E A true)
+      (fun _ => Param) (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext)) :
+    Crypto.SecPar → Real :=
+  Crypto.Infrastructure.GameBased.Advantage
+    (oneTimeSecurityGame E A false) (oneTimeSecurityGame E A true)
 
 /-- Perfect one-time security against unbounded oracle machines. -/
 def PerfectOneTimeSecure
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    (E : Scheme Param Key Message Ciphertext) : Prop :=
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme Crypto.SecPar Param Key Message Ciphertext) : Prop :=
   ∀ A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      Param (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
+      (fun _ => Param) (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
     OneTimeAdvantage E A = fun _ => 0
 
 /-- One-time security against PPT oracle adversaries. -/
 def OneTimeSecure
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    (E : Scheme Param Key Message Ciphertext) : Prop :=
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme Crypto.SecPar Param Key Message Ciphertext) : Prop :=
   Crypto.Infrastructure.GameBased.OracleDistinguishing.Hard (oneTimeProblem E)
 
 /-- Perfect one-time security implies PPT one-time security. -/
 theorem PerfectOneTimeSecure.toOneTimeSecure
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    {E : Scheme Param Key Message Ciphertext} :
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    {E : Scheme Crypto.SecPar Param Key Message Ciphertext} :
     PerfectOneTimeSecure E → OneTimeSecure E := by
   intro hPerfect A
   change Crypto.Infrastructure.Asymptotic.IsNegligible

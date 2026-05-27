@@ -19,7 +19,7 @@ structure Problem (Challenge : Type uChallenge) where
   right : Crypto.SecPar → PMF Challenge
 
 /-- Run a boolean machine on samples from a challenge distribution. -/
-noncomputable def game
+noncomputable def securityGame
     {Challenge : Type uChallenge}
     (sample : Crypto.SecPar → PMF Challenge)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticMachine Challenge Bool) :
@@ -32,8 +32,8 @@ noncomputable def game
 def Hard {Challenge : Type uChallenge} (P : Problem Challenge) : Prop :=
   ∀ A : Crypto.Infrastructure.Complexity.PPTMachine Challenge Bool,
     Indistinguishable
-      (game P.left A.toProbabilisticMachine)
-      (game P.right A.toProbabilisticMachine)
+      (securityGame P.left A.toProbabilisticMachine)
+      (securityGame P.right A.toProbabilisticMachine)
 
 end Distinguishing
 
@@ -59,7 +59,7 @@ structure Problem
       (Spec sec input)
 
 /-- Run an oracle machine against one side of an oracle distinguishing problem. -/
-noncomputable def game
+noncomputable def securityGame
     {Input : Crypto.SecPar → Type uIn}
     {Spec :
       (sec : Crypto.SecPar) →
@@ -79,8 +79,8 @@ noncomputable def game
       let output ← A.run sec input (env sec input)
       return output
 
-/-- The left-side oracle distinguishing game. -/
-noncomputable def leftGame
+/-- The left-side oracle distinguishing security game. -/
+noncomputable def leftSecurityGame
     {Input : Crypto.SecPar → Type uIn}
     {Spec :
       (sec : Crypto.SecPar) →
@@ -90,10 +90,10 @@ noncomputable def leftGame
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
       Input (fun _ => Bool) Spec) :
     Crypto.Infrastructure.Computation.Game Bool :=
-  game P P.leftEnv A
+  securityGame P P.leftEnv A
 
-/-- The right-side oracle distinguishing game. -/
-noncomputable def rightGame
+/-- The right-side oracle distinguishing security game. -/
+noncomputable def rightSecurityGame
     {Input : Crypto.SecPar → Type uIn}
     {Spec :
       (sec : Crypto.SecPar) →
@@ -103,7 +103,7 @@ noncomputable def rightGame
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
       Input (fun _ => Bool) Spec) :
     Crypto.Infrastructure.Computation.Game Bool :=
-  game P P.rightEnv A
+  securityGame P P.rightEnv A
 
 /-- An oracle distinguishing problem is hard if every PPT oracle machine has negligible advantage. -/
 def Hard
@@ -115,8 +115,8 @@ def Hard
     (P : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec) : Prop :=
   ∀ A : Crypto.Infrastructure.Complexity.PPTOracleMachine Input (fun _ => Bool) Spec,
     Indistinguishable
-      (leftGame P A.toProbabilisticOracleMachine)
-      (rightGame P A.toProbabilisticOracleMachine)
+      (leftSecurityGame P A.toProbabilisticOracleMachine)
+      (rightSecurityGame P A.toProbabilisticOracleMachine)
 
 end OracleDistinguishing
 

@@ -3,17 +3,18 @@ import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption
 
-universe uParam uMessage uCiphertext uKey
+universe uSecPar uParam uMessage uCiphertext uKey
 
 /-- Perfect correctness for a symmetric encryption scheme. -/
 def Correct
-    {Param : Crypto.SecPar → Type uParam}
-    {Key : {sec : Crypto.SecPar} → Param sec → Type uKey}
-    {Message : {sec : Crypto.SecPar} → Param sec → Type uMessage}
-    {Ciphertext : {sec : Crypto.SecPar} → Param sec → Type uCiphertext}
-    (E : Scheme Param Key Message Ciphertext) : Prop :=
-  ∀ (sec : Crypto.SecPar)
-    (pp : Param sec)
+    {SecPar : Type uSecPar}
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme SecPar Param Key Message Ciphertext) : Prop :=
+  ∀ (sec : SecPar)
+    (pp : Param)
     (message : Message pp) (key : Key pp),
     pp ∈ (E.setup sec).support →
     key ∈ (E.keygen pp).support →

@@ -1,28 +1,31 @@
 import Crypto.Infrastructure.Asymptotic.SecurityParameter
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 
-namespace Crypto.Primitive.Encryption.SymmetricEncryption
+namespace Crypto.Primitive.Encryption.AsymmetricEncryption
 
-universe uSecPar uParam uMessage uCiphertext uKey
+universe uSecPar uParam uPublicKey uSecretKey uMessage uCiphertext
 
-/-- Syntax for symmetric encryption schemes. -/
+/-- Syntax for asymmetric encryption schemes. -/
 structure Scheme
     (SecPar : Type uSecPar)
     (Param : Type uParam)
-    (Key : Param → Type uKey)
+    (PublicKey : Param → Type uPublicKey)
+    (SecretKey : Param → Type uSecretKey)
     (Message : Param → Type uMessage)
     (Ciphertext : Param → Type uCiphertext) where
   setup : SecPar → PMF Param
-  keygen : (pp : Param) → PMF (Key pp)
+  keygen :
+    (pp : Param) →
+    PMF (PublicKey pp × SecretKey pp)
   encrypt :
     (pp : Param) →
-    Key pp →
+    PublicKey pp →
     Message pp →
     PMF (Ciphertext pp)
   decrypt :
     (pp : Param) →
-    Key pp →
+    SecretKey pp →
     Ciphertext pp →
     Message pp
 
-end Crypto.Primitive.Encryption.SymmetricEncryption
+end Crypto.Primitive.Encryption.AsymmetricEncryption

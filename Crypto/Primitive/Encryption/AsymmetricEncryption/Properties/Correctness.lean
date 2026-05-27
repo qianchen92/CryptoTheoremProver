@@ -1,0 +1,26 @@
+import Crypto.Primitive.Encryption.AsymmetricEncryption.Syntax
+import Mathlib.Probability.ProbabilityMassFunction.Monad
+
+namespace Crypto.Primitive.Encryption.AsymmetricEncryption
+
+universe uSecPar uParam uPublicKey uSecretKey uMessage uCiphertext
+
+/-- Perfect correctness for an asymmetric encryption scheme. -/
+def Correct
+    {SecPar : Type uSecPar}
+    {Param : Type uParam}
+    {PublicKey : Param → Type uPublicKey}
+    {SecretKey : Param → Type uSecretKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    (E : Scheme SecPar Param PublicKey SecretKey Message Ciphertext) : Prop :=
+  ∀ (sec : SecPar)
+    (pp : Param)
+    (publicKey : PublicKey pp) (secretKey : SecretKey pp)
+    (message : Message pp),
+    pp ∈ (E.setup sec).support →
+    (publicKey, secretKey) ∈ (E.keygen pp).support →
+    (PMF.bind (E.encrypt pp publicKey message) fun ciphertext => do
+      return E.decrypt pp secretKey ciphertext) = PMF.pure message
+
+end Crypto.Primitive.Encryption.AsymmetricEncryption

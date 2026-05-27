@@ -25,6 +25,23 @@ structure PPTMachine (Input : Type uIn) (Output : Type uOut)
     extends TimedMachine Input Output where
   runtime_isPoly : IsPolyBounded runtime
 
+/-- A semantic probabilistic machine whose output type may depend on its input. -/
+structure ProbabilisticDependentMachine
+    (Input : Type uIn) (Output : Input → Type uOut) where
+  run : (sec : Crypto.SecPar) → (input : Input) → PMF (Output input)
+
+/-- A dependent-output probabilistic machine equipped with a uniform running-time bound. -/
+structure TimedDependentMachine
+    (Input : Type uIn) (Output : Input → Type uOut)
+    extends ProbabilisticDependentMachine Input Output where
+  runtime : Crypto.SecPar → Nat
+
+/-- A dependent-output probabilistic polynomial-time machine. -/
+structure PPTDependentMachine
+    (Input : Type uIn) (Output : Input → Type uOut)
+    extends TimedDependentMachine Input Output where
+  runtime_isPoly : IsPolyBounded runtime
+
 /-- A probabilistic machine with adaptive access to an oracle environment. -/
 structure ProbabilisticOracleMachine
     (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)

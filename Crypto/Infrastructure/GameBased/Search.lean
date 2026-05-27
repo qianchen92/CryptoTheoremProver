@@ -10,40 +10,40 @@ universe uInstance uWitness
 namespace Search
 
 /-- A search problem consists of an instance generator and a valid-witness relation. -/
-structure Problem (Instance : Type uInstance) (Witness : Type uWitness) where
+structure Problem (Instance : Type uInstance) where
+  Witness : Instance → Type uWitness
   sample : Crypto.SecPar → PMF Instance
-  relation : Instance → Witness → Prop
-  decidableRelation : DecidableRel relation
+  relation : (input : Instance) → Witness input → Prop
+  decidableRelation : (input : Instance) → (witness : Witness input) →
+    Decidable (relation input witness)
 
-attribute [instance] Problem.decidableRelation
-
-/-- The canonical search game: sample an instance and accept iff the machine returns a witness. -/
-noncomputable def game
-    {Instance : Type uInstance} {Witness : Type uWitness}
-    (P : Problem Instance Witness)
-    (A : Crypto.Infrastructure.Complexity.ProbabilisticMachine Instance Witness) :
+/-- The canonical search security game: sample an instance and accept iff the machine returns a witness. -/
+noncomputable def securityGame
+    {Instance : Type uInstance}
+    (P : Problem.{uInstance, uWitness} Instance)
+    (A : Crypto.Infrastructure.Complexity.ProbabilisticDependentMachine Instance P.Witness) :
     Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
     PMF.bind (P.sample sec) fun input =>
       PMF.bind (A.run sec input) fun output =>
-        letI := P.decidableRelation
+        letI := P.decidableRelation input output
         PMF.pure (decide (P.relation input output))
 
-/-- Success probability of a machine in a search game. -/
+/-- Success probability of a machine in a search security game. -/
 noncomputable def SuccessProbability
-    {Instance : Type uInstance} {Witness : Type uWitness}
-    (P : Problem Instance Witness)
-    (A : Crypto.Infrastructure.Complexity.ProbabilisticMachine Instance Witness) :
+    {Instance : Type uInstance}
+    (P : Problem.{uInstance, uWitness} Instance)
+    (A : Crypto.Infrastructure.Complexity.ProbabilisticDependentMachine Instance P.Witness) :
     Crypto.SecPar → Real :=
-  Crypto.Infrastructure.GameBased.AcceptProb (game P A)
+  Crypto.Infrastructure.GameBased.AcceptProb (securityGame P A)
 
 /-- A search problem is hard if every PPT machine succeeds with negligible probability. -/
 def Hard
-    {Instance : Type uInstance} {Witness : Type uWitness}
-    (P : Problem Instance Witness) : Prop :=
-  ∀ A : Crypto.Infrastructure.Complexity.PPTMachine Instance Witness,
+    {Instance : Type uInstance}
+    (P : Problem.{uInstance, uWitness} Instance) : Prop :=
+  ∀ A : Crypto.Infrastructure.Complexity.PPTDependentMachine Instance P.Witness,
     Crypto.Infrastructure.Asymptotic.IsNegligible
-      (SuccessProbability P A.toProbabilisticMachine)
+      (SuccessProbability P A.toProbabilisticDependentMachine)
 
 end Search
 

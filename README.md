@@ -47,6 +47,7 @@ Crypto/
     GameBased/
       Advantage.lean
       Indistinguishability.lean
+      Search.lean
       Hybrid.lean
       Reduction.lean
     ProofPattern/
@@ -54,6 +55,7 @@ Crypto/
     DL/
   Primitive/
     Encryption/
+      AsymmetricEncryption/
       SymmetricEncryption/
   Protocol/
 ```
@@ -110,7 +112,9 @@ Generic security notions that are not tied to one primitive.
 
 - `Advantage` defines acceptance probability and distinguishing advantage for
   boolean games.
-- `Indistinguishability` states negligible distinguishing advantage.
+- `Indistinguishability` states negligible distinguishing advantage and
+  provides reusable distinguishing and oracle-distinguishing problem templates.
+- `Search` defines reusable search-problem security games and hardness.
 - `Hybrid` records finite hybrid sequences.
 - `Reduction` records transformations between machine families or other
   proof-relevant types.
@@ -133,12 +137,15 @@ security definitions.
 
 The current encryption hierarchy contains:
 
+- `Primitive.Encryption.AsymmetricEncryption.Syntax`
+- `Primitive.Encryption.AsymmetricEncryption.UC`
+- `Primitive.Encryption.AsymmetricEncryption.Properties`
 - `Primitive.Encryption.SymmetricEncryption.Syntax`
 - `Primitive.Encryption.SymmetricEncryption.UC`
 - `Primitive.Encryption.SymmetricEncryption.Properties`
 - `Primitive.Encryption.SymmetricEncryption.Instantiations`
 
-The main interface is
+The main symmetric-encryption interface is
 `Crypto.Primitive.Encryption.SymmetricEncryption.Scheme Param Key Message Ciphertext`.
 `setup` samples public parameters from the security parameter; `Key`, `Message`,
 and `Ciphertext` are then indexed by those public parameters. Correctness and
@@ -148,6 +155,12 @@ notion, while `PerfectOneTimeSecure` quantifies over unbounded oracle machines
 and requires exact zero advantage. The generic notions they use remain in
 `Infrastructure.Computation`, `Infrastructure.Complexity`, and
 `Infrastructure.GameBased`.
+
+The main asymmetric-encryption interface is
+`Crypto.Primitive.Encryption.AsymmetricEncryption.Scheme Param PublicKey SecretKey Message Ciphertext`.
+It provides public parameters, key generation, public-key encryption, and
+secret-key decryption. Its IND-CPA definition is expressed as an
+`Infrastructure.GameBased.OracleDistinguishing` problem.
 
 The current instantiations include a group-based one-time pad. Its setup
 exposes the finite nonempty additive group chosen for the security parameter;
@@ -210,6 +223,29 @@ layers back into higher layers.
 When adding polymorphic Lean declarations, use descriptive universe names such
 as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,
 `uModule`, and `uGroup`, rather than bare `u`, `v`, or `w`.
+
+## Naming Conventions
+
+Use a fixed suffix vocabulary for game-based declarations.
+
+- Oracle specifications use lower-camel-case property names with the suffix
+  `OracleSpec`, for example `oneTimeOracleSpec` and `indCPAOracleSpec`.
+- Security games use lower-camel-case property names with the suffix
+  `SecurityGame`, for example `oneTimeSecurityGame` and
+  `indCPASecurityGame`. Generic infrastructure combinators use
+  `securityGame`, `leftSecurityGame`, and `rightSecurityGame`.
+- Advantages use upper-camel-case property names with the suffix `Advantage`,
+  for example `OneTimeAdvantage` and `INDCPAAdvantage`.
+- Reusable game-based problem instances use lower-camel-case property names
+  with the suffix `Problem`, for example `oneTimeProblem`, `indCPAProblem`,
+  `dLogProblem`, and `ddhProblem`.
+- Security predicates should use the established cryptographic notion name,
+  such as `OneTimeSecure`, `INDCPASecure`, or `Assumption` inside a specific
+  assumption namespace.
+
+The generic type `Crypto.Infrastructure.Computation.Game` remains named `Game`;
+the `SecurityGame` suffix is for concrete or template security experiments
+that instantiate a game-based notion.
 
 ## Status
 

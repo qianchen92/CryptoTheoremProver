@@ -67,8 +67,8 @@ theorem oneTimeEncryptionOracle_false_eq_true
       challengeDistribution_eq (GroupFamily sec) query.1 query.2
   · rfl
 
-/-- The two one-time games of the group one-time pad are identical. -/
-theorem oneTimeGame_false_eq_true
+/-- The two one-time security games of the group one-time pad are identical. -/
+theorem oneTimeSecurityGame_false_eq_true
     (GroupFamily : Crypto.SecPar → Type uGroup)
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)]
@@ -76,7 +76,8 @@ theorem oneTimeGame_false_eq_true
       (fun _ => AdditiveGroupParam.{uGroup})
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
-    oneTimeGame (scheme GroupFamily) A false = oneTimeGame (scheme GroupFamily) A true := by
+    oneTimeSecurityGame (scheme GroupFamily) A false =
+      oneTimeSecurityGame (scheme GroupFamily) A true := by
   funext sec
   change
     PMF.bind (PMF.pure (publicParam GroupFamily sec))
@@ -103,7 +104,7 @@ theorem oneTimeAdvantage_eq_zero
     OneTimeAdvantage (scheme GroupFamily) A = fun _ => 0 := by
   funext sec
   simp [OneTimeAdvantage, Crypto.Infrastructure.GameBased.Advantage,
-    Crypto.Infrastructure.GameBased.AcceptProb, oneTimeGame_false_eq_true GroupFamily A]
+    Crypto.Infrastructure.GameBased.AcceptProb, oneTimeSecurityGame_false_eq_true GroupFamily A]
 
 /-- Perfect one-time security of the group one-time pad. -/
 theorem perfectOneTimeSecure

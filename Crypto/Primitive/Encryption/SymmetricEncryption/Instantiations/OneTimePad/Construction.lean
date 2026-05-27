@@ -26,7 +26,8 @@ noncomputable def scheme
     [∀ sec, AddGroup (GroupFamily sec)] [∀ sec, Fintype (GroupFamily sec)]
     [∀ sec, Nonempty (GroupFamily sec)] :
     Scheme
-      (fun _ => Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.{uGroup})
+      Crypto.SecPar
+      Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.{uGroup}
       (fun pp => pp.Carrier)
       (fun pp => pp.Carrier)
       (fun pp => pp.Carrier) where
