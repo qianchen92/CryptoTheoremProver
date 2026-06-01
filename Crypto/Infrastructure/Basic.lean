@@ -3,3 +3,4 @@ import Crypto.Infrastructure.Computation.Basic
 import Crypto.Infrastructure.Complexity.Basic
 import Crypto.Infrastructure.GameBased.Basic
 import Crypto.Infrastructure.ProofPattern.Basic
+import Crypto.Infrastructure.UC.Basic
