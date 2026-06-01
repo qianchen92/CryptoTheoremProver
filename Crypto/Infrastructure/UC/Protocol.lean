@@ -9,6 +9,7 @@ universe uEntity uInput uOutput uState
 inductive CorruptionMode where
   | incorruptible
   | static
+  | dynamic
   | dynamicWithErasures
   deriving DecidableEq, Repr
 

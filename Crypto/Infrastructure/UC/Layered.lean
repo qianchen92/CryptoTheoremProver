@@ -111,9 +111,9 @@ def Eligible (params : Parameters) (corrupted : Finset (Role params)) : Prop :=
   OnlyParties corrupted ∧
     ∀ layer : Fin params.layers, countRolesInLayer corrupted layer ≤ params.maxCorrupt
 
-/-- Dynamic corruption with secure erasures, bounded independently in every layer. -/
+/-- Dynamic layered/YOSO corruption, bounded independently in every layer. -/
 def layeredPolicy (params : Parameters) : CorruptionPolicy (Role params) where
-  mode := Crypto.Infrastructure.UC.CorruptionMode.dynamicWithErasures
+  mode := Crypto.Infrastructure.UC.CorruptionMode.dynamic
   eligible := Eligible params
 
 end Corruption
