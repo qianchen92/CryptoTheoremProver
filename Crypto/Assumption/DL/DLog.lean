@@ -19,7 +19,6 @@ structure PublicParam where
   decidableEqCarrier : DecidableEq Carrier
   fintypeScalar : Fintype Scalar
   nonemptyScalar : Nonempty Scalar
-  mulScalar : Mul Scalar
   smul : SMul Scalar Carrier
   generator : Carrier
   generator_generates : ∀ x : Carrier, ∃ a : Scalar, a • generator = x
@@ -30,7 +29,6 @@ attribute [instance] PublicParam.nonemptyCarrier
 attribute [instance] PublicParam.decidableEqCarrier
 attribute [instance] PublicParam.fintypeScalar
 attribute [instance] PublicParam.nonemptyScalar
-attribute [instance] PublicParam.mulScalar
 attribute [instance] PublicParam.smul
 
 /-- A security-parameter-indexed family of discrete-log public parameters. -/

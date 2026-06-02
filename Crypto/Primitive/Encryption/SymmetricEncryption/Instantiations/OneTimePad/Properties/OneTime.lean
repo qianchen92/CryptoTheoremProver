@@ -77,16 +77,16 @@ theorem oneTimeSecurityGame_false_eq_true
   change
     PMF.bind (F.setup sec)
       (fun pp => PMF.bind
-        (A.run sec pp (oneTimeEncryptionOracle (scheme F) sec pp false))
+        (A.runWithEnv sec pp (oneTimeEncryptionOracle (scheme F) sec pp false))
         fun output => PMF.pure output) =
     PMF.bind (F.setup sec)
       (fun pp => PMF.bind
-        (A.run sec pp (oneTimeEncryptionOracle (scheme F) sec pp true))
+        (A.runWithEnv sec pp (oneTimeEncryptionOracle (scheme F) sec pp true))
         fun output => PMF.pure output)
   simp only [PMF.bind_pure]
   congr
   funext pp
-  exact congrArg (A.run sec pp) (oneTimeEncryptionOracle_false_eq_true F sec pp)
+  exact congrArg (A.runWithEnv sec pp) (oneTimeEncryptionOracle_false_eq_true F sec pp)
 
 /-- Every oracle machine has zero one-time advantage against the group one-time pad. -/
 theorem oneTimeAdvantage_eq_zero

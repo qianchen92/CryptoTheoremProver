@@ -3,15 +3,17 @@
 `Crypto` is an experimental Lean library for building reusable, machine-checked
 cryptographic security proofs. The project aims to provide a small but coherent
 foundation for defining cryptographic schemes, security games, oracle access,
-PPT machines, asymptotic bounds, assumptions, reductions, and proof patterns.
+semantic PPT-machine interfaces, asymptotic bounds, assumptions, reductions,
+and proof patterns.
 
-The library is organized around game-based security proofs. Shared computation
-semantics such as randomized computations, games, oracles, cost models, and
-algebraic operations live in reusable lower layers. Cryptographic primitives,
-protocols, and assumptions build on those layers without duplicating the common
-machinery. This keeps primitive-specific definitions local while still allowing
-different constructions to share the same vocabulary for games, complexity, and
-advantages.
+The library is organized around game-based security proofs, with a growing UC
+layer for interactive protocols. Shared computation semantics such as
+randomized computations, games, oracles, cost models, and algebraic operations
+live in reusable lower layers. Cryptographic primitives, protocols, and
+assumptions build on those layers without duplicating the common machinery.
+This keeps primitive-specific definitions local while still allowing different
+constructions to share the same vocabulary for games, complexity, advantages,
+and UC executions.
 
 The current codebase is intentionally minimal. It prioritizes stable boundaries
 and clear interfaces over a large catalog of primitives. The symmetric
@@ -50,6 +52,10 @@ Crypto/
       Search.lean
       Hybrid.lean
       Reduction.lean
+    UC/
+      Execution.lean
+      Protocol.lean
+      Layered.lean
     ProofPattern/
   Assumption/
     DL/
@@ -83,7 +89,8 @@ Reusable semantic infrastructure for cryptographic formalization.
 
 - `Computation.Cost` defines cost models and costed randomized computations.
 - `Computation.Algebra` contains algebraic structures and costed operations.
-- `Computation.Oracle` defines oracle interfaces and stateful environments.
+- `Computation.Oracle` defines oracle interfaces, stateful environments, and
+  adaptive oracle-program syntax.
 - `Randomized` packages security-parameter-indexed randomized computations
   with cost information.
 - `Game` packages security experiments as security-parameter-indexed
@@ -97,14 +104,16 @@ security games, reductions, and construction-specific definitions.
 Semantic complexity notions used by constructions and security games.
 
 - `Machine` defines deterministic, probabilistic, timed, PPT, oracle, and
-  oracle PPT machines.
+  oracle PPT machine interfaces.
 - `CostBound` connects core costed computations to polynomial bounds.
 - Oracle PPT machines carry security-parameter-indexed oracle specs,
   polynomial runtime, and uniform polynomial query bounds.
 
 This layer may depend on `Crypto.Infrastructure.Asymptotic` and
 `Crypto.Infrastructure.Computation`, but should not depend on specific
-primitives or assumptions.
+primitives or assumptions. The current machine layer is semantic: runtime and
+query bounds are fields of the machine interface, not yet bounds derived from a
+transition-system trace or from the oracle program syntax.
 
 ### `Crypto.Infrastructure.GameBased`
 
@@ -121,6 +130,29 @@ Generic security notions that are not tied to one primitive.
 
 Primitive-specific games should live under the corresponding primitive; shared
 game combinators and proof patterns belong here.
+
+### `Crypto.Infrastructure.UC`
+
+Reusable universal-composability vocabulary for interactive protocols. This
+layer currently sits above the computation, complexity, and game-based
+infrastructure: UC environments, adversaries, and simulators are first expressed
+as semantic oracle machines, with PPT aliases used by computational UC
+emulation. The real and ideal executions are packaged as boolean `Game`s whose
+indistinguishability is stated with the generic game-based vocabulary.
+
+- `Execution` defines semantic interactive systems, UC experiments, real and
+  ideal executions, computational UC emulation, controlled-environment UC
+  emulation, perfect UC emulation, and the coercion lemmas from perfect to
+  computational emulation.
+- `Protocol` defines generic UC protocols as indexed families of interactive
+  machines, together with corruption modes and corruption policies.
+- `Layered` provides the layered/YOSO MPC template: layered party identifiers,
+  trusted and boundary roles, per-layer corruption eligibility, the standard
+  local party-step shape, and a generic MPC ideal functionality skeleton.
+
+This layer is still a framework, not a collection of completed protocol
+proofs. Concrete UC statements should instantiate these templates with explicit
+message syntax, schedulers, ideal functionalities, and simulators.
 
 ### `Crypto.Assumption`
 
@@ -146,7 +178,7 @@ The current encryption hierarchy contains:
 - `Primitive.Encryption.SymmetricEncryption.Instantiations`
 
 The main symmetric-encryption interface is
-`Crypto.Primitive.Encryption.SymmetricEncryption.Scheme Param Key Message Ciphertext`.
+`Crypto.Primitive.Encryption.SymmetricEncryption.Scheme SecPar Param Key Message Ciphertext`.
 `setup` samples public parameters from the security parameter; `Key`, `Message`,
 and `Ciphertext` are then indexed by those public parameters. Correctness and
 one-time left-or-right security live in the same namespace because they are
@@ -157,7 +189,7 @@ and requires exact zero advantage. The generic notions they use remain in
 `Infrastructure.GameBased`.
 
 The main asymmetric-encryption interface is
-`Crypto.Primitive.Encryption.AsymmetricEncryption.Scheme Param PublicKey SecretKey Message Ciphertext`.
+`Crypto.Primitive.Encryption.AsymmetricEncryption.Scheme SecPar Param PublicKey SecretKey Message Ciphertext`.
 It provides public parameters, key generation, public-key encryption, and
 secret-key decryption. Its IND-CPA definition is expressed as an
 `Infrastructure.GameBased.OracleDistinguishing` problem.
@@ -167,6 +199,12 @@ exposes the finite nonempty additive group chosen for the security parameter;
 the construction encrypts by addition and decrypts by subtraction. The library
 proves both correctness and perfect one-time security for this construction,
 and derives PPT one-time security from the perfect theorem.
+
+The primitive-level `UC.lean` files are reserved for primitive-specific UC
+formulations, such as ideal functionalities or emulation statements for the
+corresponding primitive. The reusable UC execution and protocol machinery
+belongs in `Crypto.Infrastructure.UC`; primitive-level files should import and
+instantiate that machinery only when they introduce concrete UC definitions.
 
 ### `Crypto.Protocol`
 
@@ -193,15 +231,17 @@ The intended dependency direction is:
 Infrastructure.Asymptotic
   -> Infrastructure.Computation
   -> Infrastructure.Complexity / Infrastructure.GameBased
+  -> Infrastructure.UC
   -> Assumption / Primitive
   -> Protocol / Infrastructure.ProofPattern
 ```
 
 This is a guideline rather than a total order. For example,
 `Infrastructure.GameBased` and `Infrastructure.Complexity` both depend on
-`Infrastructure.Computation`, and primitive-specific security games may depend
-on both game-based and complexity infrastructure. Avoid dependencies from lower
-layers back into higher layers.
+`Infrastructure.Computation`, `Infrastructure.UC` uses both machine and
+game-based vocabulary, and primitive-specific security games may depend on both
+game-based and complexity infrastructure. Avoid dependencies from lower layers
+back into higher layers.
 
 ## Adding New Material
 
@@ -213,6 +253,8 @@ layers back into higher layers.
   `Infrastructure.Complexity`.
 - Put generic advantage, indistinguishability, hybrid, and reduction notions in
   `Infrastructure.GameBased`.
+- Put reusable UC experiment, execution, protocol, corruption, and layered MPC
+  templates in `Infrastructure.UC`.
 - Put assumption families in `Assumption/<family>/`.
 - Put primitive-specific syntax, correctness, and security games in
   `Primitive/<kind>/<primitive>/`, with `Syntax.lean` and `UC.lean` as direct
@@ -250,9 +292,10 @@ that instantiate a game-based notion.
 ## Status
 
 The library is early-stage. The current hierarchy is sound as a working
-architecture, but several namespaces are intentionally sparse. The next useful
-refinements are to fill out assumption interfaces, add more primitive families,
-connect costed implementations to concrete constructions, and move common proof
-patterns into `Crypto.Infrastructure.GameBased` or
+architecture, but several namespaces are intentionally sparse and the machine
+model remains semantic. The next useful refinements are to fill out assumption
+interfaces, add more primitive families, connect costed implementations to
+concrete constructions, derive query-count bounds from oracle programs when
+needed, and move common proof patterns into `Crypto.Infrastructure.GameBased` or
 `Crypto.Infrastructure.ProofPattern` once they repeat across multiple
 constructions.

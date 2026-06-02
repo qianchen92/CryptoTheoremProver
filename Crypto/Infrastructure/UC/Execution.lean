@@ -29,8 +29,17 @@ structure InteractiveSystem
   init : (sec : Crypto.SecPar) → PMF (State sec)
   step : (sec : Crypto.SecPar) → State sec → Input sec → PMF (Output sec × State sec)
 
-/-- The external UC environment, modeled as a PPT oracle machine. -/
+/-- The external UC environment, modeled semantically as an oracle machine. -/
 abbrev Environment
+    (EnvInput : Crypto.SecPar → Type uEnvInput)
+    (EnvSpec :
+      (sec : Crypto.SecPar) →
+      EnvInput sec →
+      OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse}) :=
+  ProbabilisticOracleMachine EnvInput (fun _ => Bool) EnvSpec
+
+/-- A PPT external UC environment. -/
+abbrev PPTEnvironment
     (EnvInput : Crypto.SecPar → Type uEnvInput)
     (EnvSpec :
       (sec : Crypto.SecPar) →
@@ -38,8 +47,18 @@ abbrev Environment
       OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse}) :=
   PPTOracleMachine EnvInput (fun _ => Bool) EnvSpec
 
-/-- The real-world adversary, modeled as a PPT oracle machine. -/
+/-- The real-world adversary, modeled semantically as an oracle machine. -/
 abbrev Adversary
+    (AdversaryInput : Crypto.SecPar → Type uAdvInput)
+    (AdversaryOutput : Crypto.SecPar → Type uAdvOutput)
+    (AdversarySpec :
+      (sec : Crypto.SecPar) →
+      AdversaryInput sec →
+      OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse}) :=
+  ProbabilisticOracleMachine AdversaryInput AdversaryOutput AdversarySpec
+
+/-- A PPT real-world adversary. -/
+abbrev PPTAdversary
     (AdversaryInput : Crypto.SecPar → Type uAdvInput)
     (AdversaryOutput : Crypto.SecPar → Type uAdvOutput)
     (AdversarySpec :
@@ -48,8 +67,18 @@ abbrev Adversary
       OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse}) :=
   PPTOracleMachine AdversaryInput AdversaryOutput AdversarySpec
 
-/-- The ideal-world simulator, modeled as a PPT oracle machine. -/
+/-- The ideal-world simulator, modeled semantically as an oracle machine. -/
 abbrev Simulator
+    (SimulatorInput : Crypto.SecPar → Type uSimInput)
+    (SimulatorOutput : Crypto.SecPar → Type uSimOutput)
+    (SimulatorSpec :
+      (sec : Crypto.SecPar) →
+      SimulatorInput sec →
+      OracleSpec.{uSimOracle, uSimQuery, uSimResponse}) :=
+  ProbabilisticOracleMachine SimulatorInput SimulatorOutput SimulatorSpec
+
+/-- A PPT ideal-world simulator. -/
+abbrev PPTSimulator
     (SimulatorInput : Crypto.SecPar → Type uSimInput)
     (SimulatorOutput : Crypto.SecPar → Type uSimOutput)
     (SimulatorSpec :
@@ -126,7 +155,7 @@ noncomputable def realExecution
     Game Bool :=
   fun sec =>
     PMF.bind (experiment.setup sec) fun input =>
-      environment.run sec input (experiment.realWorld adversary sec input)
+      environment.runWithEnv sec input (experiment.realWorld adversary sec input)
 
 /-- Run the external environment against the ideal-world scheduler. -/
 noncomputable def idealExecution
@@ -139,7 +168,7 @@ noncomputable def idealExecution
     Game Bool :=
   fun sec =>
     PMF.bind (experiment.setup sec) fun input =>
-      environment.run sec input (experiment.idealWorld simulator sec input)
+      environment.runWithEnv sec input (experiment.idealWorld simulator sec input)
 
 /--
 Computational UC emulation: for every PPT real-world adversary there is a PPT
@@ -151,12 +180,14 @@ def UCEmulates
       Experiment EnvInput EnvSpec
         AdversaryInput AdversaryOutput AdversarySpec
         SimulatorInput SimulatorOutput SimulatorSpec) : Prop :=
-  ∀ adversary : Adversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : Simulator SimulatorInput SimulatorOutput SimulatorSpec,
-      ∀ environment : Environment EnvInput EnvSpec,
+  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
+    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
+      ∀ environment : PPTEnvironment EnvInput EnvSpec,
         Indistinguishable
-          (realExecution experiment adversary environment)
-          (idealExecution experiment simulator environment)
+          (realExecution experiment adversary.toProbabilisticOracleMachine
+            environment.toProbabilisticOracleMachine)
+          (idealExecution experiment simulator.toProbabilisticOracleMachine
+            environment.toProbabilisticOracleMachine)
 
 /--
 UC emulation against a restricted class of environments.  This matches the
@@ -168,29 +199,32 @@ def ControlledUCEmulates
         AdversaryInput AdversaryOutput AdversarySpec
         SimulatorInput SimulatorOutput SimulatorSpec)
     (AllowedEnvironment : Environment EnvInput EnvSpec → Prop) : Prop :=
-  ∀ adversary : Adversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : Simulator SimulatorInput SimulatorOutput SimulatorSpec,
-      ∀ environment : Environment EnvInput EnvSpec,
-        AllowedEnvironment environment →
+  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
+    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
+      ∀ environment : PPTEnvironment EnvInput EnvSpec,
+        AllowedEnvironment environment.toProbabilisticOracleMachine →
           Indistinguishable
-            (realExecution experiment adversary environment)
-            (idealExecution experiment simulator environment)
+            (realExecution experiment adversary.toProbabilisticOracleMachine
+              environment.toProbabilisticOracleMachine)
+            (idealExecution experiment simulator.toProbabilisticOracleMachine
+              environment.toProbabilisticOracleMachine)
 
 /--
-Perfect UC emulation, useful for information-theoretic MPC statements.  The two
-worlds produce exactly the same boolean game at every security parameter.
+Perfect UC emulation with an efficient simulator: for every PPT real-world
+adversary there is a PPT ideal-world simulator such that every semantic
+environment sees exactly the same boolean game at every security parameter.
 -/
 def PerfectUCEmulates
     (experiment :
       Experiment EnvInput EnvSpec
         AdversaryInput AdversaryOutput AdversarySpec
         SimulatorInput SimulatorOutput SimulatorSpec) : Prop :=
-  ∀ adversary : Adversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : Simulator SimulatorInput SimulatorOutput SimulatorSpec,
+  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
+    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
       ∀ environment : Environment EnvInput EnvSpec,
         ∀ sec : Crypto.SecPar,
-          realExecution experiment adversary environment sec =
-            idealExecution experiment simulator environment sec
+          realExecution experiment adversary.toProbabilisticOracleMachine environment sec =
+            idealExecution experiment simulator.toProbabilisticOracleMachine environment sec
 
 /-- Perfect UC emulation against a restricted class of environments. -/
 def PerfectControlledUCEmulates
@@ -199,13 +233,13 @@ def PerfectControlledUCEmulates
         AdversaryInput AdversaryOutput AdversarySpec
         SimulatorInput SimulatorOutput SimulatorSpec)
     (AllowedEnvironment : Environment EnvInput EnvSpec → Prop) : Prop :=
-  ∀ adversary : Adversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : Simulator SimulatorInput SimulatorOutput SimulatorSpec,
+  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
+    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
       ∀ environment : Environment EnvInput EnvSpec,
         AllowedEnvironment environment →
           ∀ sec : Crypto.SecPar,
-            realExecution experiment adversary environment sec =
-              idealExecution experiment simulator environment sec
+            realExecution experiment adversary.toProbabilisticOracleMachine environment sec =
+              idealExecution experiment simulator.toProbabilisticOracleMachine environment sec
 
 theorem PerfectUCEmulates.ucEmulates
     {experiment :
@@ -220,11 +254,13 @@ theorem PerfectUCEmulates.ucEmulates
   intro environment
   have hAdvantage :
       Advantage
-          (realExecution experiment adversary environment)
-          (idealExecution experiment simulator environment) =
+          (realExecution experiment adversary.toProbabilisticOracleMachine
+            environment.toProbabilisticOracleMachine)
+          (idealExecution experiment simulator.toProbabilisticOracleMachine
+            environment.toProbabilisticOracleMachine) =
         fun _ => (0 : Real) := by
     funext sec
-    simp [Advantage, AcceptProb, hsimulator environment sec]
+    simp [Advantage, AcceptProb, hsimulator environment.toProbabilisticOracleMachine sec]
   unfold Indistinguishable
   rw [hAdvantage]
   exact Crypto.Infrastructure.Asymptotic.isNegligible_zero
@@ -243,11 +279,14 @@ theorem PerfectControlledUCEmulates.controlledUCEmulates
   intro environment hallowed
   have hAdvantage :
       Advantage
-          (realExecution experiment adversary environment)
-          (idealExecution experiment simulator environment) =
+          (realExecution experiment adversary.toProbabilisticOracleMachine
+            environment.toProbabilisticOracleMachine)
+          (idealExecution experiment simulator.toProbabilisticOracleMachine
+            environment.toProbabilisticOracleMachine) =
         fun _ => (0 : Real) := by
     funext sec
-    simp [Advantage, AcceptProb, hsimulator environment hallowed sec]
+    simp [Advantage, AcceptProb,
+      hsimulator environment.toProbabilisticOracleMachine hallowed sec]
   unfold Indistinguishable
   rw [hAdvantage]
   exact Crypto.Infrastructure.Asymptotic.isNegligible_zero

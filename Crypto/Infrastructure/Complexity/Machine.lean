@@ -20,7 +20,13 @@ structure TimedMachine (Input : Type uIn) (Output : Type uOut)
     extends ProbabilisticMachine Input Output where
   runtime : Crypto.SecPar → Nat
 
-/-- A probabilistic polynomial-time machine. -/
+/--
+A semantic probabilistic polynomial-time machine.
+
+The `runtime` field records the claimed uniform time bound for this semantic
+input/output behavior.  It is not yet tied to a transition-system semantics or
+to the costed-computation layer.
+-/
 structure PPTMachine (Input : Type uIn) (Output : Type uOut)
     extends TimedMachine Input Output where
   runtime_isPoly : IsPolyBounded runtime
@@ -36,13 +42,18 @@ structure TimedDependentMachine
     extends ProbabilisticDependentMachine Input Output where
   runtime : Crypto.SecPar → Nat
 
-/-- A dependent-output probabilistic polynomial-time machine. -/
+/--
+A semantic dependent-output probabilistic polynomial-time machine.
+
+As with `PPTMachine`, the runtime certificate is a semantic bound attached to
+the machine interface rather than a derived bound on an executable trace.
+-/
 structure PPTDependentMachine
     (Input : Type uIn) (Output : Input → Type uOut)
     extends TimedDependentMachine Input Output where
   runtime_isPoly : IsPolyBounded runtime
 
-/-- A probabilistic machine with adaptive access to an oracle environment. -/
+/-- A probabilistic machine that builds an adaptive oracle program. -/
 structure ProbabilisticOracleMachine
     (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
     (Spec :
@@ -52,9 +63,8 @@ structure ProbabilisticOracleMachine
   run :
     (sec : Crypto.SecPar) →
     (input : Input sec) →
-    Crypto.Infrastructure.Computation.Oracle.OracleEnv.{uOracle, uQuery, uResponse, uState}
-      (Spec sec input) →
-    PMF (Output sec)
+    Crypto.Infrastructure.Computation.Oracle.OracleProgram.{
+      uOracle, uQuery, uResponse, uOut} (Spec sec input) (ULift.{uResponse} (Output sec))
 
 /-- An oracle machine equipped with uniform runtime and per-oracle query bounds. -/
 structure TimedOracleMachine
@@ -67,7 +77,13 @@ structure TimedOracleMachine
   runtime : Crypto.SecPar → Nat
   queryBound : (sec : Crypto.SecPar) → (input : Input sec) → (Spec sec input).Name → Nat
 
-/-- A probabilistic polynomial-time oracle machine. -/
+/--
+A semantic probabilistic polynomial-time oracle machine.
+
+The runtime and query-bound fields are part of the machine interface.  The
+oracle program syntax enforces linear state threading during interpretation,
+but query bounds are not yet derived from the `run` program.
+-/
 structure PPTOracleMachine
     (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
     (Spec :
@@ -80,6 +96,31 @@ structure PPTOracleMachine
   queryBound_polyBound_isPoly : IsPolyBounded queryBound_polyBound
   queryBound_le_polyBound :
     ∀ sec input name, queryBound sec input name ≤ queryBound_polyBound sec
+
+namespace ProbabilisticOracleMachine
+
+variable
+    {Input : Crypto.SecPar → Type uIn} {Output : Crypto.SecPar → Type uOut}
+    {Spec :
+      (sec : Crypto.SecPar) →
+      Input sec →
+      Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse}}
+
+/-- Interpret an oracle machine against an environment and discard the final oracle state. -/
+noncomputable def runWithEnv
+    (M : ProbabilisticOracleMachine Input Output Spec)
+    (sec : Crypto.SecPar)
+    (input : Input sec)
+    (env :
+      Crypto.Infrastructure.Computation.Oracle.OracleEnv.{uOracle, uQuery, uResponse, uState}
+        (Spec sec input)) :
+    PMF (Output sec) :=
+  PMF.bind
+    (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runWithEnv
+      (M.run sec input) sec env) fun output =>
+      PMF.pure output.down
+
+end ProbabilisticOracleMachine
 
 /-- A semantic deterministic machine with a uniform running-time bound. -/
 structure DeterministicMachine (Input : Type uIn) (Output : Type uOut) where

@@ -23,6 +23,9 @@ structure PublicParam where
   smul : SMul Scalar Carrier
   generator : Carrier
   generator_generates : ∀ x : Carrier, ∃ a : Scalar, a • generator = x
+  mulScalarAction :
+    ∀ leftExp rightExp : Scalar,
+      (leftExp * rightExp) • generator = leftExp • (rightExp • generator)
   compatibleScalarAction :
     ∀ secretKey nonce : Scalar,
       secretKey • (nonce • generator) = nonce • (secretKey • generator)
@@ -55,6 +58,11 @@ def realChallenge
   left := a • pp.generator
   right := b • pp.generator
   shared := (a * b) • pp.generator
+
+@[simp] theorem realChallenge_shared_eq_nestedAction
+    (pp : PublicParam.{uScalar, uGroup}) (a b : pp.Scalar) :
+    (realChallenge pp a b).shared = a • (b • pp.generator) :=
+  pp.mulScalarAction a b
 
 /-- A random DDH tuple where the third group element is uniform in the group. -/
 def randomChallenge

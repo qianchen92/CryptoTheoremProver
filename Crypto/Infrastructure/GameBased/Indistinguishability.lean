@@ -76,7 +76,7 @@ noncomputable def securityGame
     Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
     PMF.bind (P.setup sec) fun input => do
-      let output ← A.run sec input (env sec input)
+      let output ← A.runWithEnv sec input (env sec input)
       return output
 
 /-- The left-side oracle distinguishing security game. -/

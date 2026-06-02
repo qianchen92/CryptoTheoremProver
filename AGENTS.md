@@ -7,7 +7,8 @@
   domains.
 - Put reusable infrastructure under `Crypto.Infrastructure`, using submodules
   such as `Asymptotic`, `Computation`, `Complexity`, `GameBased`, and
-  `ProofPattern` when they describe the actual role of the declarations.
+  `UC`, and `ProofPattern` when they describe the actual role of the
+  declarations.
 - Avoid adding new broad namespaces such as `Foundation`, `Core`, `Security`,
   or `Proof` unless the module has a precisely documented scope that cannot be
   expressed with a narrower name.
