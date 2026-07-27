@@ -1,3 +1,3 @@
-import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Construction
+import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Scheme
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.UC
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Properties.Basic

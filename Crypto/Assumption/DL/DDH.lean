@@ -1,5 +1,5 @@
-import Crypto.Infrastructure.Computation.Algebra.Group
-import Crypto.Infrastructure.Computation.Distribution
+import Crypto.Infrastructure.Computation.Algebra.Backend
+import Crypto.Infrastructure.Computation.Randomized
 import Crypto.Infrastructure.GameBased.Indistinguishability
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
@@ -7,41 +7,114 @@ namespace Crypto.Assumption.DL
 
 namespace DDH
 
+open Crypto.Infrastructure.Computation
+open Crypto.Infrastructure.Computation.Algebra
+open Crypto.Infrastructure.Computation.Cost
+
 universe uScalar uGroup
 
-/-- Public parameters for a finite additive-group DDH instance. -/
+/--
+Public parameters for a finite additive-group DDH instance.
+
+The algebraic backends and uniform samplers are part of the parameters, so
+every operation used by the assumption carries its cost at the point where it
+is executed.
+-/
 structure PublicParam where
   Scalar : Type uScalar
   Carrier : Type uGroup
   addGroup : AddGroup Carrier
   fintypeCarrier : Fintype Carrier
-  nonemptyCarrier : Nonempty Carrier
-  decidableEqCarrier : DecidableEq Carrier
   fintypeScalar : Fintype Scalar
-  nonemptyScalar : Nonempty Scalar
-  mulScalar : Mul Scalar
-  smul : SMul Scalar Carrier
+  commMonoidScalar : CommMonoid Scalar
+  mulAction : @MulAction Scalar Carrier commMonoidScalar.toMonoid
   generator : Carrier
   generator_generates : ∀ x : Carrier, ∃ a : Scalar, a • generator = x
-  mulScalarAction :
-    ∀ leftExp rightExp : Scalar,
-      (leftExp * rightExp) • generator = leftExp • (rightExp • generator)
-  compatibleScalarAction :
-    ∀ secretKey nonce : Scalar,
-      secretKey • (nonce • generator) = nonce • (secretKey • generator)
+  backend : @AdditiveBackend Scalar Carrier addGroup mulAction.toSMul
+  scalarMulBackend : @MultiplicativeBackend Scalar commMonoidScalar.toMul
+  scalarSampler : @UniformSampler Scalar fintypeScalar ⟨1⟩
+  carrierSampler : @UniformSampler Carrier fintypeCarrier ⟨0⟩
 
 attribute [instance] PublicParam.addGroup
 attribute [instance] PublicParam.fintypeCarrier
-attribute [instance] PublicParam.nonemptyCarrier
-attribute [instance] PublicParam.decidableEqCarrier
 attribute [instance] PublicParam.fintypeScalar
-attribute [instance] PublicParam.nonemptyScalar
-attribute [instance] PublicParam.mulScalar
-attribute [instance] PublicParam.smul
+attribute [instance] PublicParam.commMonoidScalar
+attribute [instance] PublicParam.mulAction
 
-/-- A security-parameter-indexed family of DDH public parameters. -/
+instance (pp : PublicParam.{uScalar, uGroup}) : Nonempty pp.Scalar :=
+  ⟨1⟩
+
+instance (pp : PublicParam.{uScalar, uGroup}) : Nonempty pp.Carrier :=
+  ⟨0⟩
+
+/-- Scalar multiplication respects multiplication in the scalar monoid. -/
+@[simp] theorem PublicParam.mulScalarAction
+    (pp : PublicParam.{uScalar, uGroup}) (leftExp rightExp : pp.Scalar) :
+    (leftExp * rightExp) • pp.generator =
+      leftExp • (rightExp • pp.generator) :=
+  mul_smul leftExp rightExp pp.generator
+
+/-- Scalar actions commute because the scalar monoid is commutative. -/
+theorem PublicParam.compatibleScalarAction
+    (pp : PublicParam.{uScalar, uGroup}) (leftExp rightExp : pp.Scalar) :
+    leftExp • (rightExp • pp.generator) =
+      rightExp • (leftExp • pp.generator) := by
+  rw [← mul_smul, mul_comm, mul_smul]
+
+/-- Local algebraic cost bounds used only when proving DDH efficiency. -/
+structure ParamEfficiencyCertificate
+    (pp : PublicParam.{uScalar, uGroup}) where
+  additiveBounds : AdditiveCostBounds pp.backend
+  scalarMulBounds : MultiplicativeCostBounds pp.scalarMulBackend
+
+/-- Three scalar actions and one scalar multiplication generate a real DDH tuple. -/
+def ParamEfficiencyCertificate.realChallengeBudget
+    {pp : PublicParam.{uScalar, uGroup}}
+    (certificate : ParamEfficiencyCertificate pp) : Cost :=
+  certificate.additiveBounds.smulBudget +
+    certificate.additiveBounds.smulBudget +
+    certificate.scalarMulBounds.mulBudget +
+    certificate.additiveBounds.smulBudget
+
+/-- Two scalar samples followed by real-tuple generation. -/
+def ParamEfficiencyCertificate.realSampleTailBudget
+    {pp : PublicParam.{uScalar, uGroup}}
+    (certificate : ParamEfficiencyCertificate pp) : Cost :=
+  pp.scalarSampler.sampleBudget +
+    pp.scalarSampler.sampleBudget +
+    certificate.realChallengeBudget
+
+/-- Two scalar actions generate the public exponents in a random DDH tuple. -/
+def ParamEfficiencyCertificate.randomChallengeBudget
+    {pp : PublicParam.{uScalar, uGroup}}
+    (certificate : ParamEfficiencyCertificate pp) : Cost :=
+  certificate.additiveBounds.smulBudget +
+    certificate.additiveBounds.smulBudget
+
+/-- Two scalar samples, one group sample, and random-tuple construction. -/
+def ParamEfficiencyCertificate.randomSampleTailBudget
+    {pp : PublicParam.{uScalar, uGroup}}
+    (certificate : ParamEfficiencyCertificate pp) : Cost :=
+  pp.scalarSampler.sampleBudget +
+    pp.scalarSampler.sampleBudget +
+    pp.carrierSampler.sampleBudget +
+    certificate.randomChallengeBudget
+
+/-- A security-parameter-indexed family of native costed DDH public parameters. -/
 structure Family where
-  setup : Crypto.SecPar → PMF PublicParam.{uScalar, uGroup}
+  setup : Crypto.SecPar → RandCosted PublicParam.{uScalar, uGroup}
+
+/-- A family with one fixed public parameter and an explicit setup cost. -/
+noncomputable def Family.ofFixed
+    (pp : PublicParam.{uScalar, uGroup}) (setupCost : Cost) :
+    Family.{uScalar, uGroup} where
+  setup := fun _sec => RandCosted.liftCosted ⟨pp, setupCost⟩
+
+/-- The mathematical setup distribution obtained by erasing native setup costs. -/
+noncomputable def Family.setupDist
+    (F : Family.{uScalar, uGroup}) (sec : Crypto.SecPar) :
+    PMF PublicParam.{uScalar, uGroup} :=
+  RandCosted.valueDist (F.setup sec)
 
 /-- A DDH challenge consists of public parameters and three group elements. -/
 structure ChallengeInput where
@@ -50,59 +123,428 @@ structure ChallengeInput where
   right : param.Carrier
   shared : param.Carrier
 
-/-- A genuine DDH tuple generated by two exponents. -/
+/-- The mathematical genuine DDH tuple generated by two exponents. -/
 def realChallenge
-    (pp : PublicParam.{uScalar, uGroup}) (a b : pp.Scalar) :
+    (pp : PublicParam.{uScalar, uGroup}) (leftExp rightExp : pp.Scalar) :
     ChallengeInput.{uScalar, uGroup} where
   param := pp
-  left := a • pp.generator
-  right := b • pp.generator
-  shared := (a * b) • pp.generator
+  left := leftExp • pp.generator
+  right := rightExp • pp.generator
+  shared := (leftExp * rightExp) • pp.generator
 
 @[simp] theorem realChallenge_shared_eq_nestedAction
-    (pp : PublicParam.{uScalar, uGroup}) (a b : pp.Scalar) :
-    (realChallenge pp a b).shared = a • (b • pp.generator) :=
-  pp.mulScalarAction a b
+    (pp : PublicParam.{uScalar, uGroup}) (leftExp rightExp : pp.Scalar) :
+    (realChallenge pp leftExp rightExp).shared =
+      leftExp • (rightExp • pp.generator) :=
+  pp.mulScalarAction leftExp rightExp
 
-/-- A random DDH tuple where the third group element is uniform in the group. -/
+/-- The mathematical random DDH tuple with an independently sampled third element. -/
 def randomChallenge
     (pp : PublicParam.{uScalar, uGroup})
-    (leftExp rightExp : pp.Scalar) (shared : pp.Carrier) : ChallengeInput.{uScalar, uGroup} where
+    (leftExp rightExp : pp.Scalar) (shared : pp.Carrier) :
+    ChallengeInput.{uScalar, uGroup} where
   param := pp
   left := leftExp • pp.generator
   right := rightExp • pp.generator
   shared := shared
 
-/-- The real DDH challenge distribution. -/
+/--
+Costed construction of a genuine DDH tuple.
+
+All algebraic operations are taken directly from the public parameter.
+-/
+def realChallengeComputation
+    (pp : PublicParam.{uScalar, uGroup})
+    (leftExp rightExp : pp.Scalar) :
+    Costed ChallengeInput.{uScalar, uGroup} :=
+  Costed.bind (pp.backend.smul leftExp pp.generator) fun left =>
+    Costed.bind (pp.backend.smul rightExp pp.generator) fun right =>
+      Costed.bind (pp.scalarMulBackend.mul leftExp rightExp) fun product =>
+        Costed.bind (pp.backend.smul product pp.generator) fun shared =>
+          Costed.pure
+            {
+              param := pp
+              left := left
+              right := right
+              shared := shared
+            }
+
+/-- Erasing operation costs recovers the mathematical real DDH tuple. -/
+@[simp] theorem realChallengeComputation_value
+    (pp : PublicParam.{uScalar, uGroup})
+    (leftExp rightExp : pp.Scalar) :
+    (realChallengeComputation pp leftExp rightExp).val =
+      realChallenge pp leftExp rightExp := by
+  simp [realChallengeComputation, Costed.bind, realChallenge]
+
+/-- The exact path cost records all three scalar actions and scalar multiplication. -/
+@[simp] theorem realChallengeComputation_cost
+    (pp : PublicParam.{uScalar, uGroup})
+    (leftExp rightExp : pp.Scalar) :
+    (realChallengeComputation pp leftExp rightExp).cost =
+      (pp.backend.smul leftExp pp.generator).cost +
+        (pp.backend.smul rightExp pp.generator).cost +
+        (pp.scalarMulBackend.mul leftExp rightExp).cost +
+        (pp.backend.smul (leftExp * rightExp) pp.generator).cost := by
+  simp [realChallengeComputation, Costed.bind, Nat.add_assoc]
+
+/-- Every genuine DDH tuple construction satisfies its parameter-local budget. -/
+theorem realChallengeComputation_cost_le
+    (pp : PublicParam.{uScalar, uGroup})
+    (certificate : ParamEfficiencyCertificate pp)
+    (leftExp rightExp : pp.Scalar) :
+    (realChallengeComputation pp leftExp rightExp).cost ≤
+      certificate.realChallengeBudget := by
+  rw [realChallengeComputation_cost]
+  simpa [ParamEfficiencyCertificate.realChallengeBudget, Nat.add_assoc] using
+    Nat.add_le_add
+      (certificate.additiveBounds.smulCost_le leftExp pp.generator)
+      (Nat.add_le_add
+        (certificate.additiveBounds.smulCost_le rightExp pp.generator)
+        (Nat.add_le_add
+          (certificate.scalarMulBounds.mulCost_le leftExp rightExp)
+          (certificate.additiveBounds.smulCost_le
+            (leftExp * rightExp) pp.generator)))
+
+/-- A compositional cost rule for randomized writer bind. -/
+private theorem bind_cost_le
+    {α : Type uScalar} {β : Type uGroup}
+    (first : RandCosted α) (next : α → RandCosted β)
+    (firstBudget nextBudget : Cost)
+    (first_cost_le :
+      ∀ firstResult, firstResult ∈ first.support →
+        firstResult.cost ≤ firstBudget)
+    (next_cost_le :
+      ∀ value nextResult, nextResult ∈ (next value).support →
+        nextResult.cost ≤ nextBudget) :
+    ∀ result, result ∈ (RandCosted.bind first next).support →
+      result.cost ≤ firstBudget + nextBudget := by
+  intro result hresult
+  simp only [RandCosted.bind] at hresult
+  rw [PMF.mem_support_bind_iff] at hresult
+  rcases hresult with ⟨firstResult, hfirstResult, hnextResult⟩
+  rw [PMF.mem_support_map_iff] at hnextResult
+  rcases hnextResult with ⟨nextResult, hnextResult, hresult⟩
+  subst result
+  exact Nat.add_le_add
+    (first_cost_le firstResult hfirstResult)
+    (next_cost_le firstResult.val nextResult hnextResult)
+
+/-- The two exponent samples plus real-tuple construction at a fixed parameter. -/
+noncomputable def realSampleTailComputation
+    (pp : PublicParam.{uScalar, uGroup}) :
+    RandCosted ChallengeInput.{uScalar, uGroup} :=
+  RandCosted.bind pp.scalarSampler.sample fun leftExp =>
+    RandCosted.bind pp.scalarSampler.sample fun rightExp =>
+      RandCosted.liftCosted
+        (realChallengeComputation pp leftExp rightExp)
+
+/-- Every fixed-parameter real-sample tail satisfies its compositional budget. -/
+theorem realSampleTailComputation_cost_le
+    (pp : PublicParam.{uScalar, uGroup})
+    (certificate : ParamEfficiencyCertificate pp) :
+    ∀ result, result ∈ (realSampleTailComputation pp).support →
+      result.cost ≤ certificate.realSampleTailBudget := by
+  intro result hresult
+  have hbound :
+      result.cost ≤
+        pp.scalarSampler.sampleBudget +
+          (pp.scalarSampler.sampleBudget +
+            certificate.realChallengeBudget) := by
+    apply
+      bind_cost_le
+        pp.scalarSampler.sample
+        (fun leftExp =>
+          RandCosted.bind
+            pp.scalarSampler.sample
+            (fun rightExp =>
+              RandCosted.liftCosted
+                (realChallengeComputation pp leftExp rightExp)))
+        pp.scalarSampler.sampleBudget
+        (pp.scalarSampler.sampleBudget + certificate.realChallengeBudget)
+        pp.scalarSampler.cost_le
+    · intro leftExp
+      apply
+        bind_cost_le
+          pp.scalarSampler.sample
+          (fun rightExp =>
+            RandCosted.liftCosted
+              (realChallengeComputation pp leftExp rightExp))
+          pp.scalarSampler.sampleBudget
+          certificate.realChallengeBudget
+          pp.scalarSampler.cost_le
+      intro rightExp nextResult hnextResult
+      simp only [RandCosted.liftCosted] at hnextResult
+      rw [PMF.mem_support_pure_iff] at hnextResult
+      subst nextResult
+      exact realChallengeComputation_cost_le pp certificate leftExp rightExp
+    · simpa [realSampleTailComputation] using hresult
+  simpa [ParamEfficiencyCertificate.realSampleTailBudget, Nat.add_assoc] using hbound
+
+/-- Costed generation of a genuine DDH challenge, including setup and sampling. -/
+noncomputable def realSampleComputation
+    (F : Family.{uScalar, uGroup}) (sec : Crypto.SecPar) :
+    RandCosted ChallengeInput.{uScalar, uGroup} :=
+  RandCosted.bind (F.setup sec) realSampleTailComputation
+
+/--
+The real DDH distribution is obtained only by erasing costs from the native
+costed computation.
+-/
 noncomputable def realSample
     (F : Family.{uScalar, uGroup}) :
     Crypto.SecPar → PMF ChallengeInput.{uScalar, uGroup} :=
-  fun sec =>
-    PMF.bind (F.setup sec) fun pp =>
-      PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun leftExp =>
-        PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun rightExp =>
-          PMF.pure (realChallenge pp leftExp rightExp)
+  fun sec => RandCosted.valueDist (realSampleComputation F sec)
 
-/-- The random DDH challenge distribution. -/
+@[simp] theorem realSampleComputation_valueDist
+    (F : Family.{uScalar, uGroup}) (sec : Crypto.SecPar) :
+    RandCosted.valueDist (realSampleComputation F sec) = realSample F sec :=
+  rfl
+
+/-- Costed construction of a random DDH tuple from fixed sampled values. -/
+def randomChallengeComputation
+    (pp : PublicParam.{uScalar, uGroup})
+    (leftExp rightExp : pp.Scalar) (sampledShared : pp.Carrier) :
+    Costed ChallengeInput.{uScalar, uGroup} :=
+  Costed.bind (pp.backend.smul leftExp pp.generator) fun left =>
+    Costed.bind (pp.backend.smul rightExp pp.generator) fun right =>
+      Costed.pure
+        {
+          param := pp
+          left := left
+          right := right
+          shared := sampledShared
+        }
+
+/-- Erasing operation costs recovers the mathematical random DDH tuple. -/
+@[simp] theorem randomChallengeComputation_value
+    (pp : PublicParam.{uScalar, uGroup})
+    (leftExp rightExp : pp.Scalar) (sampledShared : pp.Carrier) :
+    (randomChallengeComputation pp leftExp rightExp sampledShared).val =
+      randomChallenge pp leftExp rightExp sampledShared := by
+  simp [randomChallengeComputation, Costed.bind, randomChallenge]
+
+/-- The exact random-tuple construction cost is its two scalar actions. -/
+@[simp] theorem randomChallengeComputation_cost
+    (pp : PublicParam.{uScalar, uGroup})
+    (leftExp rightExp : pp.Scalar) (sampledShared : pp.Carrier) :
+    (randomChallengeComputation pp leftExp rightExp sampledShared).cost =
+      (pp.backend.smul leftExp pp.generator).cost +
+        (pp.backend.smul rightExp pp.generator).cost :=
+  rfl
+
+/-- Random DDH tuple construction satisfies its parameter-local budget. -/
+theorem randomChallengeComputation_cost_le
+    (pp : PublicParam.{uScalar, uGroup})
+    (certificate : ParamEfficiencyCertificate pp)
+    (leftExp rightExp : pp.Scalar) (sampledShared : pp.Carrier) :
+    (randomChallengeComputation pp leftExp rightExp sampledShared).cost ≤
+      certificate.randomChallengeBudget :=
+  Nat.add_le_add
+    (certificate.additiveBounds.smulCost_le leftExp pp.generator)
+    (certificate.additiveBounds.smulCost_le rightExp pp.generator)
+
+/-- The fixed-parameter randomized DDH sampling tail. -/
+noncomputable def randomSampleTailComputation
+    (pp : PublicParam.{uScalar, uGroup}) :
+    RandCosted ChallengeInput.{uScalar, uGroup} :=
+  RandCosted.bind pp.scalarSampler.sample fun leftExp =>
+    RandCosted.bind pp.scalarSampler.sample fun rightExp =>
+      RandCosted.bind pp.carrierSampler.sample fun sampledShared =>
+        RandCosted.liftCosted
+          (randomChallengeComputation pp leftExp rightExp sampledShared)
+
+/-- Every fixed-parameter random-sample tail satisfies its compositional budget. -/
+theorem randomSampleTailComputation_cost_le
+    (pp : PublicParam.{uScalar, uGroup})
+    (certificate : ParamEfficiencyCertificate pp) :
+    ∀ result, result ∈ (randomSampleTailComputation pp).support →
+      result.cost ≤ certificate.randomSampleTailBudget := by
+  intro result hresult
+  have hbound :
+      result.cost ≤
+        pp.scalarSampler.sampleBudget +
+          (pp.scalarSampler.sampleBudget +
+            (pp.carrierSampler.sampleBudget +
+              certificate.randomChallengeBudget)) := by
+    apply
+      bind_cost_le
+        pp.scalarSampler.sample
+        (fun leftExp =>
+          RandCosted.bind
+            pp.scalarSampler.sample
+            (fun rightExp =>
+              RandCosted.bind
+                pp.carrierSampler.sample
+                (fun sampledShared =>
+                  RandCosted.liftCosted
+                    (randomChallengeComputation
+                      pp leftExp rightExp sampledShared))))
+        pp.scalarSampler.sampleBudget
+        (pp.scalarSampler.sampleBudget +
+          (pp.carrierSampler.sampleBudget +
+            certificate.randomChallengeBudget))
+        pp.scalarSampler.cost_le
+    · intro leftExp
+      apply
+        bind_cost_le
+          pp.scalarSampler.sample
+          (fun rightExp =>
+            RandCosted.bind
+              pp.carrierSampler.sample
+              (fun sampledShared =>
+                RandCosted.liftCosted
+                  (randomChallengeComputation
+                    pp leftExp rightExp sampledShared)))
+          pp.scalarSampler.sampleBudget
+          (pp.carrierSampler.sampleBudget +
+            certificate.randomChallengeBudget)
+          pp.scalarSampler.cost_le
+      intro rightExp
+      apply
+        bind_cost_le
+          pp.carrierSampler.sample
+          (fun sampledShared =>
+            RandCosted.liftCosted
+              (randomChallengeComputation
+                pp leftExp rightExp sampledShared))
+          pp.carrierSampler.sampleBudget
+          certificate.randomChallengeBudget
+          pp.carrierSampler.cost_le
+      intro sampledShared nextResult hnextResult
+      simp only [RandCosted.liftCosted] at hnextResult
+      rw [PMF.mem_support_pure_iff] at hnextResult
+      subst nextResult
+      exact randomChallengeComputation_cost_le
+        pp certificate leftExp rightExp sampledShared
+    · simpa [randomSampleTailComputation] using hresult
+  simpa [ParamEfficiencyCertificate.randomSampleTailBudget,
+    Nat.add_assoc] using hbound
+
+/-- Costed generation of a random DDH challenge, including setup and sampling. -/
+noncomputable def randomSampleComputation
+    (F : Family.{uScalar, uGroup}) (sec : Crypto.SecPar) :
+    RandCosted ChallengeInput.{uScalar, uGroup} :=
+  RandCosted.bind (F.setup sec) randomSampleTailComputation
+
+/--
+The random DDH distribution is obtained only by erasing costs from the native
+costed computation.
+-/
 noncomputable def randomSample
     (F : Family.{uScalar, uGroup}) :
     Crypto.SecPar → PMF ChallengeInput.{uScalar, uGroup} :=
-  fun sec =>
-    PMF.bind (F.setup sec) fun pp =>
-      PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun leftExp =>
-        PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun rightExp =>
-          PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier)
-            fun shared =>
-              PMF.pure (randomChallenge pp leftExp rightExp shared)
+  fun sec => RandCosted.valueDist (randomSampleComputation F sec)
 
-/-- The distinguishing problem induced by a DDH family. -/
+@[simp] theorem randomSampleComputation_valueDist
+    (F : Family.{uScalar, uGroup}) (sec : Crypto.SecPar) :
+    RandCosted.valueDist (randomSampleComputation F sec) =
+      randomSample F sec :=
+  rfl
+
+/--
+Global efficiency bounds for a DDH family.
+
+The exact family and the DDH assumption do not depend on this certificate.
+-/
+structure EfficiencyCertificate (F : Family.{uScalar, uGroup}) where
+  setupBudget : Crypto.SecPar → Cost
+  setupCostBound :
+    RandomizedComputation.CostBound
+      (fun sec (_input : Unit) => F.setup sec) setupBudget
+  realSampleBudget : Crypto.SecPar → Cost
+  realSampleCostBound :
+    RandomizedComputation.CostBound
+      (fun sec (_input : Unit) => realSampleComputation F sec)
+      realSampleBudget
+  randomSampleBudget : Crypto.SecPar → Cost
+  randomSampleCostBound :
+    RandomizedComputation.CostBound
+      (fun sec (_input : Unit) => randomSampleComputation F sec)
+      randomSampleBudget
+
+/-- The setup computation satisfies the supplied global efficiency certificate. -/
+theorem setup_costBound
+    (F : Family.{uScalar, uGroup}) (certificate : EfficiencyCertificate F) :
+    RandomizedComputation.CostBound
+      (fun sec (_input : Unit) => F.setup sec) certificate.setupBudget :=
+  certificate.setupCostBound
+
+/-- Genuine-DDH sampling satisfies the supplied global efficiency certificate. -/
+theorem realSampleComputation_costBound
+    (F : Family.{uScalar, uGroup}) (certificate : EfficiencyCertificate F) :
+    RandomizedComputation.CostBound
+      (fun sec (_input : Unit) => realSampleComputation F sec)
+      certificate.realSampleBudget :=
+  certificate.realSampleCostBound
+
+/-- Random-DDH sampling satisfies the supplied global efficiency certificate. -/
+theorem randomSampleComputation_costBound
+    (F : Family.{uScalar, uGroup}) (certificate : EfficiencyCertificate F) :
+    RandomizedComputation.CostBound
+      (fun sec (_input : Unit) => randomSampleComputation F sec)
+      certificate.randomSampleBudget :=
+  certificate.randomSampleCostBound
+
+/-- Exact compositional bounds for a fixed DDH parameter family. -/
+noncomputable def EfficiencyCertificate.ofFixed
+    (pp : PublicParam.{uScalar, uGroup})
+    (paramCertificate : ParamEfficiencyCertificate pp)
+    (setupCost : Cost) :
+    EfficiencyCertificate (Family.ofFixed pp setupCost) where
+  setupBudget := fun _sec => setupCost
+  setupCostBound := by
+    intro sec input result hresult
+    simp only [Family.ofFixed, RandCosted.liftCosted,
+      PMF.mem_support_pure_iff] at hresult
+    subst result
+    rfl
+  realSampleBudget :=
+    fun _sec => setupCost + paramCertificate.realSampleTailBudget
+  realSampleCostBound := by
+    intro sec input result hresult
+    simp only [realSampleComputation, RandCosted.bind] at hresult
+    rw [PMF.mem_support_bind_iff] at hresult
+    rcases hresult with ⟨setupResult, hsetupResult, htailResult⟩
+    rw [PMF.mem_support_map_iff] at htailResult
+    rcases htailResult with ⟨tailResult, htailResult, hresult⟩
+    subst result
+    simp only [Family.ofFixed, RandCosted.liftCosted,
+      PMF.mem_support_pure_iff] at hsetupResult
+    subst setupResult
+    simp only [Costed.bind_cost]
+    exact Nat.add_le_add_left
+      (realSampleTailComputation_cost_le pp paramCertificate
+        tailResult htailResult)
+      setupCost
+  randomSampleBudget :=
+    fun _sec => setupCost + paramCertificate.randomSampleTailBudget
+  randomSampleCostBound := by
+    intro sec input result hresult
+    simp only [randomSampleComputation, RandCosted.bind] at hresult
+    rw [PMF.mem_support_bind_iff] at hresult
+    rcases hresult with ⟨setupResult, hsetupResult, htailResult⟩
+    rw [PMF.mem_support_map_iff] at htailResult
+    rcases htailResult with ⟨tailResult, htailResult, hresult⟩
+    subst result
+    simp only [Family.ofFixed, RandCosted.liftCosted,
+      PMF.mem_support_pure_iff] at hsetupResult
+    subst setupResult
+    simp only [Costed.bind_cost]
+    exact Nat.add_le_add_left
+      (randomSampleTailComputation_cost_le pp paramCertificate
+        tailResult htailResult)
+      setupCost
+
+/-- The distinguishing problem induced by a native costed DDH family. -/
 noncomputable def ddhProblem
     (F : Family.{uScalar, uGroup}) :
-    Crypto.Infrastructure.GameBased.Distinguishing.Problem ChallengeInput.{uScalar, uGroup} where
+    Crypto.Infrastructure.GameBased.Distinguishing.Problem
+      ChallengeInput.{uScalar, uGroup} where
   left := realSample F
   right := randomSample F
 
-/-- The Decisional Diffie-Hellman assumption for a parameter family. -/
+/-- The Decisional Diffie-Hellman assumption for a native costed family. -/
 def Assumption (F : Family.{uScalar, uGroup}) : Prop :=
   Crypto.Infrastructure.GameBased.Distinguishing.Hard (ddhProblem F)
 

@@ -1,4 +1,4 @@
-import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Construction
+import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Scheme
 
 namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.UC
 

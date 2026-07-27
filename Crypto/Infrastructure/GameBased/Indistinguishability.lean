@@ -26,7 +26,7 @@ noncomputable def securityGame
     Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
     PMF.bind (sample sec) fun challenge =>
-      A.run sec challenge
+      A.runDist sec challenge
 
 /-- A distinguishing problem is hard if every PPT machine sees negligible advantage. -/
 def Hard {Challenge : Type uChallenge} (P : Problem Challenge) : Prop :=
@@ -75,9 +75,8 @@ noncomputable def securityGame
       Input (fun _ => Bool) Spec) :
     Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
-    PMF.bind (P.setup sec) fun input => do
-      let output ← A.runWithEnv sec input (env sec input)
-      return output
+    PMF.bind (P.setup sec) fun input =>
+      A.runWithEnv sec input (env sec input)
 
 /-- The left-side oracle distinguishing security game. -/
 noncomputable def leftSecurityGame
@@ -105,7 +104,10 @@ noncomputable def rightSecurityGame
     Crypto.Infrastructure.Computation.Game Bool :=
   securityGame P P.rightEnv A
 
-/-- An oracle distinguishing problem is hard if every PPT oracle machine has negligible advantage. -/
+/--
+An oracle distinguishing problem is hard if every PPT oracle machine has
+negligible advantage.
+-/
 def Hard
     {Input : Crypto.SecPar → Type uIn}
     {Spec :

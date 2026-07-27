@@ -17,7 +17,10 @@ structure Problem (Instance : Type uInstance) where
   decidableRelation : (input : Instance) → (witness : Witness input) →
     Decidable (relation input witness)
 
-/-- The canonical search security game: sample an instance and accept iff the machine returns a witness. -/
+/--
+The canonical search security game samples an instance and accepts exactly
+when the machine returns a valid witness.
+-/
 noncomputable def securityGame
     {Instance : Type uInstance}
     (P : Problem.{uInstance, uWitness} Instance)
@@ -25,7 +28,7 @@ noncomputable def securityGame
     Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
     PMF.bind (P.sample sec) fun input =>
-      PMF.bind (A.run sec input) fun output =>
+      PMF.bind (A.runDist sec input) fun output =>
         letI := P.decidableRelation input output
         PMF.pure (decide (P.relation input output))
 

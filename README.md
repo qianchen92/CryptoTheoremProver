@@ -19,8 +19,25 @@ The current codebase is intentionally minimal. It prioritizes stable boundaries
 and clear interfaces over a large catalog of primitives. The symmetric
 encryption hierarchy already includes syntax, correctness, one-time
 left-or-right security, and a group-based one-time pad with correctness and
-perfect one-time security proofs. Additional primitives and proof libraries can
-be added on top of the same framework.
+perfect one-time security proofs. The asymmetric hierarchy includes ElGamal
+syntax and correctness, while DLog and DDH provide the corresponding
+game-based problems. Schemes and DL assumption families are cost-annotated
+directly and connect to the algebraic program and machine layers without
+introducing parallel uncosted structures.
+
+## Build and verification
+
+The repository pins its Lean toolchain in `lean-toolchain`. With `elan` and
+Lake available, build the library and all compile-time proof tests with:
+
+```shell
+lake build
+```
+
+The default targets are `Crypto` and `CryptoTest`. To check them separately,
+use `lake build Crypto` or `lake build CryptoTest`. The files under
+`CryptoTest/` are theorem-level regression and smoke tests; a successful build
+is the test result.
 
 ## Organization
 
@@ -42,10 +59,12 @@ Crypto/
       Oracle/
       Distribution.lean
       Randomized.lean
+      Program.lean
       Game.lean
     Complexity/
       Machine.lean
       CostBound.lean
+      ProgramMachine.lean
     GameBased/
       Advantage.lean
       Indistinguishability.lean
@@ -64,6 +83,10 @@ Crypto/
       AsymmetricEncryption/
       SymmetricEncryption/
   Protocol/
+CryptoTest/
+  Assumption/
+  Infrastructure/
+  Primitive/
 ```
 
 ### `Crypto.Infrastructure`
@@ -87,8 +110,24 @@ game-based security definitions, or machine models.
 
 Reusable semantic infrastructure for cryptographic formalization.
 
-- `Computation.Cost` defines cost models and costed randomized computations.
-- `Computation.Algebra` contains algebraic structures and costed operations.
+- `Computation.Cost` defines the `Costed` writer computation and `RandCosted`
+  randomized paths. Their bind operations add the local costs of sequential
+  steps exactly once.
+- `Computation.Algebra` separates mathematical structures from explicit
+  operation backends, operand-dependent local costs, uniform operation bounds,
+  and costed samplers. Backend operations return `Costed` values directly, and
+  a `UniformSampler` carries its full `RandCosted` execution distribution, so
+  values and costs cannot be paired by unrelated downstream code. Group and
+  module cost conventions are explicit named models rather than global
+  instances, so selecting an implementation is a local and visible choice.
+- `Algebra.Costed` is the small typeclass-based compatibility layer.
+  `AdditiveBackend`, selected explicitly by a concrete construction, is the
+  authoritative implementation route used by algebraic programs;
+  `AdditiveBackend.ofCostModel` bridges the two.
+- `Program` is a typed algebraic program language. Its value interpreter
+  recovers ordinary probability semantics, while its costed interpreter
+  accumulates primitive costs along each path. `BoundedProgram` composes static
+  budgets by addition for sequencing and `max` for branching.
 - `Computation.Oracle` defines oracle interfaces, stateful environments, and
   adaptive oracle-program syntax.
 - `Randomized` packages security-parameter-indexed randomized computations
@@ -106,14 +145,39 @@ Semantic complexity notions used by constructions and security games.
 - `Machine` defines deterministic, probabilistic, timed, PPT, oracle, and
   oracle PPT machine interfaces.
 - `CostBound` connects core costed computations to polynomial bounds.
-- Oracle PPT machines carry security-parameter-indexed oracle specs,
-  polynomial runtime, and uniform polynomial query bounds.
+- `ProgramMachine` constructs timed and PPT machines from statically bounded
+  programs, tying the machine runtime function to the program's budget index.
+- Timed machines prove that their runtime bounds cover every explicitly costed
+  execution path; PPT machines additionally prove those bounds polynomial.
+- Oracle programs record annotated local cost and the exact query trace.
+  Timed oracle machines prove runtime and per-oracle query bounds for every
+  structural execution path, and the profiled interpreter is proved to follow
+  those paths. An oracle call contributes one unit in this call-count model;
+  consequently, the polynomial runtime bound of a PPT oracle machine is also a
+  uniform polynomial query bound, without a second redundant certificate. The
+  internal implementation cost of the supplied oracle environment is not
+  included.
 
 This layer may depend on `Crypto.Infrastructure.Asymptotic` and
 `Crypto.Infrastructure.Computation`, but should not depend on specific
-primitives or assumptions. The current machine layer is semantic: runtime and
-query bounds are fields of the machine interface, not yet bounds derived from a
-transition-system trace or from the oracle program syntax.
+primitives or assumptions. The current model is an explicit, trusted path-cost
+semantics: runtime and query certificates are now connected to the annotated
+computation and oracle-program execution, rather than being unrelated metadata.
+For `Program` computations, costs are generated by the selected algebra backend
+and sampler and accumulated by the interpreter; callers do not attach a total
+cost after defining the algorithm. A `BoundedProgram` derives a uniform bound
+compositionally from the primitive bounds; the machine constructor statically
+ties its runtime field to that same budget index. It does not synthesize a
+closed-form security-parameter bound independently of the supplied program
+family.
+
+The current program language is nevertheless an engineering-level higher-order
+syntax: values passed to `pure`, continuation functions, and branch conditions
+remain Lean terms. It therefore measures all explicit program primitives but is
+not yet a first-order Turing/RAM semantics that prevents hidden host
+computation. A concrete interpretation must justify the primitive backend and
+sampler costs, and a fully non-bypassable model would additionally replace the
+higher-order boundaries with first-order typed syntax.
 
 ### `Crypto.Infrastructure.GameBased`
 
@@ -158,9 +222,24 @@ message syntax, schedulers, ideal functionalities, and simulators.
 
 Computational assumptions, organized by family.
 
-For example, discrete-logarithm assumptions belong under `Assumption.DL`. This
-area is currently skeletal, but it is the right place for assumption statements
-and their associated machine/game interfaces.
+Discrete logarithm and DDH live directly in `Assumption.DL.DLog` and
+`Assumption.DL.DDH`; there are no companion `Costed` submodules. Public
+parameters carry the exact costed algebra backends and samplers used by the
+native computations, while each family has a native `RandCosted` setup. Search
+and distinguishing distributions are obtained only by erasing costs from
+those computations.
+
+DLog and DDH separate exact execution from efficiency evidence explicitly.
+Their public parameters contain exact algebra backends and samplers, but no
+local algebraic bounds. A `ParamEfficiencyCertificate` supplies the backend
+bounds used to derive fixed-parameter challenge and sampling bounds, while
+each `Family` contains only its costed setup computation. A family-level
+`EfficiencyCertificate` supplies global setup and sampling `CostBound` proofs.
+Consequently, both assumptions and exact constructions such as the ElGamal
+`scheme` depend on native families but not on either efficiency certificate.
+Certificates prove upper bounds on already-derived path costs; they are not a
+second source of runtime. These modules state the assumptions; they do not
+prove them.
 
 ### `Crypto.Primitive`
 
@@ -179,26 +258,36 @@ The current encryption hierarchy contains:
 
 The main symmetric-encryption interface is
 `Crypto.Primitive.Encryption.SymmetricEncryption.Scheme SecPar Param Key Message Ciphertext`.
-`setup` samples public parameters from the security parameter; `Key`, `Message`,
-and `Ciphertext` are then indexed by those public parameters. Correctness and
-one-time left-or-right security live in the same namespace because they are
-definitions about symmetric-encryption schemes. `OneTimeSecure` is the PPT
-notion, while `PerfectOneTimeSecure` quantifies over unbounded oracle machines
-and requires exact zero advantage. The generic notions they use remain in
-`Infrastructure.Computation`, `Infrastructure.Complexity`, and
-`Infrastructure.GameBased`.
+It is the only scheme interface: `setup`, `keygen`, and `encrypt` return
+`RandCosted`, while `decrypt` returns `Costed`. `Key`, `Message`, and
+`Ciphertext` are indexed by the sampled public parameters. Correctness and
+security notions observe ordinary values through `setupDist`, `keygenDist`,
+`encryptDist`, and `decryptValue`; they do not convert to a second scheme
+structure. `OneTimeSecure` is the PPT notion, while `PerfectOneTimeSecure`
+quantifies over unbounded oracle machines and requires exact zero advantage.
 
 The main asymmetric-encryption interface is
 `Crypto.Primitive.Encryption.AsymmetricEncryption.Scheme SecPar Param PublicKey SecretKey Message Ciphertext`.
-It provides public parameters, key generation, public-key encryption, and
-secret-key decryption. Its IND-CPA definition is expressed as an
-`Infrastructure.GameBased.OracleDistinguishing` problem.
+It follows the same cost-annotated design for public parameters, key
+generation, public-key encryption, and secret-key decryption. Its IND-CPA
+definition is expressed as an `Infrastructure.GameBased.OracleDistinguishing`
+problem over the observed value distributions.
 
-The current instantiations include a group-based one-time pad. Its setup
-exposes the finite nonempty additive group chosen for the security parameter;
-the construction encrypts by addition and decrypts by subtraction. The library
-proves both correctness and perfect one-time security for this construction,
-and derives PPT one-time security from the perfect theorem.
+The current instantiations include a group-based one-time pad and ElGamal. The
+one-time pad exposes the finite nonempty additive group chosen for the security
+parameter, encrypts by addition, and decrypts by negation followed by addition.
+The library proves both correctness and perfect one-time security for this
+construction, and derives PPT one-time security from the perfect theorem.
+ElGamal has a correctness proof under the scalar-action laws carried by its
+public parameters; an IND-CPA-from-DDH reduction remains future work.
+
+Both construction-level `scheme` definitions directly inhabit the costed
+interface. Their setup/sampling and algebraic programs obtain path costs from
+explicit parameter-local backends, prove value-distribution equations used by
+correctness and security. In particular, the exact DDH-based ElGamal scheme
+depends only on `DDH.Family`, not on a DDH efficiency certificate. Separate
+local and global certificates can supply verified uniform bounds when
+constructing timed or PPT machines.
 
 The primitive-level `UC.lean` files are reserved for primitive-specific UC
 formulations, such as ideal functionalities or emulation statements for the
@@ -292,10 +381,15 @@ that instantiate a game-based notion.
 ## Status
 
 The library is early-stage. The current hierarchy is sound as a working
-architecture, but several namespaces are intentionally sparse and the machine
-model remains semantic. The next useful refinements are to fill out assumption
-interfaces, add more primitive families, connect costed implementations to
-concrete constructions, derive query-count bounds from oracle programs when
-needed, and move common proof patterns into `Crypto.Infrastructure.GameBased` or
-`Crypto.Infrastructure.ProofPattern` once they repeat across multiple
-constructions.
+architecture, but several namespaces are intentionally sparse. Ordinary,
+dependent-output, and oracle machines now share the explicit path-cost model;
+oracle runtime and query bounds are tied to structural executions and to the
+profiled interpreter. OTP, ElGamal, DLog, and DDH now exercise the
+backend-to-costed-computation path, with efficiency bounds treated as
+certificates over those exact executions; OTP and ElGamal additionally use the
+typed `Program` layer. The next useful refinements are to choose a
+first-order operational machine model when host-independent PPT soundness is
+required, complete reusable reduction and hybrid infrastructure, prove ElGamal
+IND-CPA security from DDH, and move common proof patterns into
+`Crypto.Infrastructure.GameBased` or `Crypto.Infrastructure.ProofPattern` once
+they repeat across multiple constructions.

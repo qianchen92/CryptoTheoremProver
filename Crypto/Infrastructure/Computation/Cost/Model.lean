@@ -7,22 +7,22 @@ abbrev Cost := Nat
 
 /-- Cost model for addition on a type. -/
 class AddCost (α : Type uValue) where
-  addCost : Cost
+  addCost : α → α → Cost
 
 /-- Cost model for multiplication on a type. -/
 class MulCost (α : Type uValue) where
-  mulCost : Cost
+  mulCost : α → α → Cost
 
 /-- Cost model for negation on a type. -/
 class NegCost (α : Type uValue) where
-  negCost : Cost
+  negCost : α → Cost
 
 /-- Cost model for subtraction on a type. -/
 class SubCost (α : Type uValue) where
-  subCost : Cost
+  subCost : α → α → Cost
 
 /-- Cost model for scalar multiplication from `R` into `α`. -/
 class SMulCost (R : Type uScalar) (α : Type uValue) where
-  smulCost : R → Cost
+  smulCost : R → α → Cost
 
 end Crypto.Infrastructure.Computation.Cost

@@ -1,7 +1,7 @@
 name = "Crypto"
 version = "0.1.0"
-keywords = ["math"]
-defaultTargets = ["Crypto"]
+keywords = ["cryptography", "formal-verification", "lean"]
+defaultTargets = ["Crypto", "CryptoTest"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -17,3 +17,6 @@ rev = "v4.29.0-rc1"
 
 [[lean_lib]]
 name = "Crypto"
+
+[[lean_lib]]
+name = "CryptoTest"

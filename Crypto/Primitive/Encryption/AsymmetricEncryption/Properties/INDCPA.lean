@@ -56,7 +56,7 @@ noncomputable def indCPAEncryptionOracle
         else
           let m0 := query.1
           let m1 := query.2
-          PMF.bind (E.encrypt input.param input.publicKey (if b then m1 else m0))
+          PMF.bind (E.encryptDist input.param input.publicKey (if b then m1 else m0))
             fun ciphertext => do
               return ((some ciphertext : ChallengeResponse (Ciphertext input.param)), true)
 
@@ -72,8 +72,8 @@ noncomputable def indCPAProblem
       (PublicInput Param PublicKey) (indCPAOracleSpec Message Ciphertext) where
   setup :=
     fun sec =>
-      PMF.bind (E.setup sec) fun pp =>
-        PMF.bind (E.keygen pp) fun keys =>
+      PMF.bind (E.setupDist sec) fun pp =>
+        PMF.bind (E.keygenDist pp) fun keys =>
           PMF.pure ({ param := pp, publicKey := keys.1 } : PublicInput Param PublicKey sec)
   leftEnv := fun sec input => indCPAEncryptionOracle E sec input false
   rightEnv := fun sec input => indCPAEncryptionOracle E sec input true

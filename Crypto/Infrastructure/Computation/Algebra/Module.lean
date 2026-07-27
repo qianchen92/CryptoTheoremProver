@@ -3,15 +3,26 @@ import Mathlib.Algebra.Module.Defs
 
 namespace Crypto.Infrastructure.Computation.Algebra.Module
 
+open Crypto.Infrastructure.Computation.Cost
+
 universe uScalar uModule
 
-/-- Default unit cost for a scalar multiplication when no sharper model is provided. -/
-def unitSMulCost {R : Type uScalar} (_ : R) : Crypto.Infrastructure.Computation.Cost.Cost :=
-  1
+/--
+An explicit constant-cost model for scalar multiplication in a module.
 
-instance (priority := 50) instSMulCostOfModule
+The caller chooses this model locally; it is not installed as a global
+typeclass instance.
+-/
+def constantSMulCostModel
+    (R : Type uScalar) (M : Type uModule) [Semiring R] [AddCommMonoid M] [Module R M]
+    (cost : Cost) :
+    SMulCost R M where
+  smulCost := fun _ _ => cost
+
+/-- Explicit unit-operation model for scalar multiplication in a module. -/
+def unitSMulCostModel
     (R : Type uScalar) (M : Type uModule) [Semiring R] [AddCommMonoid M] [Module R M] :
-    Crypto.Infrastructure.Computation.Cost.SMulCost R M where
-  smulCost := unitSMulCost
+    SMulCost R M :=
+  constantSMulCostModel R M 1
 
 end Crypto.Infrastructure.Computation.Algebra.Module

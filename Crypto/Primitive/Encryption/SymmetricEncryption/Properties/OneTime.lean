@@ -46,9 +46,10 @@ noncomputable def oneTimeEncryptionOracle
         else
           let m0 := query.1
           let m1 := query.2
-          PMF.bind (E.keygen pp) fun key => do
-            let ciphertext ← E.encrypt pp key (if b then m1 else m0)
-            return ((some ciphertext : ChallengeResponse (Ciphertext pp)), true)
+          PMF.bind (E.keygenDist pp) fun key =>
+            PMF.bind (E.encryptDist pp key (if b then m1 else m0)) fun ciphertext =>
+              PMF.pure
+                ((some ciphertext : ChallengeResponse (Ciphertext pp)), true)
 
 /-- The oracle distinguishing problem induced by one-time left-or-right encryption. -/
 noncomputable def oneTimeProblem
@@ -59,7 +60,7 @@ noncomputable def oneTimeProblem
     (E : Scheme Crypto.SecPar Param Key Message Ciphertext) :
     Crypto.Infrastructure.GameBased.OracleDistinguishing.Problem
       (fun _ => Param) (oneTimeOracleSpec Message Ciphertext) where
-  setup := E.setup
+  setup := E.setupDist
   leftEnv := fun sec pp => oneTimeEncryptionOracle E sec pp false
   rightEnv := fun sec pp => oneTimeEncryptionOracle E sec pp true
 

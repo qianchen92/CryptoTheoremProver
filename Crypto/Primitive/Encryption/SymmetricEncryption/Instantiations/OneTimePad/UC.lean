@@ -1,4 +1,4 @@
-import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Construction
+import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Scheme
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.UC
 

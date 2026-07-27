@@ -18,9 +18,9 @@ def Correct
     (pp : Param)
     (publicKey : PublicKey pp) (secretKey : SecretKey pp)
     (message : Message pp),
-    pp ∈ (E.setup sec).support →
-    (publicKey, secretKey) ∈ (E.keygen pp).support →
-    (PMF.bind (E.encrypt pp publicKey message) fun ciphertext => do
-      return E.decrypt pp secretKey ciphertext) = PMF.pure message
+    pp ∈ (E.setupDist sec).support →
+    (publicKey, secretKey) ∈ (E.keygenDist pp).support →
+    (PMF.bind (E.encryptDist pp publicKey message) fun ciphertext =>
+      PMF.pure (E.decryptValue pp secretKey ciphertext)) = PMF.pure message
 
 end Crypto.Primitive.Encryption.AsymmetricEncryption

@@ -1,4 +1,4 @@
-import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Construction
+import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Scheme
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Properties.Correctness
 
 namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
@@ -12,9 +12,7 @@ theorem correct
     (F : Crypto.Assumption.DL.DDH.Family.{uScalar, uGroup}) :
     Correct (scheme F) := by
   intro _sec pp publicKey secretKey message _hpp hkey
-  change (publicKey, secretKey) ∈
-    (PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun secretKey =>
-      PMF.pure (secretKey • pp.generator, secretKey)).support at hkey
+  rw [scheme_keygenDist] at hkey
   have hkey' := (PMF.mem_support_bind_iff
     (p := Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
     (f := fun secretKey => PMF.pure (secretKey • pp.generator, secretKey))
@@ -24,15 +22,8 @@ theorem correct
   injection hkeys with hpublicKey hsecretKey
   subst publicKey
   subst secretKey
-  change
-    (PMF.bind
-      (PMF.bind (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar) fun nonce =>
-        PMF.pure
-          (nonce • pp.generator,
-            message + nonce • (sampledSecretKey • pp.generator)))
-      fun ciphertext =>
-        PMF.pure (ciphertext.2 - sampledSecretKey • ciphertext.1)) =
-    PMF.pure message
+  rw [scheme_encryptDist]
+  simp_rw [scheme_decryptValue]
   rw [PMF.bind_bind]
   simp [pp.compatibleScalarAction sampledSecretKey]
 
