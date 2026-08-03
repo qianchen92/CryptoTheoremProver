@@ -2,7 +2,7 @@ import Mathlib.Algebra.Order.Group.Nat
 
 namespace Crypto.Infrastructure.Computation.Cost
 
-universe uCost uValue uScalar
+universe uCost
 
 /--
 A compositional model of exact execution resources.
@@ -30,9 +30,6 @@ abbrev nat : CostModel where
 
 end CostModel
 
-/-- Public name for the natural-number compatibility cost model. -/
-abbrev natCostModel : CostModel := CostModel.nat
-
 /--
 A cost model equipped with a least common upper bound, used for deriving
 branching bounds automatically.
@@ -49,37 +46,10 @@ namespace WorstCaseCostModel
 
 /-- The natural-number model with `max` as its worst-case combination. -/
 def nat : WorstCaseCostModel where
-  toCostModel := natCostModel
+  toCostModel := CostModel.nat
   instSemilatticeSup := (inferInstance : SemilatticeSup Nat)
   partialOrder_eq := rfl
 
 end WorstCaseCostModel
-
-set_option linter.dupNamespace false
-
-/-- Operation cost in the backwards-compatible natural-number model. -/
-abbrev Cost := natCostModel.Cost
-
-set_option linter.dupNamespace true
-
-/-- Cost model for addition on a type. -/
-class AddCost (α : Type uValue) where
-  addCost : α → α → Cost
-
-/-- Cost model for multiplication on a type. -/
-class MulCost (α : Type uValue) where
-  mulCost : α → α → Cost
-
-/-- Cost model for negation on a type. -/
-class NegCost (α : Type uValue) where
-  negCost : α → Cost
-
-/-- Cost model for subtraction on a type. -/
-class SubCost (α : Type uValue) where
-  subCost : α → α → Cost
-
-/-- Cost model for scalar multiplication from `R` into `α`. -/
-class SMulCost (R : Type uScalar) (α : Type uValue) where
-  smulCost : R → α → Cost
 
 end Crypto.Infrastructure.Computation.Cost

@@ -1,4 +1,5 @@
-import Crypto.Infrastructure.Computation.Algebra.Basic
+import Crypto.Infrastructure.Computation.Algebra.Operation
+import Crypto.Infrastructure.Computation.Distribution
 import Crypto.Infrastructure.Complexity.ProgramMachine
 import Mathlib.Tactic
 
@@ -9,29 +10,52 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-/-- A small backend whose exact local operation costs are visible in tests. -/
-def integerBackend : AdditiveBackend Nat Int :=
-  AdditiveBackend.ofConstantCosts 2 1 2 3
+/-- Exact arithmetic costs used by the direct typed primitive handlers. -/
+def integerAddCost (_left _right : Int) : Nat := 2
+def integerNegCost (_value : Int) : Nat := 1
+def integerSubCost (_left _right : Int) : Nat := 2
+def integerSMulCost (_scalar : Nat) (_value : Int) : Nat := 3
+def integerMulCost (_left _right : Int) : Nat := 5
 
-/-- Independent uniform bounds for `integerBackend`. -/
-def integerBounds : AdditiveCostBounds integerBackend :=
-  AdditiveCostBounds.ofConstantCosts 2 1 2 3
+/-- A direct exact addition algebra over the natural-number cost model. -/
+noncomputable def integerAddAlgebra :
+    CostedAlgebra CostModel.nat (AddOperation.signature Int) :=
+  AddOperation.algebra CostModel.nat integerAddCost
 
-/-- A multiplication capability with a different exact local cost. -/
-def integerMultiplicativeBackend : MultiplicativeBackend Int :=
-  MultiplicativeBackend.ofConstantCost 5
+/-- Addition semantics are independent of the exact cost function. -/
+noncomputable def integerAddLaws : AlgebraLaws integerAddAlgebra :=
+  AddOperation.laws CostModel.nat integerAddCost
+
+/-- Addition bounds are attached directly to the exact addition algebra. -/
+noncomputable def integerAddBounds : OperationBounds integerAddAlgebra :=
+  AddOperation.bounds CostModel.nat integerAddCost
+    (fun _left _right => 2) (by
+      intro left right
+      exact Nat.le_refl _)
 
 /-- The sample type is deliberately different from the arithmetic carrier. -/
-noncomputable def boolSampler : UniformSampler Bool :=
-  UniformSampler.ofConstantCost 2
+noncomputable def boolSample : RandCostedT CostModel.nat Bool :=
+  RandCostedT.sampleWithCost
+    (Crypto.Infrastructure.Computation.Distribution.uniformPMF Bool)
+    (fun _value => 2)
 
 /-- Uniformity is a mathematical law separate from the exact sampler. -/
-noncomputable def boolSamplerLaws : UniformSamplerLaws boolSampler :=
-  UniformSamplerLaws.ofConstantCost 2
+noncomputable def boolSampleLaws :
+    AlgebraLaws (SampleOperation.algebra CostModel.nat boolSample) :=
+  SampleOperation.laws CostModel.nat boolSample
+    (Crypto.Infrastructure.Computation.Distribution.uniformPMF Bool)
+    (RandCostedT.valueDist_sampleWithCost _ _)
 
 /-- Sampling bounds are separate from the sampler's exact semantics. -/
-noncomputable def boolSamplerBounds : UniformSamplerBounds boolSampler :=
-  UniformSamplerBounds.ofConstantCost 2
+noncomputable def boolSampleBounds :
+    OperationBounds (SampleOperation.algebra CostModel.nat boolSample) :=
+  SampleOperation.bounds CostModel.nat boolSample 2 (by
+    intro result hresult
+    simp only [boolSample, RandCostedT.sampleWithCost] at hresult
+    rw [PMF.mem_support_map_iff] at hresult
+    rcases hresult with ⟨value, _hvalue, hresult⟩
+    subst result
+    exact Nat.le_refl _)
 
 /-- A genuinely heterogeneous signature: calls return either `Bool` or `Int`. -/
 abbrev SampleAddSignature :=
@@ -39,22 +63,22 @@ abbrev SampleAddSignature :=
 
 /-- Exact handlers compose in the same shape as their typed signatures. -/
 noncomputable def sampleAddAlgebra :
-    CostedAlgebra natCostModel SampleAddSignature :=
+    CostedAlgebra CostModel.nat SampleAddSignature :=
   CostedAlgebra.sum
-    (SampleOperation.algebra boolSampler)
-    (AddOperation.algebra integerBackend)
+    (SampleOperation.algebra CostModel.nat boolSample)
+    integerAddAlgebra
 
 /-- Mathematical specifications compose independently of exact costs. -/
 noncomputable def sampleAddLaws : AlgebraLaws sampleAddAlgebra :=
   AlgebraLaws.sum
-    (SampleOperation.laws boolSampler boolSamplerLaws)
-    (AddOperation.laws integerBackend)
+    boolSampleLaws
+    integerAddLaws
 
 /-- Upper-bound certificates also compose independently. -/
 noncomputable def sampleAddBounds : OperationBounds sampleAddAlgebra :=
   OperationBounds.sum
-    (SampleOperation.bounds boolSamplerBounds)
-    (AddOperation.bounds integerBounds)
+    boolSampleBounds
+    integerAddBounds
 
 /-- An addition call in the right-hand capability of `SampleAddSignature`. -/
 noncomputable def addCode (left right : Int) :
@@ -107,7 +131,7 @@ noncomputable def boundedInputDependentProgram :
 
 /-- Every exact path respects the budget selected by the program input. -/
 theorem boundedInputDependentProgram_cost_le
-    (input : Bool) (result : Costed Int)
+    (input : Bool) (result : CostedT CostModel.nat Int)
     (hresult :
       result ∈
         (Crypto.Infrastructure.Computation.Program.runCosted
@@ -118,8 +142,18 @@ theorem boundedInputDependentProgram_cost_le
 /-- The exact addition handler is authoritative for both result and path cost. -/
 theorem integerAddition_runCosted :
     Crypto.Infrastructure.Computation.Program.Code.runCosted (addCode 3 4) =
-      RandCosted.liftCosted (⟨7, 2⟩ : Costed Int) :=
+      RandCostedT.liftCosted (⟨7, 2⟩ : CostedT CostModel.nat Int) :=
   rfl
+
+/-- The exact interpreter path is reified with the same value and resource cost. -/
+example :
+    Crypto.Infrastructure.Computation.Program.Code.Execution
+      (addCode 3 4) 7 2 := by
+  refine
+    Crypto.Infrastructure.Computation.Program.Code.execution_of_mem_support_runCosted
+      (addCode 3 4) (⟨7, 2⟩ : CostedT CostModel.nat Int) ?_
+  rw [integerAddition_runCosted]
+  rw [PMF.mem_support_pure_iff]
 
 /-- Cost erasure follows the separately composed mathematical laws. -/
 theorem integerAddition_valueDist :
@@ -129,30 +163,37 @@ theorem integerAddition_valueDist :
     (Crypto.Infrastructure.Computation.Program.Code.valueDist_call_eq
       sampleAddLaws (.inr (.add (3 : Int) 4)))
 
-/-- The remaining arithmetic capabilities retain their backend's exact costs. -/
+/-- The remaining arithmetic capabilities retain their direct algebra costs. -/
 example :
     Crypto.Infrastructure.Computation.Program.Code.runCosted
-        (A := NegOperation.algebra integerBackend) (.call (.neg (5 : Int))) =
-      RandCosted.liftCosted (⟨-5, 1⟩ : Costed Int) :=
+        (A := NegOperation.algebra CostModel.nat integerNegCost)
+        (.call (.neg (5 : Int))) =
+      RandCostedT.liftCosted
+        (⟨-5, 1⟩ : CostedT CostModel.nat Int) :=
   rfl
 
 example :
     Crypto.Infrastructure.Computation.Program.Code.runCosted
-        (A := SubOperation.algebra integerBackend) (.call (.sub (7 : Int) 4)) =
-      RandCosted.liftCosted (⟨3, 2⟩ : Costed Int) :=
+        (A := SubOperation.algebra CostModel.nat integerSubCost)
+        (.call (.sub (7 : Int) 4)) =
+      RandCostedT.liftCosted
+        (⟨3, 2⟩ : CostedT CostModel.nat Int) :=
   rfl
 
 example :
     Crypto.Infrastructure.Computation.Program.Code.runCosted
-        (A := SMulOperation.algebra integerBackend) (.call (.smul 2 (5 : Int))) =
-      RandCosted.liftCosted (⟨10, 3⟩ : Costed Int) :=
+        (A := SMulOperation.algebra CostModel.nat integerSMulCost)
+        (.call (.smul 2 (5 : Int))) =
+      RandCostedT.liftCosted
+        (⟨10, 3⟩ : CostedT CostModel.nat Int) :=
   rfl
 
 example :
     Crypto.Infrastructure.Computation.Program.Code.runCosted
-        (A := MulOperation.algebra integerMultiplicativeBackend)
+        (A := MulOperation.algebra CostModel.nat integerMulCost)
         (.call (.mul (6 : Int) 7)) =
-      RandCosted.liftCosted (⟨42, 5⟩ : Costed Int) :=
+      RandCostedT.liftCosted
+        (⟨42, 5⟩ : CostedT CostModel.nat Int) :=
   rfl
 
 /-- Addition and scalar multiplication form another independently composed algebra. -/
@@ -162,15 +203,18 @@ abbrev AddSMulSignature :=
     (SMulOperation.signature Nat Int)
 
 noncomputable def addSMulAlgebra :
-    CostedAlgebra natCostModel AddSMulSignature :=
+    CostedAlgebra CostModel.nat AddSMulSignature :=
   CostedAlgebra.sum
-    (AddOperation.algebra integerBackend)
-    (SMulOperation.algebra integerBackend)
+    integerAddAlgebra
+    (SMulOperation.algebra CostModel.nat integerSMulCost)
 
 noncomputable def addSMulBounds : OperationBounds addSMulAlgebra :=
   OperationBounds.sum
-    (AddOperation.bounds integerBounds)
-    (SMulOperation.bounds integerBounds)
+    integerAddBounds
+    (SMulOperation.bounds CostModel.nat integerSMulCost
+      (fun _scalar _value => 3) (by
+        intro scalar value
+        exact Nat.le_refl _))
 
 /-- Only the selected branch contributes exact cost; its certificate uses `max 2 3`. -/
 noncomputable def branchProgram :
@@ -195,7 +239,7 @@ noncomputable def boundedBranchProgram :
 
 /-- The common `max` budget bounds either selected execution path. -/
 theorem boundedBranchProgram_cost_le
-    (condition : Bool) (result : Costed Int)
+    (condition : Bool) (result : CostedT CostModel.nat Int)
     (hresult :
       result ∈
         (Crypto.Infrastructure.Computation.Program.runCosted
@@ -204,7 +248,7 @@ theorem boundedBranchProgram_cost_le
   simpa using
     boundedBranchProgram.cost_le_budget_of_mem_support condition result hresult
 
-/-- Projecting the exact cost through `NatMeasure.nat` yields a legacy machine. -/
+/-- Projecting the exact cost through `NatMeasure.nat` yields a timed machine. -/
 noncomputable def boundedInputDependentMachine : TimedMachine Bool Int :=
   TimedMachine.ofBoundedProgram
     NatMeasure.nat
@@ -225,11 +269,11 @@ noncomputable def boundedInputDependentMachine : TimedMachine Bool Int :=
 /-- Cost projection at the machine boundary preserves ordinary semantics. -/
 theorem boundedInputDependentMachine_valueDist
     (sec : Crypto.SecPar) (input : Bool) :
-    RandCosted.valueDist (boundedInputDependentMachine.run sec input) =
+    RandCostedT.valueDist (boundedInputDependentMachine.run sec input) =
       Crypto.Infrastructure.Computation.Program.valueDist
         boundedInputDependentProgram.program input := by
   change
-    RandCosted.valueDist
+    RandCostedT.valueDist
         (RandCostedT.mapCost NatMeasure.nat
           (Crypto.Infrastructure.Computation.Program.runCosted
             boundedInputDependentProgram.program input)) =

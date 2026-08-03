@@ -4,7 +4,7 @@ import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.AsymmetricEncryption
 
-universe uParam uPublicKey uSecretKey uMessage uCiphertext
+universe uCost uParam uPublicKey uSecretKey uMessage uCiphertext
 
 abbrev ChallengeQuery (Message : Type uMessage) :=
   Message × Message
@@ -38,12 +38,13 @@ def indCPAOracleSpec
 
 /-- A one-use left-or-right public-key encryption oracle. -/
 noncomputable def indCPAEncryptionOracle
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
-    (E : Scheme Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
+    (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
     (sec : Crypto.SecPar) (input : PublicInput Param PublicKey sec) (b : Bool) :
     Crypto.Infrastructure.Computation.Oracle.OracleEnv
       (indCPAOracleSpec Message Ciphertext sec input) where
@@ -62,12 +63,13 @@ noncomputable def indCPAEncryptionOracle
 
 /-- The oracle distinguishing problem induced by IND-CPA public-key encryption. -/
 noncomputable def indCPAProblem
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
-    (E : Scheme Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) :
+    (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) :
     Crypto.Infrastructure.GameBased.OracleDistinguishing.Problem
       (PublicInput Param PublicKey) (indCPAOracleSpec Message Ciphertext) where
   setup :=
@@ -80,13 +82,15 @@ noncomputable def indCPAProblem
 
 /-- The IND-CPA security game for a fixed challenge bit. -/
 noncomputable def indCPASecurityGame
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
-    (E : Scheme Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
+    (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
       (PublicInput Param PublicKey) (fun _ => Bool) (indCPAOracleSpec Message Ciphertext))
     (b : Bool) : Crypto.Infrastructure.Computation.Game Bool :=
   if b then
@@ -96,13 +100,15 @@ noncomputable def indCPASecurityGame
 
 /-- IND-CPA distinguishing advantage. -/
 noncomputable def INDCPAAdvantage
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
-    (E : Scheme Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
+    (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
       (PublicInput Param PublicKey) (fun _ => Bool) (indCPAOracleSpec Message Ciphertext)) :
     Crypto.SecPar → Real :=
   Crypto.Infrastructure.GameBased.Advantage
@@ -110,22 +116,24 @@ noncomputable def INDCPAAdvantage
 
 /-- IND-CPA security against PPT oracle adversaries. -/
 def INDCPASecure
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
-    (E : Scheme Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) : Prop :=
+    (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) : Prop :=
   Crypto.Infrastructure.GameBased.OracleDistinguishing.Hard (indCPAProblem E)
 
 /-- Short alias for the IND-CPA security predicate. -/
 abbrev INDCPA
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
-    (E : Scheme Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) : Prop :=
+    (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) : Prop :=
   INDCPASecure E
 
 end Crypto.Primitive.Encryption.AsymmetricEncryption

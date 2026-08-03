@@ -72,6 +72,7 @@ noncomputable def securityGame
       Crypto.Infrastructure.Computation.Oracle.OracleEnv.{uOracle, uQuery, uResponse, uState}
         (Spec sec input))
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
       Input (fun _ => Bool) Spec) :
     Crypto.Infrastructure.Computation.Game Bool :=
   fun sec =>
@@ -87,6 +88,7 @@ noncomputable def leftSecurityGame
       Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse}}
     (P : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
       Input (fun _ => Bool) Spec) :
     Crypto.Infrastructure.Computation.Game Bool :=
   securityGame P P.leftEnv A
@@ -100,6 +102,7 @@ noncomputable def rightSecurityGame
       Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse}}
     (P : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
       Input (fun _ => Bool) Spec) :
     Crypto.Infrastructure.Computation.Game Bool :=
   securityGame P P.rightEnv A
@@ -115,7 +118,10 @@ def Hard
       Input sec →
       Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse}}
     (P : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec) : Prop :=
-  ∀ A : Crypto.Infrastructure.Complexity.PPTOracleMachine Input (fun _ => Bool) Spec,
+  ∀ A : Crypto.Infrastructure.Complexity.PPTOracleMachine
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
+      Crypto.Infrastructure.Computation.Cost.NatMeasure.nat
+      Input (fun _ => Bool) Spec,
     Indistinguishable
       (leftSecurityGame P A.toProbabilisticOracleMachine)
       (rightSecurityGame P A.toProbabilisticOracleMachine)

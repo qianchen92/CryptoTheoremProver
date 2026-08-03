@@ -36,7 +36,7 @@ abbrev Environment
       (sec : Crypto.SecPar) →
       EnvInput sec →
       OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse}) :=
-  ProbabilisticOracleMachine EnvInput (fun _ => Bool) EnvSpec
+  ProbabilisticOracleMachine Cost.CostModel.nat EnvInput (fun _ => Bool) EnvSpec
 
 /-- A PPT external UC environment. -/
 abbrev PPTEnvironment
@@ -45,7 +45,8 @@ abbrev PPTEnvironment
       (sec : Crypto.SecPar) →
       EnvInput sec →
       OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse}) :=
-  PPTOracleMachine EnvInput (fun _ => Bool) EnvSpec
+  PPTOracleMachine Cost.CostModel.nat Cost.NatMeasure.nat
+    EnvInput (fun _ => Bool) EnvSpec
 
 /-- The real-world adversary, modeled semantically as an oracle machine. -/
 abbrev Adversary
@@ -55,7 +56,8 @@ abbrev Adversary
       (sec : Crypto.SecPar) →
       AdversaryInput sec →
       OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse}) :=
-  ProbabilisticOracleMachine AdversaryInput AdversaryOutput AdversarySpec
+  ProbabilisticOracleMachine Cost.CostModel.nat
+    AdversaryInput AdversaryOutput AdversarySpec
 
 /-- A PPT real-world adversary. -/
 abbrev PPTAdversary
@@ -65,7 +67,8 @@ abbrev PPTAdversary
       (sec : Crypto.SecPar) →
       AdversaryInput sec →
       OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse}) :=
-  PPTOracleMachine AdversaryInput AdversaryOutput AdversarySpec
+  PPTOracleMachine Cost.CostModel.nat Cost.NatMeasure.nat
+    AdversaryInput AdversaryOutput AdversarySpec
 
 /-- The ideal-world simulator, modeled semantically as an oracle machine. -/
 abbrev Simulator
@@ -75,7 +78,8 @@ abbrev Simulator
       (sec : Crypto.SecPar) →
       SimulatorInput sec →
       OracleSpec.{uSimOracle, uSimQuery, uSimResponse}) :=
-  ProbabilisticOracleMachine SimulatorInput SimulatorOutput SimulatorSpec
+  ProbabilisticOracleMachine Cost.CostModel.nat
+    SimulatorInput SimulatorOutput SimulatorSpec
 
 /-- A PPT ideal-world simulator. -/
 abbrev PPTSimulator
@@ -85,7 +89,8 @@ abbrev PPTSimulator
       (sec : Crypto.SecPar) →
       SimulatorInput sec →
       OracleSpec.{uSimOracle, uSimQuery, uSimResponse}) :=
-  PPTOracleMachine SimulatorInput SimulatorOutput SimulatorSpec
+  PPTOracleMachine Cost.CostModel.nat Cost.NatMeasure.nat
+    SimulatorInput SimulatorOutput SimulatorSpec
 
 /--
 A UC experiment exposes the same oracle interface to the environment in both

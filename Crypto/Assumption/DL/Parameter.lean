@@ -1,5 +1,5 @@
-import Crypto.Infrastructure.Computation.Algebra.Backend
 import Crypto.Infrastructure.Computation.Algebra.Group
+import Mathlib.Algebra.Group.Action.Defs
 
 namespace Crypto.Assumption.DL.Parameter
 
@@ -20,8 +20,9 @@ def scalarNonemptyOfGenerator
 /--
 Shared finite cyclic-action parameter used by discrete-log style problems.
 
-The record stores only the additive carrier action, generator, exact backend,
-and scalar sampler. Stronger assumptions obtain this interface by projection.
+This is the mathematical layer only.  Executable primitive handlers,
+distributional laws, and resource bounds belong to the assumption-specific
+`PublicParam` records built over this structure.
 -/
 structure CyclicAction extends
     Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.{uGroup} where
@@ -31,16 +32,6 @@ structure CyclicAction extends
   generator : Carrier
   generator_generates : ∀ value : Carrier, ∃ scalar : Scalar,
     scalar • generator = value
-  backend : @AdditiveBackend Scalar Carrier addGroup smul
-  scalarSampler :
-    @UniformSampler Scalar fintypeScalar
-      (@scalarNonemptyOfGenerator
-        Scalar Carrier addGroup smul generator generator_generates)
-  scalarSamplerLaws :
-    @UniformSamplerLaws Scalar fintypeScalar
-      (@scalarNonemptyOfGenerator
-        Scalar Carrier addGroup smul generator generator_generates)
-      scalarSampler
 
 namespace CyclicAction
 
@@ -62,8 +53,7 @@ end CyclicAction
 
 /--
 The stronger DDH parameter extends the shared cyclic-action base with a
-commutative scalar monoid, the two action laws, exact scalar multiplication,
-and an independent carrier sampler.
+commutative scalar monoid and the two action laws.
 
 The action laws are stored against the inherited `smul`, and `mulAction` below
 is derived from that same operation. This makes the two projected instances
@@ -76,11 +66,6 @@ structure DecisionalCyclicAction extends CyclicAction.{uScalar, uGroup} where
   mul_smul : ∀ (left right : Scalar) (value : Carrier),
     smul.smul (commMonoidScalar.mul left right) value =
       smul.smul left (smul.smul right value)
-  scalarMulBackend :
-    @MultiplicativeBackend Scalar commMonoidScalar.toMul
-  carrierSampler : @UniformSampler Carrier fintypeCarrier nonemptyCarrier
-  carrierSamplerLaws :
-    @UniformSamplerLaws Carrier fintypeCarrier nonemptyCarrier carrierSampler
 
 /-- The stronger parameter's multiplicative action uses the inherited action. -/
 @[instance_reducible] def DecisionalCyclicAction.mulAction

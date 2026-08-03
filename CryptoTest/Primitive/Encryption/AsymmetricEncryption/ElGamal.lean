@@ -3,66 +3,73 @@ import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.B
 
 namespace CryptoTest.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
-open Crypto.Infrastructure.Computation.Algebra
+open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.AsymmetricEncryption
 open Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
 open CryptoTest.Assumption.DL
 open scoped DDHParameter
 
-/-- The derived encryption budget is sample plus two scalar actions plus addition. -/
+/-- The encryption budget is sample plus two scalar actions plus addition. -/
 example :
     encryptBudget DDH.testPublicParam DDH.testParamEfficiency = 29 :=
   rfl
 
-/-- The derived decryption budget is one scalar action plus subtraction. -/
+/-- The decryption budget is one scalar action plus subtraction. -/
 example :
     decryptBudget DDH.testPublicParam DDH.testParamEfficiency = 17 :=
   rfl
 
-/-- Every concrete encryption path has the exact four-operation cost 2+11+11+5. -/
+/-- Every concrete encryption path has exact cost `2 + 11 + 11 + 5`. -/
 example
     (publicKey message : DDH.testPublicParam.Carrier)
-    (result : Costed
-      (DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier))
+    (result : CostedT CostModel.nat
+      (ULift (DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier)))
     (hresult : result ∈
-      (encryptComputation DDH.testPublicParam publicKey message).support) :
+      (Program.runCosted
+        (encryptProgram DDH.testPublicParam) (publicKey, message)).support) :
     result.cost = 29 := by
-  rcases encryptComputation_exactCost
+  rcases encryptProgram_exactCost
       DDH.testPublicParam publicKey message result hresult with
-    ⟨sampleResult, hsampleResult, _hvalue, hcost⟩
+    ⟨sampleResult, hsample, firstResult, hfirst,
+      sharedResult, hshared, additionResult, haddition, _hvalue, hcost⟩
   have hsampleCost : sampleResult.cost = 2 := by
-    change sampleResult ∈
-      (UniformSampler.ofConstantCost
-        (Sample := DDH.testPublicParam.Scalar) 2).sample.support at hsampleResult
-    simp only [UniformSampler.ofConstantCost, UniformSampler.ofCost,
-      RandCosted.sampleWithCost, RandCostedT.sampleWithCost] at hsampleResult
-    rw [PMF.mem_support_map_iff] at hsampleResult
-    rcases hsampleResult with ⟨sampleValue, _hsampleValue, hsampleResult⟩
+    simp only [DDH.testPublicParam, DDH.testAlgebra,
+      RandCostedT.sampleWithCost] at hsample
+    rw [PMF.support_map] at hsample
+    rcases hsample with ⟨sampleValue, _hsampleValue, hsample⟩
     subst sampleResult
     rfl
-  rw [hcost, hsampleCost]
+  have hfirstCost : firstResult.cost = 11 := by
+    simp only [DDH.testPublicParam, DDH.testAlgebra,
+      RandCostedT.liftCosted] at hfirst
+    rw [PMF.support_pure] at hfirst
+    exact congrArg CostedT.cost (show firstResult = _ from hfirst)
+  have hsharedCost : sharedResult.cost = 11 := by
+    simp only [DDH.testPublicParam, DDH.testAlgebra,
+      RandCostedT.liftCosted] at hshared
+    rw [PMF.support_pure] at hshared
+    exact congrArg CostedT.cost (show sharedResult = _ from hshared)
+  have hadditionCost : additionResult.cost = 5 := by
+    simp only [DDH.testPublicParam, DDH.testAlgebra,
+      RandCostedT.liftCosted] at haddition
+    rw [PMF.support_pure] at haddition
+    exact congrArg CostedT.cost (show additionResult = _ from haddition)
+  rw [hcost, hsampleCost, hfirstCost, hsharedCost, hadditionCost]
   rfl
 
-/-- The scheme boundary erases setup costs without changing the DDH distribution. -/
+/-- The scheme erases setup costs without changing the DDH distribution. -/
 example (sec : Crypto.SecPar) :
     (scheme DDH.testFamily).setupDist sec =
       DDH.testFamily.setupDist sec :=
   scheme_setupDist DDH.testFamily sec
 
-/-- ElGamal executes setup through the typed DDH family program exactly. -/
-example (sec : Crypto.SecPar) :
-    (scheme DDH.testFamily).setup sec =
-      Crypto.Infrastructure.Computation.Program.runCosted
-        (Crypto.Assumption.DL.DDH.setupProgram DDH.testFamily) sec :=
-  rfl
-
-/-- Typed setup dispatch preserves the native setup computation path-for-path. -/
+/-- Setup is the authoritative family computation path-for-path. -/
 example (sec : Crypto.SecPar) :
     (scheme DDH.testFamily).setup sec = DDH.testFamily.setup sec :=
   scheme_setup_eq_family_setup DDH.testFamily sec
 
-/-- The scheme boundary exposes the cost-erased ElGamal key distribution. -/
+/-- The scheme boundary exposes ordinary ElGamal key generation. -/
 example :
     (scheme DDH.testFamily).keygenDist DDH.testPublicParam =
       PMF.bind
@@ -73,38 +80,51 @@ example :
             (secretKey • DDH.testPublicParam.generator, secretKey)) :=
   scheme_keygenDist DDH.testFamily DDH.testPublicParam
 
-/-- The scheme boundary erases decryption costs without changing its value. -/
+/-- Cost erasure of decryption gives the ordinary ElGamal plaintext. -/
 example
     (secretKey : DDH.testPublicParam.Scalar)
     (ciphertext :
       DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier) :
-    (scheme DDH.testFamily).decryptValue
+    (scheme DDH.testFamily).decryptDist
         DDH.testPublicParam secretKey ciphertext =
-      ciphertext.2 - secretKey • ciphertext.1 :=
-  scheme_decryptValue DDH.testFamily DDH.testPublicParam secretKey ciphertext
+      PMF.pure (ciphertext.2 - secretKey • ciphertext.1) :=
+  scheme_decryptDist DDH.testFamily DDH.testPublicParam secretKey ciphertext
 
-/-- Concrete ElGamal decryption derives its cost from scalar action and subtraction. -/
+/-- Concrete decryption has exact scalar-action-plus-subtraction cost. -/
 example
     (secretKey : DDH.testPublicParam.Scalar)
     (ciphertext :
       DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier) :
-    ((scheme DDH.testFamily).decrypt
-        DDH.testPublicParam secretKey ciphertext).cost = 17 :=
-  rfl
+    Program.runCosted (decryptProgram DDH.testPublicParam)
+        (secretKey, ciphertext) =
+      PMF.pure
+        (⟨ULift.up (ciphertext.2 - secretKey • ciphertext.1), 17⟩ :
+          CostedT CostModel.nat (ULift DDH.testPublicParam.Carrier)) := by
+  change
+    Program.runCosted (decryptProgram DDH.testPublicParam)
+        (secretKey, ciphertext) =
+      PMF.pure
+        (⟨ULift.up
+            (DDH.testMath.addGroup.sub ciphertext.2
+              (DDH.testMath.smul.smul secretKey ciphertext.1)), 17⟩ :
+          CostedT CostModel.nat (ULift DDH.testMath.Carrier))
+  simp [Program.runCosted, decryptProgram, Program.Code.runCosted,
+    DDH.testPublicParam, DDH.testAlgebra, RandCostedT.bind,
+    RandCostedT.liftCosted, PMF.pure_map, CostedT.bind]
 
-/-- The timed encryption machine exposes the original ElGamal distribution. -/
+/-- The timed adapter preserves the ordinary ElGamal encryption distribution. -/
 example
     (sec : Crypto.SecPar)
     (input :
       DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier) :
-    (encryptTimedMachine
+    (encryptTimedMachine NatMeasure.nat
         DDH.testPublicParam DDH.testParamEfficiency).runDist sec input =
       (scheme DDH.testFamily).encryptDist
         DDH.testPublicParam input.1 input.2 :=
-  encryptTimedMachine_runDist
+  encryptTimedMachine_runDist NatMeasure.nat
     DDH.testFamily DDH.testPublicParam DDH.testParamEfficiency sec input
 
-/-- The concrete costed scheme satisfies the generic correctness interface. -/
+/-- The cost-aware scheme retains the generic correctness theorem. -/
 example :
     Correct (scheme DDH.testFamily) :=
   correct DDH.testFamily

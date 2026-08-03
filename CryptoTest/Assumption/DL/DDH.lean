@@ -10,8 +10,8 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-/-- A concrete two-element DDH parameter whose operations carry their own costs. -/
-noncomputable def testPublicParam : PublicParam where
+/-- The DDH mathematical parameter contains no costed operations or samplers. -/
+def testMath : MathematicalParam where
   Scalar := ZMod 2
   Carrier := ZMod 2
   addGroup := inferInstance
@@ -30,168 +30,162 @@ noncomputable def testPublicParam : PublicParam where
   generator_generates := by
     intro value
     exact ⟨value, by simp⟩
-  backend := AdditiveBackend.ofConstantCosts 5 7 6 11
-  scalarMulBackend := MultiplicativeBackend.ofConstantCost 13
-  scalarSampler := UniformSampler.ofConstantCost 2
-  scalarSamplerLaws := UniformSamplerLaws.ofConstantCost 2
-  carrierSampler := UniformSampler.ofConstantCost 4
-  carrierSamplerLaws := UniformSamplerLaws.ofConstantCost 4
 
-/-- Local sampler and operation bounds certified once for the concrete parameter. -/
+/-- The single typed algebra assigns all exact DDH primitive costs. -/
+noncomputable def testAlgebra :
+    CostedAlgebra CostModel.nat (signature testMath) where
+  exec operation :=
+    match operation with
+    | .sampleScalar =>
+        RandCostedT.sampleWithCost
+          (PMF.map ULift.up
+            (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+              testMath.Scalar testMath.fintypeScalar
+              ⟨testMath.commMonoidScalar.one⟩))
+          (fun _ => 2)
+    | .sampleCarrier =>
+        RandCostedT.sampleWithCost
+          (PMF.map ULift.up
+            (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+              testMath.Carrier testMath.fintypeCarrier
+              testMath.nonemptyCarrier))
+          (fun _ => 4)
+    | .smul scalar value =>
+        RandCostedT.liftCosted
+          (⟨ULift.up (testMath.smul.smul scalar value), 11⟩ :
+            CostedT CostModel.nat (ULift testMath.Carrier))
+    | .add left right =>
+        RandCostedT.liftCosted
+          (⟨ULift.up (testMath.addGroup.add left right), 5⟩ :
+            CostedT CostModel.nat (ULift testMath.Carrier))
+    | .sub left right =>
+        RandCostedT.liftCosted
+          (⟨ULift.up (testMath.addGroup.sub left right), 6⟩ :
+            CostedT CostModel.nat (ULift testMath.Carrier))
+    | .mul left right =>
+        RandCostedT.liftCosted
+          (⟨ULift.up (testMath.commMonoidScalar.mul left right), 13⟩ :
+            CostedT CostModel.nat (ULift testMath.Scalar))
+
+noncomputable def testLaws : ExactLaws testAlgebra where
+  sampleScalar := RandCostedT.valueDist_sampleWithCost _ _
+  sampleCarrier := RandCostedT.valueDist_sampleWithCost _ _
+  smul _scalar _value := RandCostedT.valueDist_liftCosted _
+  add _left _right := RandCostedT.valueDist_liftCosted _
+  sub _left _right := RandCostedT.valueDist_liftCosted _
+  mul _left _right := RandCostedT.valueDist_liftCosted _
+
+noncomputable def testPublicParam : PublicParam CostModel.nat where
+  toDecisionalCyclicAction := testMath
+  algebra := testAlgebra
+  laws := testLaws
+
+noncomputable def testBounds : OperationBounds testAlgebra where
+  budget operation :=
+    match operation with
+    | .sampleScalar => 2
+    | .sampleCarrier => 4
+    | .smul _ _ => 11
+    | .add _ _ => 5
+    | .sub _ _ => 6
+    | .mul _ _ => 13
+  cost_le operation result hresult := by
+    cases operation with
+    | sampleScalar =>
+        simp only [testAlgebra, RandCostedT.sampleWithCost] at hresult
+        rw [PMF.mem_support_map_iff] at hresult
+        rcases hresult with ⟨value, _hvalue, hresult⟩
+        subst result
+        exact Nat.le_refl 2
+    | sampleCarrier =>
+        simp only [testAlgebra, RandCostedT.sampleWithCost] at hresult
+        rw [PMF.mem_support_map_iff] at hresult
+        rcases hresult with ⟨value, _hvalue, hresult⟩
+        subst result
+        exact Nat.le_refl 4
+    | smul scalar value =>
+        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        rw [PMF.mem_support_pure_iff] at hresult
+        subst result
+        exact Nat.le_refl 11
+    | add left right =>
+        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        rw [PMF.mem_support_pure_iff] at hresult
+        subst result
+        exact Nat.le_refl 5
+    | sub left right =>
+        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        rw [PMF.mem_support_pure_iff] at hresult
+        subst result
+        exact Nat.le_refl 6
+    | mul left right =>
+        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        rw [PMF.mem_support_pure_iff] at hresult
+        subst result
+        exact Nat.le_refl 13
+
 noncomputable def testParamEfficiency :
     ParamEfficiencyCertificate testPublicParam where
-  scalarSamplerBounds := UniformSamplerBounds.ofConstantCost 2
-  carrierSamplerBounds := UniformSamplerBounds.ofConstantCost 4
-  additiveBounds := AdditiveCostBounds.ofConstantCosts 5 7 6 11
-  scalarMulBounds := MultiplicativeCostBounds.ofConstantCost 13
+  bounds := testBounds
+  scalarSampleBudget := 2
+  scalarSampleBudget_sound := Nat.le_refl 2
+  carrierSampleBudget := 4
+  carrierSampleBudget_sound := Nat.le_refl 4
+  smulBudget := 11
+  smulBudget_sound := by intros; exact Nat.le_refl 11
+  addBudget := 5
+  addBudget_sound := by intros; exact Nat.le_refl 5
+  subBudget := 6
+  subBudget_sound := by intros; exact Nat.le_refl 6
+  mulBudget := 13
+  mulBudget_sound := by intros; exact Nat.le_refl 13
 
-/-- A native costed DDH family with one fixed public parameter. -/
-noncomputable def testFamily : Family :=
+noncomputable def testFamily : Family CostModel.nat :=
   Family.ofFixed testPublicParam 3
 
-/-- The exact compositional efficiency certificate for `testFamily`. -/
-noncomputable def testEfficiency : EfficiencyCertificate testFamily :=
-  EfficiencyCertificate.ofFixed testPublicParam testParamEfficiency 3
+example : Prop := Assumption testFamily
 
-/-- The DDH assumption itself depends only on the exact costed family. -/
-example : Prop :=
-  Assumption testFamily
-
-/-- A real DDH sample distribution is the erasure of its costed computation. -/
-example (sec : Crypto.SecPar) :
-    RandCosted.valueDist (realSampleComputation testFamily sec) =
-      realSample testFamily sec :=
-  realSampleComputation_valueDist testFamily sec
-
-/-- A random DDH sample distribution is the erasure of its costed computation. -/
-example (sec : Crypto.SecPar) :
-    RandCosted.valueDist (randomSampleComputation testFamily sec) =
-      randomSample testFamily sec :=
-  randomSampleComputation_valueDist testFamily sec
-
-/-- Setup is dispatched by the family-level typed program without alteration. -/
 example (sec : Crypto.SecPar) :
     Program.runCosted (setupProgram testFamily) sec = testFamily.setup sec :=
   setupProgram_runCosted testFamily sec
 
-/-- The full genuine path is exactly setup followed by the typed local tail. -/
-example (sec : Crypto.SecPar) :
-    Program.runCosted (realSampleProgram testFamily) sec =
-      RandCosted.bind (testFamily.setup sec) realSampleTailComputation :=
-  realSampleProgram_runCosted_eq_bind_tail testFamily sec
-
-/-- The full random path is exactly setup followed by the typed local tail. -/
-example (sec : Crypto.SecPar) :
-    Program.runCosted (randomSampleProgram testFamily) sec =
-      RandCosted.bind (testFamily.setup sec) randomSampleTailComputation :=
-  randomSampleProgram_runCosted_eq_bind_tail testFamily sec
-
-/-- Erasing the full typed genuine path gives the unchanged DDH real game. -/
+/-- Both games are defined directly by erasing their authoritative programs. -/
 example (sec : Crypto.SecPar) :
     Program.valueDist (realSampleProgram testFamily) sec =
-      realSample testFamily sec :=
+      (ddhProblem testFamily).left sec :=
   rfl
 
-/-- Erasing the full typed random path gives the unchanged DDH random game. -/
 example (sec : Crypto.SecPar) :
     Program.valueDist (randomSampleProgram testFamily) sec =
-      randomSample testFamily sec :=
+      (ddhProblem testFamily).right sec :=
   rfl
 
-/-- Family-level setup erasure is specified independently of execution. -/
-example (sec : Crypto.SecPar) :
-    Program.Code.valueDist
-        (A := familyAlgebra testFamily)
-        (.call (FamilyOp.setup sec)) =
-      (familyAlgebraLaws testFamily).semantics (FamilyOp.setup sec) :=
-  Program.Code.valueDist_call_eq (familyAlgebraLaws testFamily)
-    (FamilyOp.setup sec)
-
-/-- A dependent carrier sample uses the delegated family erasure law. -/
 example :
     Program.Code.valueDist
-        (A := familyAlgebra testFamily)
-        (.call (FamilyOp.sampleCarrier testPublicParam)) =
-      (familyAlgebraLaws testFamily).semantics
-        (FamilyOp.sampleCarrier testPublicParam) :=
-  Program.Code.valueDist_call_eq (familyAlgebraLaws testFamily)
-    (FamilyOp.sampleCarrier testPublicParam)
+        (A := testPublicParam.algebra) (.call Op.sampleCarrier) =
+      (algebraLaws testPublicParam).semantics Op.sampleCarrier :=
+  Program.Code.valueDist_call_eq (algebraLaws testPublicParam) Op.sampleCarrier
 
-/-- The authoritative typed real path is the exact 46-unit compatibility path. -/
-example (leftExp rightExp : testPublicParam.Scalar) :
-    (RandCosted.map
-        (fun values => ChallengeValues.toChallengeInput values.down)
-        (Program.runCosted (realChallengeProgram testPublicParam)
-          (leftExp, rightExp)) =
-      RandCosted.liftCosted
-        (realChallengeComputation testPublicParam leftExp rightExp)) ∧
-      (realChallengeComputation testPublicParam leftExp rightExp).cost = 46 :=
-  ⟨realChallengeProgram_runCosted testPublicParam leftExp rightExp, rfl⟩
-
-/-- The authoritative typed random path is the exact 22-unit compatibility path. -/
-example (leftExp rightExp : testPublicParam.Scalar)
-    (sampledShared : testPublicParam.Carrier) :
-    (RandCosted.map
-        (fun values => ChallengeValues.toChallengeInput values.down)
-        (Program.runCosted (randomChallengeProgram testPublicParam)
-          (leftExp, rightExp, sampledShared)) =
-      RandCosted.liftCosted
-        (randomChallengeComputation testPublicParam leftExp rightExp
-          sampledShared)) ∧
-      (randomChallengeComputation testPublicParam leftExp rightExp
-        sampledShared).cost = 22 :=
-  ⟨randomChallengeProgram_runCosted testPublicParam leftExp rightExp
-      sampledShared, rfl⟩
-
-/-- Typed genuine and random tails retain their exact structural budgets. -/
+/-- Genuine and random fixed-exponent programs retain their exact bounds. -/
 example :
     Program.CostBound
-      (realSampleTailProgram testPublicParam) (fun _input => 50) :=
-  (realSampleTailBoundedProgram
-    testPublicParam testParamEfficiency).costBound
+      (realChallengeProgram testPublicParam) (fun _ => 46) :=
+  (realChallengeBoundedProgram testPublicParam testParamEfficiency).costBound
 
 example :
     Program.CostBound
-      (randomSampleTailProgram testPublicParam) (fun _input => 30) :=
-  (randomSampleTailBoundedProgram
-    testPublicParam testParamEfficiency).costBound
+      (randomChallengeProgram testPublicParam) (fun _ => 22) :=
+  (randomChallengeBoundedProgram testPublicParam testParamEfficiency).costBound
 
-/-- Dependent scalar-operation dispatch uses the separate erasure laws. -/
+/-- Sampling adds two scalar samples, and the random game adds one carrier sample. -/
 example :
-    Program.Code.valueDist
-        (A := algebra testPublicParam) (.call Op.sampleScalar) =
-      (algebraLaws testPublicParam).semantics Op.sampleScalar :=
-  Program.Code.valueDist_call_eq (algebraLaws testPublicParam) Op.sampleScalar
-
-/-- Full real and random sampling paths satisfy their global budgets. -/
-example :
-    Crypto.Infrastructure.Computation.RandomizedComputation.CostBound
-      (fun sec (_input : Unit) => testFamily.setup sec)
-      (fun _sec => 3) :=
-  setup_costBound testFamily testEfficiency
+    Program.CostBound
+      (realSampleTailProgram testPublicParam) (fun _ => 50) :=
+  (realSampleTailBoundedProgram testPublicParam testParamEfficiency).costBound
 
 example :
-    Program.CostBound (setupProgram testFamily) (fun _sec => 3) :=
-  setupProgram_costBound testFamily testEfficiency
-
-example :
-    Crypto.Infrastructure.Computation.RandomizedComputation.CostBound
-      (fun sec (_input : Unit) => realSampleComputation testFamily sec)
-      (fun _sec => 53) :=
-  realSampleComputation_costBound testFamily testEfficiency
-
-example :
-    Program.CostBound (realSampleProgram testFamily) (fun _sec => 53) :=
-  realSampleProgram_costBound testFamily testEfficiency
-
-example :
-    Crypto.Infrastructure.Computation.RandomizedComputation.CostBound
-      (fun sec (_input : Unit) => randomSampleComputation testFamily sec)
-      (fun _sec => 33) :=
-  randomSampleComputation_costBound testFamily testEfficiency
-
-example :
-    Program.CostBound (randomSampleProgram testFamily) (fun _sec => 33) :=
-  randomSampleProgram_costBound testFamily testEfficiency
+    Program.CostBound
+      (randomSampleTailProgram testPublicParam) (fun _ => 30) :=
+  (randomSampleTailBoundedProgram testPublicParam testParamEfficiency).costBound
 
 end CryptoTest.Assumption.DL.DDH

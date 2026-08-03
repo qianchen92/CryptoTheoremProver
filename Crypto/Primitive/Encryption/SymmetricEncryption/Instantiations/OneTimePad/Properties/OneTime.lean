@@ -3,9 +3,10 @@ import Crypto.Primitive.Encryption.SymmetricEncryption.Properties.OneTime
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
 
-universe uGroup
+universe uCost uGroup
 
 open Crypto.Primitive.Encryption.SymmetricEncryption
+open Crypto.Infrastructure.Computation.Cost
 open Crypto.Infrastructure.Computation.Distribution
 open scoped OneTimePadParameter
 
@@ -53,7 +54,8 @@ theorem challengeDistribution_eq
 
 /-- The false and true challenge oracles of the group one-time pad are extensionally equal. -/
 theorem oneTimeEncryptionOracle_false_eq_true
-    (F : Family.{uGroup}) (sec : Crypto.SecPar) (pp : PublicParam.{uGroup}) :
+    {M : CostModel.{uCost}}
+    (F : Family M) (sec : Crypto.SecPar) (pp : PublicParam M) :
     oneTimeEncryptionOracle (scheme F) sec pp false =
     oneTimeEncryptionOracle (scheme F) sec pp true := by
   dsimp [oneTimeEncryptionOracle]
@@ -69,9 +71,11 @@ theorem oneTimeEncryptionOracle_false_eq_true
 
 /-- The two one-time security games of the group one-time pad are identical. -/
 theorem oneTimeSecurityGame_false_eq_true
-    (F : Family.{uGroup})
+    {M : CostModel.{uCost}}
+    (F : Family M)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      (fun _ => PublicParam.{uGroup})
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
+      (fun _ => PublicParam M)
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
     oneTimeSecurityGame (scheme F) A false =
@@ -89,9 +93,11 @@ theorem oneTimeSecurityGame_false_eq_true
 
 /-- Every oracle machine has zero one-time advantage against the group one-time pad. -/
 theorem oneTimeAdvantage_eq_zero
-    (F : Family.{uGroup})
+    {M : CostModel.{uCost}}
+    (F : Family M)
     (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      (fun _ => PublicParam.{uGroup})
+      Crypto.Infrastructure.Computation.Cost.CostModel.nat
+      (fun _ => PublicParam M)
       (fun _ => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
     OneTimeAdvantage (scheme F) A = fun _ => 0 := by
@@ -100,13 +106,13 @@ theorem oneTimeAdvantage_eq_zero
     Crypto.Infrastructure.GameBased.AcceptProb, oneTimeSecurityGame_false_eq_true F A]
 
 /-- Perfect one-time security of the group one-time pad. -/
-theorem perfectOneTimeSecure (F : Family.{uGroup}) :
+theorem perfectOneTimeSecure {M : CostModel.{uCost}} (F : Family M) :
     PerfectOneTimeSecure (scheme F) := by
   intro A
   exact oneTimeAdvantage_eq_zero F A
 
 /-- PPT one-time security of the group one-time pad. -/
-theorem oneTimeSecure (F : Family.{uGroup}) :
+theorem oneTimeSecure {M : CostModel.{uCost}} (F : Family M) :
     OneTimeSecure (scheme F) := by
   exact PerfectOneTimeSecure.toOneTimeSecure (perfectOneTimeSecure F)
 

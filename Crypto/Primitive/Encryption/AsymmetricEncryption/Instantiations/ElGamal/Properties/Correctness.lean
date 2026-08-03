@@ -3,14 +3,16 @@ import Crypto.Primitive.Encryption.AsymmetricEncryption.Properties.Correctness
 
 namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
 
-universe uScalar uGroup
+universe uCost uScalar uGroup
 
+open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.AsymmetricEncryption
 open scoped DDHParameter
 
 /-- Correctness of ElGamal under the scalar action law carried by public parameters. -/
 theorem correct
-    (F : Crypto.Assumption.DL.DDH.Family.{uScalar, uGroup}) :
+    {M : CostModel.{uCost}}
+    (F : Crypto.Assumption.DL.DDH.Family.{uCost, uScalar, uGroup} M) :
     Correct (scheme F) := by
   intro _sec pp publicKey secretKey message _hpp hkey
   rw [scheme_keygenDist] at hkey
@@ -24,8 +26,8 @@ theorem correct
   subst publicKey
   subst secretKey
   rw [scheme_encryptDist]
-  simp_rw [scheme_decryptValue]
+  simp_rw [scheme_decryptDist]
   rw [PMF.bind_bind]
-  simp [pp.compatibleScalarAction sampledSecretKey]
+  simp [pp.scalarAction_commutes sampledSecretKey]
 
 end Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal

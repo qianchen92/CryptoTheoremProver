@@ -10,8 +10,8 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-/-- A concrete two-element DLog parameter whose operations carry their own costs. -/
-noncomputable def testPublicParam : PublicParam where
+/-- The mathematical parameter contains no execution backend or sampler. -/
+def testMath : MathematicalParam where
   Scalar := ZMod 2
   Carrier := ZMod 2
   addGroup := inferInstance
@@ -23,111 +23,94 @@ noncomputable def testPublicParam : PublicParam where
   generator_generates := by
     intro value
     exact ⟨value, by simp⟩
-  backend := AdditiveBackend.ofConstantCosts 5 7 6 11
-  scalarSampler := UniformSampler.ofConstantCost 2
-  scalarSamplerLaws := UniformSamplerLaws.ofConstantCost 2
 
-/-- Local sampler and operation bounds certified once for the concrete parameter. -/
+/-- One exact typed handler is the sole source of DLog path costs. -/
+noncomputable def testAlgebra :
+    CostedAlgebra CostModel.nat (signature testMath) where
+  exec operation :=
+    match operation with
+    | .sampleScalar =>
+        RandCostedT.sampleWithCost
+          (PMF.map ULift.up
+            (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+              testMath.Scalar testMath.fintypeScalar
+              (@Crypto.Assumption.DL.Parameter.scalarNonemptyOfGenerator
+                testMath.Scalar testMath.Carrier testMath.addGroup testMath.smul
+                testMath.generator testMath.generator_generates)))
+          (fun _ => 2)
+    | .smul scalar value =>
+        RandCostedT.liftCosted
+          (⟨ULift.up (testMath.smul.smul scalar value), 11⟩ :
+            CostedT CostModel.nat (ULift testMath.Carrier))
+
+noncomputable def testLaws : ExactLaws testAlgebra where
+  sampleScalar := RandCostedT.valueDist_sampleWithCost _ _
+  smul _scalar _value := RandCostedT.valueDist_liftCosted _
+
+noncomputable def testPublicParam : PublicParam CostModel.nat where
+  toCyclicAction := testMath
+  algebra := testAlgebra
+  laws := testLaws
+
+noncomputable def testBounds : OperationBounds testAlgebra where
+  budget operation :=
+    match operation with
+    | .sampleScalar => 2
+    | .smul _ _ => 11
+  cost_le operation result hresult := by
+    cases operation with
+    | sampleScalar =>
+        simp only [testAlgebra, RandCostedT.sampleWithCost] at hresult
+        rw [PMF.mem_support_map_iff] at hresult
+        rcases hresult with ⟨value, _hvalue, hresult⟩
+        subst result
+        exact Nat.le_refl 2
+    | smul scalar value =>
+        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        rw [PMF.mem_support_pure_iff] at hresult
+        subst result
+        exact Nat.le_refl 11
+
 noncomputable def testParamEfficiency :
     ParamEfficiencyCertificate testPublicParam where
-  scalarSamplerBounds := UniformSamplerBounds.ofConstantCost 2
-  additiveBounds := AdditiveCostBounds.ofConstantCosts 5 7 6 11
+  bounds := testBounds
+  sampleScalarBudget := 2
+  sampleScalarBudget_sound := Nat.le_refl 2
+  smulBudget := 11
+  smulBudget_sound := by intros; exact Nat.le_refl 11
 
-/-- A native costed DLog family with one fixed public parameter. -/
-noncomputable def testFamily : Family :=
+noncomputable def testFamily : Family CostModel.nat :=
   Family.ofFixed testPublicParam 3
 
-/-- The exact compositional efficiency certificate for `testFamily`. -/
-noncomputable def testEfficiency : EfficiencyCertificate testFamily :=
-  EfficiencyCertificate.ofFixed testPublicParam testParamEfficiency 3
+example : Prop := Assumption testFamily
 
-/-- The DLog assumption itself depends only on the exact costed family. -/
-example : Prop :=
-  Assumption testFamily
-
-/-- Cost erasure is definitionally the DLog search-problem sampler. -/
-example (sec : Crypto.SecPar) :
-    RandCosted.valueDist (sampleComputation testFamily sec) =
-      (dLogProblem testFamily).sample sec :=
-  sampleComputation_valueDist testFamily sec
-
-/-- Setup is dispatched by the family-level typed program without alteration. -/
 example (sec : Crypto.SecPar) :
     Program.runCosted (setupProgram testFamily) sec = testFamily.setup sec :=
   setupProgram_runCosted testFamily sec
 
-/-- The full setup-dependent program preserves the exact legacy bind path. -/
-example (sec : Crypto.SecPar) :
-    Program.runCosted (sampleProgram testFamily) sec =
-      RandCosted.bind (testFamily.setup sec) sampleTailComputation :=
-  sampleProgram_runCosted_eq_bind_tail testFamily sec
-
-/-- Erasing the full typed program gives the unchanged DLog sampler. -/
+/-- The problem distribution is exactly the erasure of the sole sample program. -/
 example (sec : Crypto.SecPar) :
     Program.valueDist (sampleProgram testFamily) sec =
       (dLogProblem testFamily).sample sec :=
   rfl
 
-/-- Family-level setup erasure is specified independently of execution. -/
-example (sec : Crypto.SecPar) :
-    Program.Code.valueDist
-        (A := familyAlgebra testFamily)
-        (.call (FamilyOp.setup sec)) =
-      (familyAlgebraLaws testFamily).semantics (FamilyOp.setup sec) :=
-  Program.Code.valueDist_call_eq (familyAlgebraLaws testFamily)
-    (FamilyOp.setup sec)
-
-/-- Delegated dependent sampling also satisfies the family-level erasure law. -/
 example :
     Program.Code.valueDist
-        (A := familyAlgebra testFamily)
-        (.call (FamilyOp.sampleScalar testPublicParam)) =
-      (familyAlgebraLaws testFamily).semantics
-        (FamilyOp.sampleScalar testPublicParam) :=
-  Program.Code.valueDist_call_eq (familyAlgebraLaws testFamily)
-    (FamilyOp.sampleScalar testPublicParam)
-
-/-- The authoritative typed path is the exact 11-unit compatibility computation. -/
-example (secret : testPublicParam.Scalar) :
-    (RandCosted.map (fun challenge => ⟨testPublicParam, challenge.down⟩)
-        (Program.runCosted (challengeProgram testPublicParam) secret) =
-      RandCosted.liftCosted
-        (challengeComputation testPublicParam secret)) ∧
-      (challengeComputation testPublicParam secret).cost = 11 :=
-  ⟨challengeProgram_runCosted_eq_challengeComputation
-      testPublicParam secret, rfl⟩
-
-/-- The typed DLog tail itself carries the exact structural 13-unit bound. -/
-example :
-    Program.CostBound (sampleTailProgram testPublicParam) (fun _input => 13) :=
-  (sampleTailBoundedProgram testPublicParam testParamEfficiency).costBound
-
-/-- Dispatching the dependent scalar sampler obeys its separate erasure law. -/
-example :
-    Program.Code.valueDist
-        (A := algebra testPublicParam) (.call Op.sampleScalar) =
+        (A := testPublicParam.algebra) (.call Op.sampleScalar) =
       (algebraLaws testPublicParam).semantics Op.sampleScalar :=
   Program.Code.valueDist_call_eq (algebraLaws testPublicParam) Op.sampleScalar
 
-/-- Setup and complete sampling satisfy their separate global bounds. -/
+/-- The exact typed tail has the expected `2 + 11` structural bound. -/
 example :
-    Crypto.Infrastructure.Computation.RandomizedComputation.CostBound
-      (fun sec (_input : Unit) => testFamily.setup sec)
-      (fun _sec => 3) :=
-  setup_costBound testFamily testEfficiency
+    Program.CostBound (sampleTailProgram testPublicParam) (fun _ => 13) :=
+  (sampleTailBoundedProgram testPublicParam testParamEfficiency).costBound
 
-example :
-    Program.CostBound (setupProgram testFamily) (fun _sec => 3) :=
-  setupProgram_costBound testFamily testEfficiency
-
-example :
-    Crypto.Infrastructure.Computation.RandomizedComputation.CostBound
-      (fun sec (_input : Unit) => sampleComputation testFamily sec)
-      (fun _sec => 16) :=
-  sampleComputation_costBound testFamily testEfficiency
-
-example :
-    Program.CostBound (sampleProgram testFamily) (fun _sec => 16) :=
-  sampleProgram_costBound testFamily testEfficiency
+/-- A fixed challenge receives exactly the handler's scalar-action cost. -/
+example (secret : testPublicParam.Scalar) :
+    Program.runCosted (challengeProgram testPublicParam) secret =
+      PMF.pure
+        (⟨ULift.up (testPublicParam.smul.smul secret testPublicParam.generator), 11⟩ :
+          CostedT CostModel.nat (ULift testPublicParam.Carrier)) :=
+  rfl
 
 end CryptoTest.Assumption.DL.DLog

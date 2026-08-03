@@ -1,11 +1,10 @@
-import Crypto.Infrastructure.Computation.Algebra.Backend
 import Crypto.Infrastructure.Computation.Algebra.Signature
 
 namespace Crypto.Infrastructure.Computation.Algebra
 
 open Crypto.Infrastructure.Computation.Cost
 
-universe uScalar uCarrier uSample uValue
+universe uCost uScalar uCarrier uSample uValue
 
 /-- A typed primitive addition call. -/
 inductive AddOperation (Carrier : Type uCarrier) :
@@ -19,22 +18,24 @@ def signature (Carrier : Type uCarrier) :
     Signature.{uCarrier, uCarrier + 1} where
   Op := AddOperation Carrier
 
-/-- Interpret addition exactly through an existing natural-cost backend. -/
+/-- Interpret mathematical addition with an exact cost in an arbitrary model. -/
 noncomputable def algebra
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    CostedAlgebra natCostModel (signature Carrier) where
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Add Carrier]
+    (addCost : Carrier → Carrier → M.Cost) :
+    CostedAlgebra M (signature Carrier) where
   exec operation :=
     match operation with
-    | .add left right => RandCosted.liftCosted (backend.add left right)
+    | .add left right =>
+        RandCostedT.liftCosted
+          (⟨left + right, addCost left right⟩ : CostedT M Carrier)
 
 /-- The cost-erased addition handler agrees with mathematical addition. -/
 noncomputable def laws
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    AlgebraLaws (algebra backend) where
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Add Carrier]
+    (addCost : Carrier → Carrier → M.Cost) :
+    AlgebraLaws (algebra M addCost) where
   semantics operation :=
     match operation with
     | .add left right => PMF.pure (left + right)
@@ -43,22 +44,24 @@ noncomputable def laws
     | add left right => simp [algebra]
 
 /-- An independently chosen bound for the exact addition handler. -/
-def bounds
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    {backend : AdditiveBackend Scalar Carrier}
-    (backendBounds : AdditiveCostBounds backend) :
-    OperationBounds (algebra backend) where
+noncomputable def bounds
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Add Carrier]
+    (addCost addBudget : Carrier → Carrier → M.Cost)
+    (addCost_le : ∀ left right,
+      @LE.le M.Cost M.instPartialOrder.toLE
+        (addCost left right) (addBudget left right)) :
+    OperationBounds (algebra M addCost) where
   budget operation :=
     match operation with
-    | .add _ _ => backendBounds.addBudget
+    | .add left right => addBudget left right
   cost_le operation result hresult := by
     cases operation with
     | add left right =>
-        simp only [algebra] at hresult
+        simp only [algebra, RandCostedT.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
-        exact backendBounds.addCost_le left right
+        exact addCost_le left right
 
 end AddOperation
 
@@ -74,22 +77,24 @@ def signature (Carrier : Type uCarrier) :
     Signature.{uCarrier, uCarrier + 1} where
   Op := NegOperation Carrier
 
-/-- Interpret negation exactly through an existing natural-cost backend. -/
+/-- Interpret mathematical negation with an exact cost in an arbitrary model. -/
 noncomputable def algebra
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    CostedAlgebra natCostModel (signature Carrier) where
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Neg Carrier]
+    (negCost : Carrier → M.Cost) :
+    CostedAlgebra M (signature Carrier) where
   exec operation :=
     match operation with
-    | .neg value => RandCosted.liftCosted (backend.neg value)
+    | .neg value =>
+        RandCostedT.liftCosted
+          (⟨-value, negCost value⟩ : CostedT M Carrier)
 
 /-- The cost-erased negation handler agrees with mathematical negation. -/
 noncomputable def laws
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    AlgebraLaws (algebra backend) where
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Neg Carrier]
+    (negCost : Carrier → M.Cost) :
+    AlgebraLaws (algebra M negCost) where
   semantics operation :=
     match operation with
     | .neg value => PMF.pure (-value)
@@ -98,22 +103,24 @@ noncomputable def laws
     | neg value => simp [algebra]
 
 /-- An independently chosen bound for the exact negation handler. -/
-def bounds
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    {backend : AdditiveBackend Scalar Carrier}
-    (backendBounds : AdditiveCostBounds backend) :
-    OperationBounds (algebra backend) where
+noncomputable def bounds
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Neg Carrier]
+    (negCost negBudget : Carrier → M.Cost)
+    (negCost_le : ∀ value,
+      @LE.le M.Cost M.instPartialOrder.toLE
+        (negCost value) (negBudget value)) :
+    OperationBounds (algebra M negCost) where
   budget operation :=
     match operation with
-    | .neg _ => backendBounds.negBudget
+    | .neg value => negBudget value
   cost_le operation result hresult := by
     cases operation with
     | neg value =>
-        simp only [algebra] at hresult
+        simp only [algebra, RandCostedT.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
-        exact backendBounds.negCost_le value
+        exact negCost_le value
 
 end NegOperation
 
@@ -129,22 +136,24 @@ def signature (Carrier : Type uCarrier) :
     Signature.{uCarrier, uCarrier + 1} where
   Op := SubOperation Carrier
 
-/-- Interpret subtraction exactly through an existing natural-cost backend. -/
+/-- Interpret mathematical subtraction with an exact cost in an arbitrary model. -/
 noncomputable def algebra
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    CostedAlgebra natCostModel (signature Carrier) where
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Sub Carrier]
+    (subCost : Carrier → Carrier → M.Cost) :
+    CostedAlgebra M (signature Carrier) where
   exec operation :=
     match operation with
-    | .sub left right => RandCosted.liftCosted (backend.sub left right)
+    | .sub left right =>
+        RandCostedT.liftCosted
+          (⟨left - right, subCost left right⟩ : CostedT M Carrier)
 
 /-- The cost-erased subtraction handler agrees with mathematical subtraction. -/
 noncomputable def laws
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    AlgebraLaws (algebra backend) where
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Sub Carrier]
+    (subCost : Carrier → Carrier → M.Cost) :
+    AlgebraLaws (algebra M subCost) where
   semantics operation :=
     match operation with
     | .sub left right => PMF.pure (left - right)
@@ -153,22 +162,24 @@ noncomputable def laws
     | sub left right => simp [algebra]
 
 /-- An independently chosen bound for the exact subtraction handler. -/
-def bounds
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    {backend : AdditiveBackend Scalar Carrier}
-    (backendBounds : AdditiveCostBounds backend) :
-    OperationBounds (algebra backend) where
+noncomputable def bounds
+    (M : CostModel.{uCost})
+    {Carrier : Type uCarrier} [Sub Carrier]
+    (subCost subBudget : Carrier → Carrier → M.Cost)
+    (subCost_le : ∀ left right,
+      @LE.le M.Cost M.instPartialOrder.toLE
+        (subCost left right) (subBudget left right)) :
+    OperationBounds (algebra M subCost) where
   budget operation :=
     match operation with
-    | .sub _ _ => backendBounds.subBudget
+    | .sub left right => subBudget left right
   cost_le operation result hresult := by
     cases operation with
     | sub left right =>
-        simp only [algebra] at hresult
+        simp only [algebra, RandCostedT.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
-        exact backendBounds.subCost_le left right
+        exact subCost_le left right
 
 end SubOperation
 
@@ -186,22 +197,26 @@ def signature (Scalar : Type uScalar) (Carrier : Type uCarrier) :
     Signature.{uCarrier, max uScalar (uCarrier + 1)} where
   Op := SMulOperation Scalar Carrier
 
-/-- Interpret scalar multiplication exactly through an existing natural-cost backend. -/
+/-- Interpret scalar multiplication with an exact cost in an arbitrary model. -/
 noncomputable def algebra
+    (M : CostModel.{uCost})
     {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    CostedAlgebra natCostModel (signature Scalar Carrier) where
+    [SMul Scalar Carrier]
+    (smulCost : Scalar → Carrier → M.Cost) :
+    CostedAlgebra M (signature Scalar Carrier) where
   exec operation :=
     match operation with
-    | .smul scalar value => RandCosted.liftCosted (backend.smul scalar value)
+    | .smul scalar value =>
+        RandCostedT.liftCosted
+          (⟨scalar • value, smulCost scalar value⟩ : CostedT M Carrier)
 
 /-- The cost-erased handler agrees with mathematical scalar multiplication. -/
 noncomputable def laws
+    (M : CostModel.{uCost})
     {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    (backend : AdditiveBackend Scalar Carrier) :
-    AlgebraLaws (algebra backend) where
+    [SMul Scalar Carrier]
+    (smulCost : Scalar → Carrier → M.Cost) :
+    AlgebraLaws (algebra M smulCost) where
   semantics operation :=
     match operation with
     | .smul scalar value => PMF.pure (scalar • value)
@@ -210,22 +225,25 @@ noncomputable def laws
     | smul scalar value => simp [algebra]
 
 /-- An independently chosen bound for the exact scalar-multiplication handler. -/
-def bounds
+noncomputable def bounds
+    (M : CostModel.{uCost})
     {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    {backend : AdditiveBackend Scalar Carrier}
-    (backendBounds : AdditiveCostBounds backend) :
-    OperationBounds (algebra backend) where
+    [SMul Scalar Carrier]
+    (smulCost smulBudget : Scalar → Carrier → M.Cost)
+    (smulCost_le : ∀ scalar value,
+      @LE.le M.Cost M.instPartialOrder.toLE
+        (smulCost scalar value) (smulBudget scalar value)) :
+    OperationBounds (algebra M smulCost) where
   budget operation :=
     match operation with
-    | .smul _ _ => backendBounds.smulBudget
+    | .smul scalar value => smulBudget scalar value
   cost_le operation result hresult := by
     cases operation with
     | smul scalar value =>
-        simp only [algebra] at hresult
+        simp only [algebra, RandCostedT.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
-        exact backendBounds.smulCost_le scalar value
+        exact smulCost_le scalar value
 
 end SMulOperation
 
@@ -241,20 +259,24 @@ def signature (Value : Type uValue) :
     Signature.{uValue, uValue + 1} where
   Op := MulOperation Value
 
-/-- Interpret multiplication exactly through an existing natural-cost backend. -/
+/-- Interpret mathematical multiplication with an exact cost in an arbitrary model. -/
 noncomputable def algebra
+    (M : CostModel.{uCost})
     {Value : Type uValue} [Mul Value]
-    (backend : MultiplicativeBackend Value) :
-    CostedAlgebra natCostModel (signature Value) where
+    (mulCost : Value → Value → M.Cost) :
+    CostedAlgebra M (signature Value) where
   exec operation :=
     match operation with
-    | .mul left right => RandCosted.liftCosted (backend.mul left right)
+    | .mul left right =>
+        RandCostedT.liftCosted
+          (⟨left * right, mulCost left right⟩ : CostedT M Value)
 
 /-- The cost-erased multiplication handler agrees with mathematical multiplication. -/
 noncomputable def laws
+    (M : CostModel.{uCost})
     {Value : Type uValue} [Mul Value]
-    (backend : MultiplicativeBackend Value) :
-    AlgebraLaws (algebra backend) where
+    (mulCost : Value → Value → M.Cost) :
+    AlgebraLaws (algebra M mulCost) where
   semantics operation :=
     match operation with
     | .mul left right => PMF.pure (left * right)
@@ -263,25 +285,28 @@ noncomputable def laws
     | mul left right => simp [algebra]
 
 /-- An independently chosen bound for the exact multiplication handler. -/
-def bounds
+noncomputable def bounds
+    (M : CostModel.{uCost})
     {Value : Type uValue} [Mul Value]
-    {backend : MultiplicativeBackend Value}
-    (backendBounds : MultiplicativeCostBounds backend) :
-    OperationBounds (algebra backend) where
+    (mulCost mulBudget : Value → Value → M.Cost)
+    (mulCost_le : ∀ left right,
+      @LE.le M.Cost M.instPartialOrder.toLE
+        (mulCost left right) (mulBudget left right)) :
+    OperationBounds (algebra M mulCost) where
   budget operation :=
     match operation with
-    | .mul _ _ => backendBounds.mulBudget
+    | .mul left right => mulBudget left right
   cost_le operation result hresult := by
     cases operation with
     | mul left right =>
-        simp only [algebra] at hresult
+        simp only [algebra, RandCostedT.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
-        exact backendBounds.mulCost_le left right
+        exact mulCost_le left right
 
 end MulOperation
 
-/-- A typed primitive call to one exact finite sampler. -/
+/-- A typed primitive call to one exact sampler. -/
 inductive SampleOperation (Sample : Type uSample) :
     Type uSample → Type (uSample + 1) where
   | sample : SampleOperation Sample Sample
@@ -293,39 +318,44 @@ def signature (Sample : Type uSample) :
     Signature.{uSample, uSample + 1} where
   Op := SampleOperation Sample
 
-/-- Interpret sampling through the sampler's exact randomized computation. -/
+/-- Interpret sampling through an arbitrary exact joint value/cost distribution. -/
 noncomputable def algebra
-    {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
-    (sampler : UniformSampler Sample) :
-    CostedAlgebra natCostModel (signature Sample) where
+    (M : CostModel.{uCost})
+    {Sample : Type uSample}
+    (sample : RandCostedT M Sample) :
+    CostedAlgebra M (signature Sample) where
   exec operation :=
     match operation with
-    | .sample => sampler.sample
+    | .sample => sample
 
-/-- The cost-erased sampling handler is the uniform distribution. -/
+/-- A cost-erased mathematical specification for one exact sampler. -/
 noncomputable def laws
-    {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
-    (sampler : UniformSampler Sample)
-    (samplerLaws : UniformSamplerLaws sampler) :
-    AlgebraLaws (algebra sampler) where
+    (M : CostModel.{uCost})
+    {Sample : Type uSample}
+    (sample : RandCostedT M Sample)
+    (semantics : PMF Sample)
+    (sample_spec : RandCostedT.valueDist sample = semantics) :
+    AlgebraLaws (algebra M sample) where
   semantics operation :=
     match operation with
-    | .sample =>
-        Crypto.Infrastructure.Computation.Distribution.uniformPMF Sample
+    | .sample => semantics
   exec_spec operation := by
     cases operation
-    exact samplerLaws.sample_spec
+    exact sample_spec
 
-/-- An independently chosen bound for the exact sampling handler. -/
+/-- An independently chosen path-cost bound for one exact sampler. -/
 noncomputable def bounds
-    {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
-    {sampler : UniformSampler Sample}
-    (samplerBounds : UniformSamplerBounds sampler) :
-    OperationBounds (algebra sampler) where
-  budget _operation := samplerBounds.sampleBudget
+    (M : CostModel.{uCost})
+    {Sample : Type uSample}
+    (sample : RandCostedT M Sample)
+    (sampleBudget : M.Cost)
+    (cost_le : ∀ result, result ∈ sample.support →
+      @LE.le M.Cost M.instPartialOrder.toLE result.cost sampleBudget) :
+    OperationBounds (algebra M sample) where
+  budget _operation := sampleBudget
   cost_le operation result hresult := by
     cases operation
-    exact samplerBounds.cost_le result hresult
+    exact cost_le result hresult
 
 end SampleOperation
 

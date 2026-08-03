@@ -14,7 +14,7 @@ universe uCost uIn uOut uResult uOp
 namespace TimedMachine
 
 /--
-Build a legacy `Nat`-timed machine from programs over an arbitrary exact
+Build a `Nat`-timed machine from programs over an arbitrary exact
 resource model.
 
 `measure` is the explicit complexity boundary.  Its monotonicity transfers the
@@ -70,12 +70,12 @@ noncomputable def ofBoundedProgram
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec)
     (sec : Crypto.SecPar) (input : Input) :
-    RandCosted.valueDist
+    RandCostedT.valueDist
         ((ofBoundedProgram measure A bounds budget runtime program
           budget_le_runtime).run sec input) =
       Program.valueDist (program sec).program input := by
   change
-    RandCosted.valueDist
+    RandCostedT.valueDist
         (RandCostedT.mapCost measure
           (Program.runCosted (program sec).program input)) =
       RandCostedT.valueDist
@@ -103,13 +103,13 @@ noncomputable def ofMappedBoundedProgram
       ∀ sec input, measure (budget sec input) ≤ runtime sec) :
     TimedMachine Input Output where
   run := fun sec input =>
-    RandCosted.map mapOutput
+    RandCostedT.map mapOutput
       (RandCostedT.mapCost measure
         (Program.runCosted (program sec).program input))
   runtime := runtime
   runtime_sound := by
     intro sec input result hresult
-    simp only [RandCosted.map, RandCostedT.mapCost] at hresult
+    simp only [RandCostedT.map, RandCostedT.mapCost] at hresult
     rw [PMF.mem_support_map_iff] at hresult
     rcases hresult with ⟨projectedResult, hprojectedResult, hresult⟩
     rw [PMF.mem_support_map_iff] at hprojectedResult
@@ -140,36 +140,22 @@ noncomputable def ofMappedBoundedProgram
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec)
     (sec : Crypto.SecPar) (input : Input) :
-    RandCosted.valueDist
+    RandCostedT.valueDist
         ((ofMappedBoundedProgram measure A bounds budget runtime mapOutput
           program budget_le_runtime).run sec input) =
       PMF.map mapOutput (Program.valueDist (program sec).program input) := by
   change
-    RandCosted.valueDist
-        (RandCosted.map mapOutput
+    RandCostedT.valueDist
+        (RandCostedT.map mapOutput
           (RandCostedT.mapCost measure
             (Program.runCosted (program sec).program input))) =
       PMF.map mapOutput
         (RandCostedT.valueDist
           (Program.runCosted (program sec).program input))
-  rw [RandCosted.valueDist_map, RandCostedT.valueDist_mapCost]
-
-/-- Nat-cost specialization with the identity resource observation. -/
-noncomputable def ofNatBoundedProgram
-    {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {Output : Type uResult}
-    (A : Crypto.SecPar → CostedAlgebra natCostModel S)
-    (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
-    (runtime : Crypto.SecPar → Nat)
-    (program :
-      (sec : Crypto.SecPar) →
-        Program.BoundedProgram (Input := Input) (Output := Output)
-          (bounds sec) (fun _input => runtime sec)) :
-    TimedMachine Input Output :=
-  ofBoundedProgram NatMeasure.nat A bounds
-    (fun sec _input => runtime sec) runtime program (by
-      intro sec input
-      exact Nat.le_refl _)
+  rw [RandCostedT.valueDist_map]
+  exact congrArg (PMF.map mapOutput)
+    (RandCostedT.valueDist_mapCost measure
+      (Program.runCosted (program sec).program input))
 
 end TimedMachine
 

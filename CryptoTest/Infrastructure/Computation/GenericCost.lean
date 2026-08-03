@@ -90,7 +90,7 @@ example : twoStage.val = 7 := rfl
 
 example : twoStage.cost = (7, 3) := rfl
 
-/-- Observe total work only at the legacy machine boundary. -/
+/-- Observe total work only at the natural-number machine boundary. -/
 def totalWork : NatMeasure stepsQueriesCostModel where
   toNat :=
     { toFun := fun resources => resources.1 + resources.2
@@ -103,7 +103,7 @@ def totalWork : NatMeasure stepsQueriesCostModel where
     intro left right hle
     exact Nat.add_le_add hle.1 hle.2
 
-/-- One generic-cost primitive used to exercise the legacy-machine adapter. -/
+/-- One generic-cost primitive used to exercise the natural-number projection. -/
 inductive VectorOperation : Type → Type 1 where
   | tick (value : Nat) : VectorOperation Nat
 
@@ -149,13 +149,14 @@ noncomputable def vectorTimedMachine : TimedMachine Nat Nat :=
       exact Nat.le_refl 3)
 
 example (sec : Crypto.SecPar) (input : Nat) :
-    RandCosted.valueDist (vectorTimedMachine.run sec input) =
+    RandCostedT.valueDist (vectorTimedMachine.run sec input) =
       Program.valueDist vectorProgram input := by
   unfold vectorTimedMachine
   rw [TimedMachine.valueDist_run_ofBoundedProgram]
   rfl
 
-example : CostedT.mapCost totalWork twoStage = (⟨7, 10⟩ : Costed Nat) := rfl
+example : CostedT.mapCost totalWork twoStage =
+    (⟨7, 10⟩ : CostedT CostModel.nat Nat) := rfl
 
 noncomputable def sampled : RandCostedT stepsQueriesCostModel Nat :=
   RandCostedT.sampleWithCost (PMF.pure 11) (fun _ => (3, 2))
@@ -202,11 +203,11 @@ example : RandCostedT.valueDist sampled = PMF.pure 11 := by
   simp [sampled]
 
 example :
-    RandCosted.valueDist (RandCostedT.mapCost totalWork sampled) = PMF.pure 11 := by
+    RandCostedT.valueDist (RandCostedT.mapCost totalWork sampled) = PMF.pure 11 := by
   simp [sampled]
 
 example :
-    RandCosted.costDist (RandCostedT.mapCost totalWork sampled) = PMF.pure 5 := by
+    RandCostedT.costDist (RandCostedT.mapCost totalWork sampled) = PMF.pure 5 := by
   rw [RandCostedT.costDist_mapCost]
   unfold sampled
   rw [RandCostedT.costDist_sampleWithCost]
@@ -215,7 +216,7 @@ example :
   rfl
 
 example :
-    RandCosted.valueDist
+    RandCostedT.valueDist
         (RandCostedT.mapCost totalWork
           (RandCostedT.bind sampled fun value =>
             RandCostedT.pure stepsQueriesCostModel (value + 1))) =

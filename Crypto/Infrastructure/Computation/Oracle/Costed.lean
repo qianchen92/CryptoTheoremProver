@@ -15,7 +15,7 @@ games.  `CostedOracleEnv.erase` forgets these internal costs, while the
 composed interpreter below retains them when an oracle is implemented inside a
 reduction.
 -/
-structure CostedOracleEnvT
+structure CostedOracleEnv
     (M : CostModel.{uCost})
     (Spec : OracleSpec.{uOracle, uQuery, uResponse}) where
   State : Type uState
@@ -27,19 +27,14 @@ structure CostedOracleEnvT
     Spec.Query name →
     RandCostedT M (Spec.Response name × State)
 
-/-- Natural-number compatibility name for internally costed environments. -/
-abbrev CostedOracleEnv
-    (Spec : OracleSpec.{uOracle, uQuery, uResponse}) :=
-  CostedOracleEnvT natCostModel Spec
-
-namespace CostedOracleEnvT
+namespace CostedOracleEnv
 
 variable {M : CostModel.{uCost}}
 variable {Spec : OracleSpec.{uOracle, uQuery, uResponse}}
 
 /-- Forget all internal costs without changing query value distributions. -/
 noncomputable def erase
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     OracleEnv.{uOracle, uQuery, uResponse, uState} Spec where
   State := env.State
   init := env.init
@@ -48,7 +43,7 @@ noncomputable def erase
 
 /-- A uniform bound on every internal query path in the generic model. -/
 def QueryCostBound
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (bound : Crypto.SecPar → M.Cost) : Prop :=
   ∀ name sec state query result,
     result ∈ (env.query name sec state query).support →
@@ -56,72 +51,22 @@ def QueryCostBound
 
 /-- A generic per-query bound at one fixed security parameter. -/
 def QueryCostBoundAt
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (sec : Crypto.SecPar) (bound : Crypto.SecPar → M.Cost) : Prop :=
   ∀ name state query result,
     result ∈ (env.query name sec state query).support →
       M.instPartialOrder.le result.cost (bound sec)
 
 theorem QueryCostBound.at
-    {env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec}
+    {env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec}
     {bound : Crypto.SecPar → M.Cost}
     (certificate : env.QueryCostBound bound) (sec : Crypto.SecPar) :
     env.QueryCostBoundAt sec bound :=
   fun name state query result => certificate name sec state query result
 
-end CostedOracleEnvT
-
-namespace CostedOracleEnv
-
-variable {Spec : OracleSpec.{uOracle, uQuery, uResponse}}
-
-/-- Explicit constructor retained for callers of the natural-number API. -/
-@[match_pattern] abbrev mk
-    (State : Type uState) (init : State)
-    (query :
-      (name : Spec.Name) → Crypto.SecPar → State → Spec.Query name →
-        RandCosted (Spec.Response name × State)) :
-    CostedOracleEnv Spec :=
-  CostedOracleEnvT.mk State init query
-
-/-- Forget internal query costs and expose the semantic oracle environment. -/
-noncomputable def erase
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec) :
-    OracleEnv.{uOracle, uQuery, uResponse, uState} Spec where
-  State := env.State
-  init := env.init
-  query := fun name sec state query =>
-    RandCosted.valueDist (env.query name sec state query)
-
-/-- A uniform security-parameter-indexed bound on every internal query path. -/
-def QueryCostBound
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (bound : Crypto.SecPar → Cost) : Prop :=
-  ∀ name sec state query result,
-    result ∈ (env.query name sec state query).support →
-      result.cost ≤ bound sec
-
-/-- A per-query cost bound at one fixed security parameter. -/
-def QueryCostBoundAt
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (sec : Crypto.SecPar)
-    (bound : Crypto.SecPar → Cost) : Prop :=
-  ∀ name state query result,
-    result ∈ (env.query name sec state query).support →
-      result.cost ≤ bound sec
-
-/-- A uniform query certificate specializes to any fixed security parameter. -/
-theorem QueryCostBound.at
-    {env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec}
-    {bound : Crypto.SecPar → Cost}
-    (certificate : env.QueryCostBound bound)
-    (sec : Crypto.SecPar) :
-    env.QueryCostBoundAt sec bound :=
-  fun name state query result => certificate name sec state query result
-
 end CostedOracleEnv
 
-namespace OracleProgramT
+namespace OracleProgram
 
 variable {M : CostModel.{uCost}}
 variable {Spec : OracleSpec.{uOracle, uQuery, uResponse}}
@@ -148,7 +93,7 @@ abbrev repeatCost (M : CostModel.{uCost}) (count : Nat) (cost : M.Cost) : M.Cost
   exact add_nsmul cost left right
 
 @[simp] theorem repeatCost_nat (count cost : Nat) :
-    repeatCost natCostModel count cost = count * cost := by
+    repeatCost CostModel.nat count cost = count * cost := by
   exact Nat.nsmul_eq_mul count cost
 
 /--
@@ -167,7 +112,7 @@ def CostExchange (M : CostModel.{uCost}) : Prop :=
         (M.instAddMonoid.add localLeft localRight)
         (M.instAddMonoid.add oracleLeft oracleRight))
 
-theorem costExchange_nat : CostExchange natCostModel := by
+theorem costExchange_nat : CostExchange CostModel.nat := by
   intro localLeft oracleLeft localRight oracleRight
   change (localLeft + oracleLeft) + (localRight + oracleRight) ≤
     (localLeft + localRight) + (oracleLeft + oracleRight)
@@ -175,9 +120,9 @@ theorem costExchange_nat : CostExchange natCostModel := by
 
 theorem repeatCost_nat_mono (cost : Nat) :
     ∀ {left right : Nat}, left ≤ right →
-      natCostModel.instPartialOrder.le
-        (repeatCost natCostModel left cost)
-        (repeatCost natCostModel right cost) := by
+      CostModel.nat.instPartialOrder.le
+        (repeatCost CostModel.nat left cost)
+        (repeatCost CostModel.nat right cost) := by
   intro left right hle
   simpa only [repeatCost_nat] using Nat.mul_le_mul_right cost hle
 
@@ -191,7 +136,7 @@ structure CostedRunResult
     (State : Type uState) (α : Type (max uValue uResponse)) where
   value : α
   state : State
-  profile : OracleProfileT M Spec
+  profile : OracleProfile M Spec
   oracleCost : M.Cost
   /-- Exact cost in structural execution order, without regrouping. -/
   totalCost : M.Cost
@@ -209,17 +154,17 @@ end CostedRunResult
 
 /-- Interpret a generic oracle program against a generic-cost environment. -/
 noncomputable def runProfiledWithCostedEnv
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (state : env.State) :
     PMF (CostedRunResult M Spec env.State α) := by
   letI := M.instAddMonoid
   exact
     match program with
-    | OracleProgramT.pure value =>
-        PMF.pure ⟨value, state, OracleProfileT.zero M Spec, 0, 0⟩
-    | OracleProgramT.bind first next =>
+    | OracleProgram.pure value =>
+        PMF.pure ⟨value, state, OracleProfile.zero M Spec, 0, 0⟩
+    | OracleProgram.bind first next =>
         PMF.bind (runProfiledWithCostedEnv first sec env state) fun firstResult =>
           PMF.bind
             (runProfiledWithCostedEnv
@@ -227,42 +172,42 @@ noncomputable def runProfiledWithCostedEnv
             fun nextResult =>
               PMF.pure
                 ⟨nextResult.value, nextResult.state,
-                  OracleProfileT.append firstResult.profile nextResult.profile,
+                  OracleProfile.append firstResult.profile nextResult.profile,
                   firstResult.oracleCost + nextResult.oracleCost,
                   firstResult.totalCost + nextResult.totalCost⟩
-    | OracleProgramT.liftCosted dist =>
+    | OracleProgram.liftCosted dist =>
         PMF.bind dist fun result =>
           PMF.pure
-            ⟨result.val, state, OracleProfileT.ofCost result.cost, 0, result.cost⟩
-    | OracleProgramT.queryWithCost localCost name oracleQuery =>
+            ⟨result.val, state, OracleProfile.ofCost result.cost, 0, result.cost⟩
+    | OracleProgram.query localCost name oracleQuery =>
         PMF.bind (env.query name sec state oracleQuery) fun result =>
           PMF.pure
             ⟨ULift.up result.val.1, result.val.2,
-              OracleProfileT.ofQueryWithCost localCost name, result.cost,
+              OracleProfile.ofQuery localCost name, result.cost,
               localCost + result.cost⟩
 
 /-- Run the generic composed interpreter from the environment's initial state. -/
 noncomputable def runProfiledWithCostedEnvFromInit
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     PMF (CostedRunResult M Spec env.State α) :=
   runProfiledWithCostedEnv program sec env env.init
 
 /-- Retain the ordered generic composed cost. -/
 noncomputable def runCostedWithCostedEnv
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     RandCostedT M α :=
   PMF.map (fun result => ⟨result.value, result.totalCost⟩)
     (runProfiledWithCostedEnvFromInit program sec env)
 
 /-- Generic cost erasure recovers the ordinary profiled interpreter. -/
 theorem map_erase_runProfiledWithCostedEnv
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (state : env.State) :
     PMF.map CostedRunResult.erase
         (runProfiledWithCostedEnv program sec env state) =
@@ -286,7 +231,7 @@ theorem map_erase_runProfiledWithCostedEnv
                 value := nextResult.value
                 state := nextResult.state
                 profile :=
-                  OracleProfileT.append firstResult.profile nextResult.profile
+                  OracleProfile.append firstResult.profile nextResult.profile
               } : RunResult M Spec env.State _))).symm
     congr 1
     funext firstResult
@@ -303,23 +248,23 @@ theorem map_erase_runProfiledWithCostedEnv
               value := nextResult.value
               state := nextResult.state
               profile :=
-                OracleProfileT.append firstResult.profile nextResult.profile
+                OracleProfile.append firstResult.profile nextResult.profile
             } : RunResult M Spec env.State _))).symm
   | liftCosted dist =>
       simp only [runProfiledWithCostedEnv, runProfiled,
         PMF.map_bind, PMF.pure_map]
       rfl
-  | queryWithCost localCost name oracleQuery =>
+  | query localCost name oracleQuery =>
       simp only [runProfiledWithCostedEnv, runProfiled,
-        CostedOracleEnvT.erase, RandCostedT.valueDist,
+        CostedOracleEnv.erase, RandCostedT.valueDist,
         PMF.map_bind, PMF.pure_map, PMF.bind_map]
       rfl
 
 /-- Erasing generic composed costs preserves the output distribution. -/
 @[simp] theorem valueDist_runCostedWithCostedEnv
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     RandCostedT.valueDist (runCostedWithCostedEnv program sec env) =
       runWithEnv program sec env.erase := by
   simp only [RandCostedT.valueDist, runCostedWithCostedEnv,
@@ -335,9 +280,9 @@ theorem map_erase_runProfiledWithCostedEnv
       (f := CostedRunResult.erase) RunResult.value).symm
 
 theorem execution_of_mem_support_runProfiledWithCostedEnv
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (state : env.State) (result : CostedRunResult M Spec env.State α)
     (hresult :
       result ∈ (runProfiledWithCostedEnv program sec env state).support) :
@@ -366,19 +311,19 @@ theorem execution_of_mem_support_runProfiledWithCostedEnv
       rw [PMF.mem_support_pure_iff] at hresult
       subst result
       exact Execution.liftCosted hcostedResult
-  | queryWithCost localCost name oracleQuery =>
+  | query localCost name oracleQuery =>
       simp only [runProfiledWithCostedEnv] at hresult
       rw [PMF.mem_support_bind_iff] at hresult
       rcases hresult with ⟨oracleResult, _horacleResult, hresult⟩
       rw [PMF.mem_support_pure_iff] at hresult
       subst result
-      exact Execution.queryWithCost localCost name oracleQuery oracleResult.val.1
+      exact Execution.query localCost name oracleQuery oracleResult.val.1
 
 /-- Under `CostExchange`, exact interleaved work is bounded by grouped work. -/
 theorem totalCost_le_separated
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (exchange : CostExchange M)
     (state : env.State) (result : CostedRunResult M Spec env.State α)
     (hresult :
@@ -420,7 +365,7 @@ theorem totalCost_le_separated
       change M.instPartialOrder.le costedResult.cost
         (M.instAddMonoid.add costedResult.cost M.instAddMonoid.zero)
       exact le_of_eq (M.instAddMonoid.add_zero costedResult.cost).symm
-  | queryWithCost localCost name oracleQuery =>
+  | query localCost name oracleQuery =>
       simp only [runProfiledWithCostedEnv] at hresult
       rw [PMF.mem_support_bind_iff] at hresult
       rcases hresult with ⟨oracleResult, _horacleResult, hresult⟩
@@ -430,9 +375,9 @@ theorem totalCost_le_separated
 
 /-- Internal oracle work is bounded by query count repeated addition. -/
 theorem oracleCost_le_totalQueries_nsmul
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (bound : Crypto.SecPar → M.Cost)
     (envBound : env.QueryCostBoundAt sec bound)
     (state : env.State) (result : CostedRunResult M Spec env.State α)
@@ -449,7 +394,7 @@ theorem oracleCost_le_totalQueries_nsmul
       simp only [runProfiledWithCostedEnv] at hresult
       rw [PMF.mem_support_pure_iff] at hresult
       subst result
-      simpa only [OracleProfileT.totalQueries_zero, repeatCost_zero] using
+      simpa only [OracleProfile.totalQueries_zero, repeatCost_zero] using
         (le_refl M.instAddMonoid.zero)
   | bind first next ihFirst ihNext =>
       simp only [runProfiledWithCostedEnv] at hresult
@@ -459,7 +404,7 @@ theorem oracleCost_le_totalQueries_nsmul
       rcases hnextResult with ⟨nextResult, hnextResult, hresult⟩
       rw [PMF.mem_support_pure_iff] at hresult
       subst result
-      simpa only [OracleProfileT.totalQueries_append, repeatCost_add] using
+      simpa only [OracleProfile.totalQueries_append, repeatCost_add] using
         add_le_add
           (ihFirst state firstResult hfirstResult)
           (ihNext firstResult.value firstResult.state nextResult hnextResult)
@@ -469,15 +414,15 @@ theorem oracleCost_le_totalQueries_nsmul
       rcases hresult with ⟨costedResult, _hcostedResult, hresult⟩
       rw [PMF.mem_support_pure_iff] at hresult
       subst result
-      simpa only [OracleProfileT.totalQueries_ofCost, repeatCost_zero] using
+      simpa only [OracleProfile.totalQueries_ofCost, repeatCost_zero] using
         (le_refl M.instAddMonoid.zero)
-  | queryWithCost localCost name oracleQuery =>
+  | query localCost name oracleQuery =>
       simp only [runProfiledWithCostedEnv] at hresult
       rw [PMF.mem_support_bind_iff] at hresult
       rcases hresult with ⟨oracleResult, horacleResult, hresult⟩
       rw [PMF.mem_support_pure_iff] at hresult
       subst result
-      simpa only [OracleProfileT.totalQueries_ofQueryWithCost, repeatCost_one] using
+      simpa only [OracleProfile.totalQueries_ofQuery, repeatCost_one] using
         envBound name state oracleQuery oracleResult horacleResult
 
 /--
@@ -486,9 +431,9 @@ it does not follow from an arbitrary ordered additive monoid unless the chosen
 oracle budget is nonnegative in that model.
 -/
 theorem totalCost_le_composedBudget
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (machineBudget : M.Cost) (totalQueryBudget : Nat)
     (envBudget : Crypto.SecPar → M.Cost)
     (nsmulMono : ∀ {left right : Nat}, left ≤ right →
@@ -527,9 +472,9 @@ theorem totalCost_le_composedBudget
 
 /-- Every generic composed execution path satisfies the generic coarse bound. -/
 theorem runCostedWithCostedEnv_cost_le
-    {α : Type (max uValue uResponse)} (program : OracleProgramT M Spec α)
+    {α : Type (max uValue uResponse)} (program : OracleProgram M Spec α)
     (sec : Crypto.SecPar)
-    (env : CostedOracleEnvT.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
+    (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (machineBudget : M.Cost) (totalQueryBudget : Nat)
     (envBudget : Crypto.SecPar → M.Cost)
     (nsmulMono : ∀ {left right : Nat}, left ≤ right →
@@ -554,243 +499,6 @@ theorem runCostedWithCostedEnv_cost_le
     program sec env machineBudget totalQueryBudget envBudget nsmulMono exchange
       programBound programQueryBound envBound
       env.init profiledResult hprofiledResult
-
-end OracleProgramT
-
-namespace OracleProgram
-
-variable {Spec : OracleSpec.{uOracle, uQuery, uResponse}}
-
-/--
-Result of interpreting an oracle program against a costed environment.
-
-`profile` records the machine's own local work and oracle-call trace;
-`oracleCost` records work performed inside the supplied environment.  Keeping
-the components separate lets the ordinary oracle-machine bound remain valid
-and makes the reduction overhead explicit.
--/
-structure CostedRunResult
-    (Spec : OracleSpec.{uOracle, uQuery, uResponse})
-    (State : Type uState)
-    (α : Type (max uValue uResponse)) where
-  value : α
-  state : State
-  profile : OracleProfile Spec
-  oracleCost : Cost
-
-namespace CostedRunResult
-
-/-- Project the authoritative generic natural-cost result to legacy packaging. -/
-def ofT
-    {State : Type uState} {alpha : Type (max uValue uResponse)}
-    (result :
-      OracleProgramT.CostedRunResult natCostModel Spec State alpha) :
-    CostedRunResult Spec State alpha :=
-  ⟨result.value, result.state, OracleProfile.ofT result.profile,
-    result.oracleCost⟩
-
-/-- Total composed cost of the machine path and the environment path. -/
-def totalCost
-    {State : Type uState} {α : Type (max uValue uResponse)}
-    (result : CostedRunResult Spec State α) : Cost :=
-  result.profile.cost + result.oracleCost
-
-/-- Forget environment costs while retaining the ordinary machine profile. -/
-def erase
-    {State : Type uState} {α : Type (max uValue uResponse)}
-    (result : CostedRunResult Spec State α) : RunResult Spec State α :=
-  ⟨result.value, result.state, result.profile⟩
-
-end CostedRunResult
-
-/--
-Interpret an oracle program while separately accumulating machine and internal
-environment costs.
--/
-noncomputable def runProfiledWithCostedEnv
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (state : env.State) :
-    PMF (CostedRunResult Spec env.State α) :=
-  PMF.map CostedRunResult.ofT
-    (OracleProgramT.runProfiledWithCostedEnv program.toT sec env state)
-
-/-- Run from the initial state and retain both resource components. -/
-noncomputable def runProfiledWithCostedEnvFromInit
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec) :
-    PMF (CostedRunResult Spec env.State α) :=
-  runProfiledWithCostedEnv program sec env env.init
-
-/-- Run against a costed environment and retain the total composed path cost. -/
-noncomputable def runCostedWithCostedEnv
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec) :
-    RandCosted α :=
-  OracleProgramT.runCostedWithCostedEnv program.toT sec env
-
-/-- Erasing internal environment costs recovers the ordinary profiled interpreter. -/
-theorem map_erase_runProfiledWithCostedEnv
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (state : env.State) :
-    PMF.map CostedRunResult.erase
-        (runProfiledWithCostedEnv program sec env state) =
-      runProfiled program sec env.erase state := by
-  have bridge := congrArg (PMF.map RunResult.ofT)
-    (OracleProgramT.map_erase_runProfiledWithCostedEnv
-      program.toT sec env state)
-  have projected := bridge.trans
-    (OracleProgram.map_ofT_runProfiled_toT
-      program sec (CostedOracleEnvT.erase env) state)
-  simpa only [runProfiledWithCostedEnv, OracleProgram.runProfiled,
-    PMF.map_comp, Function.comp_apply, CostedRunResult.erase,
-    CostedRunResult.ofT, RunResult.ofT,
-    OracleProgramT.CostedRunResult.erase,
-    CostedOracleEnvT.erase, CostedOracleEnv.erase] using projected
-
-/-- Cost erasure of the composed interpreter recovers ordinary oracle semantics. -/
-@[simp] theorem valueDist_runCostedWithCostedEnv
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec) :
-    RandCosted.valueDist (runCostedWithCostedEnv program sec env) =
-      runWithEnv program sec env.erase := by
-  change RandCostedT.valueDist
-      (OracleProgramT.runCostedWithCostedEnv program.toT sec env) =
-    runWithEnv program sec env.erase
-  rw [OracleProgramT.valueDist_runCostedWithCostedEnv]
-  simp only [OracleProgramT.runWithEnv, OracleProgram.runWithEnv]
-  have bridge := congrArg (PMF.map RunResult.value)
-    (OracleProgram.map_ofT_runProfiled_toT
-      program sec (CostedOracleEnvT.erase env) env.init)
-  simpa only [PMF.map_comp, Function.comp_apply, RunResult.ofT,
-    CostedOracleEnvT.erase, CostedOracleEnv.erase] using bridge
-
-/-- Every composed interpreter result follows an abstract machine execution. -/
-theorem execution_of_mem_support_runProfiledWithCostedEnv
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (state : env.State)
-    (result : CostedRunResult Spec env.State α)
-    (hresult : result ∈ (runProfiledWithCostedEnv program sec env state).support) :
-    Execution program result.value result.profile := by
-  have herased :
-      result.erase ∈
-        (PMF.map CostedRunResult.erase
-          (runProfiledWithCostedEnv program sec env state)).support := by
-    rw [PMF.mem_support_map_iff]
-    exact ⟨result, hresult, rfl⟩
-  rw [map_erase_runProfiledWithCostedEnv program sec env state] at herased
-  exact OracleProgram.execution_of_mem_support_runProfiled
-    program sec env.erase state result.erase herased
-
-/-- Internal oracle work is bounded by query count times the per-query budget. -/
-theorem oracleCost_le_totalQueries_mul
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (bound : Crypto.SecPar → Cost)
-    (envBound : env.QueryCostBoundAt sec bound)
-    (state : env.State)
-    (result : CostedRunResult Spec env.State α)
-    (hresult : result ∈ (runProfiledWithCostedEnv program sec env state).support) :
-    result.oracleCost ≤ result.profile.totalQueries * bound sec := by
-  simp only [runProfiledWithCostedEnv] at hresult
-  rw [PMF.mem_support_map_iff] at hresult
-  rcases hresult with ⟨genericResult, hgenericResult, hresult⟩
-  subst result
-  simpa only [CostedRunResult.ofT, OracleProfile.totalQueries_ofT,
-    OracleProgramT.repeatCost_nat] using
-    (OracleProgramT.oracleCost_le_totalQueries_nsmul
-      program.toT sec env bound envBound state genericResult hgenericResult)
-
-/--
-The composed interpreter is bounded by the local machine budget plus the
-independent total-query budget times the uniform internal query budget.
--/
-theorem totalCost_le_composedBudget
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (machineBudget : Cost)
-    (totalQueryBudget : Nat)
-    (envBudget : Crypto.SecPar → Cost)
-    (programBound : CostBound program machineBudget)
-    (programQueryBound : TotalQueryBound program totalQueryBudget)
-    (envBound : env.QueryCostBoundAt sec envBudget)
-    (state : env.State)
-    (result : CostedRunResult Spec env.State α)
-    (hresult : result ∈ (runProfiledWithCostedEnv program sec env state).support) :
-    result.totalCost ≤
-      machineBudget + totalQueryBudget * envBudget sec := by
-  have execution :=
-    execution_of_mem_support_runProfiledWithCostedEnv
-      program sec env state result hresult
-  have machineCost : result.profile.cost ≤ machineBudget :=
-    programBound result.value result.profile execution
-  have queryCount : result.profile.totalQueries ≤ totalQueryBudget :=
-    programQueryBound result.value result.profile execution
-  have oracleCost :
-      result.oracleCost ≤ result.profile.totalQueries * envBudget sec :=
-    oracleCost_le_totalQueries_mul
-      program sec env envBudget envBound state result hresult
-  exact Nat.add_le_add machineCost
-    (oracleCost.trans (Nat.mul_le_mul_right (envBudget sec) queryCount))
-
-/-- Every path of the composed costed interpreter satisfies the composed budget. -/
-theorem runCostedWithCostedEnv_cost_le
-    {α : Type (max uValue uResponse)}
-    (program : OracleProgram Spec α)
-    (sec : Crypto.SecPar)
-    (env : CostedOracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
-    (machineBudget : Cost)
-    (totalQueryBudget : Nat)
-    (envBudget : Crypto.SecPar → Cost)
-    (programBound : CostBound program machineBudget)
-    (programQueryBound : TotalQueryBound program totalQueryBudget)
-    (envBound : env.QueryCostBoundAt sec envBudget)
-    (result : Costed α)
-    (hresult : result ∈ (runCostedWithCostedEnv program sec env).support) :
-    result.cost ≤ machineBudget + totalQueryBudget * envBudget sec := by
-  simp only [runCostedWithCostedEnv,
-    OracleProgramT.runCostedWithCostedEnv,
-    OracleProgramT.runProfiledWithCostedEnvFromInit] at hresult
-  rw [PMF.mem_support_map_iff] at hresult
-  rcases hresult with ⟨genericResult, hgenericResult, hresult⟩
-  subst result
-  have hlegacy :
-      CostedRunResult.ofT genericResult ∈
-        (runProfiledWithCostedEnv program sec env env.init).support := by
-    simp only [runProfiledWithCostedEnv]
-    rw [PMF.mem_support_map_iff]
-    exact ⟨genericResult, hgenericResult, rfl⟩
-  have hseparated :
-      genericResult.totalCost ≤
-        genericResult.profile.cost + genericResult.oracleCost :=
-    OracleProgramT.totalCost_le_separated
-      program.toT sec env OracleProgramT.costExchange_nat
-      env.init genericResult hgenericResult
-  exact hseparated.trans (by
-    simpa only [CostedRunResult.totalCost, CostedRunResult.ofT,
-      OracleProfile.cost_ofT] using
-      totalCost_le_composedBudget
-        program sec env machineBudget totalQueryBudget envBudget
-        programBound programQueryBound envBound env.init
-        (CostedRunResult.ofT genericResult) hlegacy)
 
 end OracleProgram
 

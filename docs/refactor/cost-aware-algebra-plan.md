@@ -1,165 +1,165 @@
 # Cost-aware algebra and generic `Program` migration
 
 This document is the implementation ledger for the repository-wide migration
-from a fixed natural-number cost model and a fixed additive `Program` syntax to
-generic resource models and typed heterogeneous primitive operations.  It is
-intended to be updated at each buildable milestone.  It is not evidence that a
-milestone has been completed unless the corresponding verification commands
-and status are recorded below.
+to generic ordered resource models and typed heterogeneous primitive
+operations. It records the final architecture selected on 2026-08-04: the
+repository has one generic cost-aware API and does not retain the superseded
+fixed-`Nat` or adapter APIs.
 
-## Baseline
+A status entry is evidence only when the corresponding command and result are
+recorded in the verification section. The final builds and static audits below
+were run against the completed working tree on 2026-08-04.
 
-- Date recorded: 2026-08-03.
-- Branch: `main`.
-- Baseline commit: `d8ba0802be01` (`rebuild the entire project`).
-- Toolchain: Lean `v4.29.0-rc1`; Lake `5.0.0`; Mathlib pinned by the current
-  manifest.
-- Baseline verification: `lake build` completed successfully (1812 jobs).
-- Source inventory: 81 Lean files including the two root aggregation modules.
-- Trust audit: no `sorry`, `admit`, `axiom`, or `unsafe` declaration was found.
+## Baseline and current checkpoint
+
+- Initial planning baseline: `main@d8ba0802be01` on 2026-08-03.
+- Baseline verification: `lake build` passed with 1812 jobs.
+- Baseline trust scan: no `sorry`, `admit`, `axiom`, or `unsafe` declaration.
+- Current checkpoint while this ledger is being updated:
+  `main@3d83dfe84d2c` (`使用含复杂度代数重构`).
+- The costed-oracle, machine-bound, and test changes that were already present
+  at the initial baseline remain migration inputs and must not be discarded.
 - No commit or push is part of this migration unless explicitly requested.
 
-The following user-owned changes existed before this document was created and
-are migration inputs.  They must not be discarded or overwritten:
+The semantic `OracleEnv` remains the cost-erased API used by games and security
+definitions. `CostedOracleEnv M` is an exact implementation layer with a proved
+erasure map; it does not replace or weaken the semantic interface.
 
-| Status | Path | Existing intent |
-| --- | --- | --- |
-| modified | `Crypto/Infrastructure/Asymptotic/Bounds.lean` | polynomial closure lemmas used by composed resource bounds |
-| modified | `Crypto/Infrastructure/Complexity/Machine.lean` | cost-aware oracle-machine integration |
-| modified | `Crypto/Infrastructure/Computation/Oracle/Basic.lean` | profiled and costed oracle execution |
-| modified | `README.md` | documentation for the in-progress oracle work |
-| untracked | `Crypto/Infrastructure/Computation/Oracle/Costed.lean` | exact-cost oracle environment and erasure bridge |
-| untracked | `CryptoTest/Infrastructure/Computation/CostedOracle.lean` | oracle composition regression tests |
+## Final architectural decisions
 
-The semantic `OracleEnv` remains the cost-erased API used by games.  The
-cost-aware environment is an implementation layer with a proved erasure map;
-it must not replace or weaken the semantic interface.
+1. The repository exposes only `CostModel`, `CostedT`, `RandCostedT`, typed
+   algebras, and generic programs. Superseded aliases, typeclass adapters,
+   duplicate execution records, and fixed-natural-number program surfaces are
+   removed rather than deprecated in place.
+2. `CostModel.nat` is a normal concrete `CostModel`. It is used when an exact
+   natural-number resource is the intended model, not as a compatibility layer.
+3. Sequential resource composition uses an ordered `AddMonoid`; it is not
+   assumed commutative. Automatic branch bounds additionally use
+   `WorstCaseCostModel`, while callers may prove a common bound in any model.
+4. Every primitive has exactly one authoritative execution in
+   `CostedAlgebra.exec`. `AlgebraLaws` describe cost-erased mathematics and
+   probability; `OperationBounds` separately certify upper bounds.
+5. Every scheme stage, including decryption, returns `RandCostedT M`.
+   Decomposed construction algorithms run their `Program`s directly; an exact
+   family setup may itself be the primitive called by a family-level program.
+   There is no separately maintained concrete computation path.
+6. `Program.runCosted` is the only program interpreter. `Program.valueDist` is
+   defined by erasing costs from that interpreter, and `BoundedProgram` pairs
+   the same program with a proof rather than copying its syntax.
+7. Exact path cost, finite upper-bound certificates, structural query counts,
+   and asymptotic complexity are separate layers.
+8. `NatMeasure M` is a monotone additive observation from a generic exact cost
+   into the existing natural-number complexity interfaces. Mapping a cost does
+   not change the value distribution.
+9. Oracle query calls always receive an explicit caller-side cost in their
+   selected model. Per-name query counts and total query count are structural
+   resources, never inferred from runtime.
+10. `TimedOracleMachine` requires local-cost, projected-runtime, per-name-query,
+    and total-query bounds. `PPTOracleMachine` additionally requires polynomial
+    proofs for projected runtime and total queries.
+11. Existing games, advantages, correctness statements, `Hard`, DLog/DDH
+    `Assumption`, `OneTimeSecure`, `INDCPASecure`, and UC semantics retain their
+    names, arbitrary-machine quantification domains, probability semantics, and
+    theorem strength.
+12. Exact cost semantics remains pathwise. Expected cost, tail bounds,
+    communication rounds, encoding size, and parallel composition are outside
+    this migration.
 
-## Architectural invariants
+## Final dependency structure
 
-1. There is one authoritative exact interpreter for every primitive.  Value
-   semantics are obtained by erasing its cost, never by maintaining a second
-   evaluator whose behavior may drift.
-2. Exact execution costs, finite upper-bound certificates, and asymptotic
-   bounds are separate layers.
-3. Sequential resource composition need not be commutative.  The core assumes
-   an ordered additive monoid; automatic worst-case branch bounds require an
-   additional join capability.
-4. Random computations retain the joint distribution of values and path
-   costs.  This migration does not introduce expected-cost or tail-bound
-   semantics.
-5. Existing cost-erased games, advantages, correctness statements, `Hard`,
-   DLog/DDH `Assumption`, `OneTimeSecure`, `INDCPASecure`, and UC semantics keep
-   their current names, quantification domains, and theorem strength.
-6. Global projection instances are avoided.  Algebra bundles expose explicit
-   projections and scoped/local instances so that concrete Mathlib instances
-   cannot form diamonds.
-7. `Nat` remains a compatibility model while internal algorithms migrate to
-   generic resources.
+```mermaid
+flowchart TD
+    CM["CostModel"]
+    WC["WorstCaseCostModel"]
+    NM["NatMeasure M"]
+    CT["CostedT M / RandCostedT M"]
+    SG["Signature"]
+    CA["CostedAlgebra M S"]
+    LAWS["AlgebraLaws"]
+    BOUNDS["OperationBounds"]
+    CODE["Program.Code A Result"]
+    P["Program A Input Output"]
+    BP["BoundedProgram"]
+    PM["ProgramMachine"]
+    MC["Nat-observed Timed/PPT machines"]
+    SEM["Games and security predicates"]
 
-## Target dependency structure
-
-```text
-CostModel ------------------------------+
-  |                                     |
-  +--> CostedT / RandCostedT             +--> NatMeasure
-               |                                  |
-Signature ---> CostedAlgebra                      |
-  |            |                                  |
-  |            +--> AlgebraLaws                   |
-  |            +--> OperationBounds               |
-  |                     |                          |
-  +-----------> Program.Code                      |
-                        |                          |
-                        +--> Program A Input Output|
-                                  |                |
-                                  +--> CostBound   |
-                                  +--> BoundedProgram
-                                           |
-                                           +------> ProgramMachine
-                                                      |
-                                                      +--> existing Nat
-                                                           Timed/PPT machines
-                                                               |
-                                                               +--> existing
-                                                                    games and
-                                                                    security
-                                                                    predicates
+    CM --> CT
+    WC --> BP
+    CM --> NM
+    SG --> CA
+    CT --> CA
+    CA --> CODE
+    LAWS --> CODE
+    CODE --> P
+    BOUNDS --> BP
+    P --> BP
+    NM --> PM
+    BP --> PM
+    PM --> MC
+    MC --> SEM
 ```
 
-### Generic cost model
+## Core interfaces
 
-The cost layer will provide the following roles (exact field names may be
-adjusted only to match available Mathlib typeclasses without changing their
-meaning):
+### Generic costs
 
 ```lean
 structure CostModel where
   Cost : Type uCost
   instAddMonoid : AddMonoid Cost
   instPartialOrder : PartialOrder Cost
-  addLeftMono : AddLeftMono Cost
-  addRightMono : AddRightMono Cost
+  instAddLeftMono : AddLeftMono Cost
+  instAddRightMono : AddRightMono Cost
 
 structure WorstCaseCostModel extends CostModel where
   instSemilatticeSup : SemilatticeSup Cost
 
 structure NatMeasure (M : CostModel) where
-  toNat : M.Cost ->+ Nat
+  toNat : M.Cost →+ Nat
   monotone_toNat : Monotone toNat
 ```
 
 - `CostedT M Value` is the deterministic writer value.
-- `RandCostedT M Value := PMF (CostedT M Value)` retains exact path costs.
-- `Costed` and `RandCosted` remain aliases for `natCostModel`.
-- Cost mapping through `NatMeasure` must preserve `valueDist`.
-- A componentwise `Steps x Queries` test model will demonstrate that the
-  abstraction is genuinely multi-resource rather than a renamed `Nat` API.
-- Parallel composition is not part of the initial model; it can be added later
-  as an independent capability.
+- `RandCostedT M Value := PMF (CostedT M Value)` preserves the joint
+  distribution of values and exact path costs.
+- `CostModel.nat`, `WorstCaseCostModel.nat`, and `NatMeasure.nat` are ordinary
+  concrete instances and observations.
+- `CostedT.mapCost` and `RandCostedT.mapCost` implement resource observation;
+  their erasure theorems prove value-distribution preservation.
+- The `Steps × Queries` regression model demonstrates non-scalar exact costs.
 
-### Typed primitive signatures
-
-The program algebra is based on an operation family indexed by result type:
+### Typed primitive algebra
 
 ```lean
 structure Signature where
-  Op : (Result : Type uResult) -> Type uOp
+  Op : (Result : Type uResult) → Type uOp
 
 structure CostedAlgebra (M : CostModel) (S : Signature) where
-  exec : forall {Result}, S.Op Result -> RandCostedT M Result
+  exec : ∀ {Result}, S.Op Result → RandCostedT M Result
 ```
 
-`Signature.Sum` combines independent capabilities.  Deterministic arithmetic
-operations, sampling, and family-dependent operations are represented as
-typed constructors.  In particular, a family signature may contain operations
-such as `sampleScalar pp : Op pp.Scalar`; no dummy scalar type or optional
-backend field is required.
+`Signature.sum` composes independent capabilities. Arithmetic and sampling are
+typed operations, including result-dependent operations such as a scalar sample
+whose result type is selected by a public parameter. The exact operation is
+defined once in `exec`; a uniformity theorem belongs in `AlgebraLaws`, and a
+path-cost bound belongs in `OperationBounds`.
 
-`AlgebraLaws` relates the erasure of `exec` to Mathlib operations or a uniform
-distribution.  `OperationBounds` proves local upper bounds separately.  The
-existing `AdditiveBackend` and `MultiplicativeBackend` become compatibility
-constructors for handlers, while the current operation-cost typeclasses remain
-temporary adapters until repository users have been migrated.
+The mathematical hierarchy is capability-based:
 
-The shared mathematical parameter hierarchy is intentionally capability-based:
+- OTP uses a finite additive-group parameter;
+- DLog uses a cyclic-action parameter;
+- DDH extends that parameter with its stronger commutative multiplication and
+  action requirements;
+- ElGamal reuses the DDH parameter and algebra rather than restating its
+  arithmetic operations.
 
-- a finite additive parameter for one-time pad;
-- a cyclic-action parameter for discrete logarithm;
-- a stronger DDH parameter extending cyclic action with the commutative
-  multiplicative/action structure used by DDH;
-- ElGamal continues to reuse DDH parameters rather than restating the laws.
+Projection instances remain explicit or scoped to avoid typeclass diamonds.
 
-The current `UniformSampler` is split into exact sampling, its uniformity law,
-and a separate bound certificate.
-
-### Generic program
-
-The fixed `Scalar`/`Carrier`/`Sample` syntax is replaced by a generic typed
-program:
+### Generic programs and schemes
 
 ```lean
-inductive Program.Code (A : CostedAlgebra M S) : Type uResult -> Type _
+inductive Program.Code (A : CostedAlgebra M S) : Type uResult → Type _
   | pure
   | bind
   | call
@@ -167,142 +167,136 @@ inductive Program.Code (A : CostedAlgebra M S) : Type uResult -> Type _
 
 structure Program (A : CostedAlgebra M S)
     (Input : Type uIn) (Output : Type uOut) where
-  body : Input -> Program.Code A Output
+  body : Input → Program.Code A Output
 ```
 
-- `runCosted` is the only interpreter and `valueDist` is its erasure.
-- `Execution` records the selected structural path and exact model cost.
-- `Program.CostBound` accepts an input-dependent budget
-  `Input -> M.Cost`.
-- `BoundedProgram` contains one `Program` plus a proof; concrete algorithms do
-  not duplicate bounded and unbounded syntax trees.
-- Structural bound derivation uses operation certificates, sequential addition,
-  and either a worst-case join or an explicitly supplied common branch bound.
-- `ProgramMachine` maps generic costs through `NatMeasure` before constructing
-  the existing `TimedMachine` or `PPTMachine`, with a theorem that the value
-  distribution is unchanged.
+- `Program.Code.Execution` records a selected structural path and its exact cost.
+- `Program.CostBound p budget` accepts `budget : Input → M.Cost`.
+- Structural bound derivation uses operation bounds, ordered sequential
+  addition, and either an explicit common branch bound or worst-case supremum.
+- `BoundedProgram` stores a `Program` and its bound proof only.
+- Symmetric and asymmetric `Scheme M ...` use `RandCostedT M` for setup,
+  key generation, encryption, and decryption.
+- `setupDist`, `keygenDist`, `encryptDist`, and `decryptDist` are obtained only
+  by erasing costs from those exact scheme computations.
+- `ProgramMachine` applies an explicit `NatMeasure` and proves that the
+  resulting natural-number complexity view has the same value distribution.
 
-The existing `Hard` predicate continues to quantify over arbitrary legacy
-`PPTMachine` values.  Program-derived machines form a source of such machines,
-not a replacement adversary class.  Any program-restricted hardness notion
-must use a distinct name and may receive only the sound one-way implication
-from existing hardness.
+### Generic oracle execution
 
-## Declaration migration map
+- `OracleProgram M Spec` is the only oracle-program syntax.
+- `OracleProfile M Spec` records exact caller-side cost and query trace.
+- `OracleProfile.ofQuery localCost name` has no hard-coded query charge.
+- `ProbabilisticOracleMachine M` executes that generic syntax.
+- `TimedOracleMachine M measure` carries mandatory `costBound`, `runtime`,
+  `queryBound`, and `totalQueryBound` fields together with their soundness
+  proofs.
+- `PPTOracleMachine M measure` carries mandatory polynomial proofs for runtime
+  and total-query bounds.
+- `CostedOracleEnv M` returns exact implementation cost. Its erasure theorem
+  recovers `OracleEnv` without changing response/state distributions.
+- Exact composition preserves the interleaving order of local and environment
+  work. With the explicit exchange law needed to regroup a noncommutative
+  resource, the coarse bound is
+  `localBudget + totalQueryBound • envBudget`.
+- Applying `NatMeasure` yields the corresponding natural-number complexity
+  observation; no separate formula or execution semantics is introduced.
 
-| Existing declaration | Target role | Compatibility policy |
+## Zero-compatibility declaration migration
+
+The final repository does not expose two generations of the cost API. The
+following migration is removal or direct replacement, not wrapper retention.
+
+| Superseded surface | Final surface | Policy |
 | --- | --- | --- |
-| `Cost := Nat` | `natCostModel.Cost` | retain the public alias |
-| `Costed`, `RandCosted` | `CostedT natCostModel`, `RandCostedT natCostModel` | retain namespaces and existing theorem names where practical |
-| `AddCost`, `MulCost`, `NegCost`, `SubCost`, `SMulCost` | adapters that construct exact handlers | do not use as the new source of truth |
-| `AdditiveBackend`, `MultiplicativeBackend` | typed-operation handler constructors | retain Nat-facing constructors during migration |
-| `UniformSampler` | exact sampler plus uniformity law and independent bounds | provide a wrapper for existing constructors |
-| fixed-parameter `Program` | `Program A Input Output` | migrate all concrete programs before retiring the old shape |
-| current `BoundedProgram` combinator trees | a single program paired with `CostBound` | no duplicated algorithm bodies |
-| `ProgramMachine` | generic program plus bounds and `NatMeasure` | resulting legacy machine preserves value semantics |
-| OTP `UnusedScalar` | no declaration | OTP signature contains only sample/add/neg operations |
-| repeated DLog/DDH parameter shells | cyclic-action base and DDH extension | preserve old projection names through adapters where needed |
-| legacy `OracleProgram.query` and `OracleProfile.ofQuery` | original unit-cost syntax and profile | retain exactly; explicit costs exist only in `OracleProgramT` |
-| runtime-derived legacy query count | retain, plus optional `TotalQueryBoundCertificate` | runtime remains a polynomial query bound; the certificate supplies composition-specific bounds |
-| existing security predicates | unchanged semantic boundary | never replace by program-restricted quantification |
+| `Cost := Nat` | `CostModel.nat.Cost` where a natural model is intended | remove alias |
+| `Costed`, `RandCosted` | `CostedT M`, `RandCostedT M` | remove aliases and old namespaces |
+| `natCostModel` | `CostModel.nat` | remove alias |
+| operation-cost typeclasses | exact typed operations in `CostedAlgebra.exec` | remove classes and bridges |
+| additive/multiplicative execution records | one typed algebra selected by the parameter | remove duplicate records |
+| standalone uniform-sampling execution record | typed sampling operation plus law and bound | remove wrapper |
+| fixed-parameter `Program` | `Program A Input Output` | replace globally |
+| duplicated bounded algorithm bodies | `BoundedProgram` over the same `Program` | remove duplicates |
+| handwritten `*Computation` algorithm paths | direct `Program.runCosted` scheme fields | remove duplicates |
+| natural-only program-machine constructor | generic program plus `NatMeasure` | remove special constructor |
+| suffixed generic oracle types | unsuffixed `OracleProfile M`, `OracleProgram M`, `CostedOracleEnv M` | remove parallel names |
+| hard-coded unit query charge | explicit query-operation cost | remove implicit charge |
+| optional total-query certificate | mandatory machine field and proof | remove optional package |
+| runtime-derived total queries | `totalQueryBound` and `totalQueryBound_sound` | prohibit inference |
+| OTP dummy scalar | signature containing only sampling, addition, and negation | remove dummy type |
+| repeated DLog/DDH/ElGamal arithmetic implementations | shared cyclic-action/DDH algebra | keep one handler |
 
-## Ordered milestones
+## Semantic boundary audit
 
-| Milestone | Work | Exit criterion | Status |
+| Boundary | Required final condition |
+| --- | --- |
+| `OracleEnv`, `OracleSpec`, `OracleFn` | remain cost-erased semantic interfaces |
+| ordinary `PPTMachine` and game machines | retain their existing arbitrary-machine domain |
+| `Hard` | continue quantifying over arbitrary PPT machines |
+| DLog/DDH `Assumption` | retain problem distributions and quantification |
+| `OneTimeSecure`, `PerfectOneTimeSecure` | retain adversary domains and advantage conclusions |
+| `INDCPASecure` | retain adversary domain and advantage conclusion |
+| correctness theorems | retain the same message-level conclusions |
+| GameBased, Advantage, Reduction, UC | accept only generic import/type-argument adjustments; no semantic weakening |
+
+The oracle-machine record has new explicit resource fields, but this does not
+exclude an adversary admitted before the migration. `withUnitQueryCost`
+specializes any natural-cost oracle program by charging each query one while
+preserving all non-query work. `totalQueries_le_cost_withUnitQueryCost` and
+`totalQueryBound_withUnitQueryCost_of_costBound` prove that its natural cost
+bound supplies the required total-query bound, while
+`runWithEnv_withUnitQueryCost` proves that the specialization does not change
+oracle responses or the machine's output distribution. These use the sole
+`runProfiled` interpreter; they are semantic/resource theorems rather than a
+parallel compatibility representation.
+
+Program-derived adversaries may be offered as examples or embeddings, but they
+must not replace the machine classes quantified by the public security notions.
+Any formerly definitional equality that no longer reduces by `rfl` must be
+reproved through an explicit erasure or measurement theorem with the same
+conclusion.
+
+## Milestone ledger
+
+| Milestone | Exit criterion | Status at this update |
+| --- | --- | --- |
+| 1. Baseline and decision lock | baseline recorded; root imports include oracle regressions; no user work overwritten | complete |
+| 2. Generic cost foundation | only `CostModel`, `CostedT`, `RandCostedT`, and `NatMeasure`; vector-resource regressions pass | complete; focused and aggregate builds pass |
+| 3. Typed algebra and Program | one typed handler, separate laws/bounds, one interpreter, input-dependent bounds | complete; focused and aggregate builds pass |
+| 4. Concrete algorithms | OTP, DLog, DDH, and ElGamal all generic in `M`, with one algebra and direct programs | complete; focused and aggregate builds pass |
+| 5. Oracle composition | explicit query costs, mandatory total-query proof, exact erasure and coarse bounds | complete; unit-charge embedding and composition proofs pass |
+| 6. Zero-compatibility cleanup | no superseded aliases, adapter files, duplicate algorithms, or stale imports remain | complete; repository-wide scans have no hits |
+| 7. Final verification | focused targets, `Crypto`, `CryptoTest`, full build, trust scan, diff check, and import audit pass | complete |
+
+## Per-file migration ledger
+
+| Area | Files | Final action | Status at this update |
 | --- | --- | --- | --- |
-| 1. Lock the baseline | Record this plan and import `CostedOracle` from the root test module. | Direct CostedOracle build and `lake build CryptoTest` pass without changing pre-existing files. | complete; regression imported |
-| 2. Generic cost foundation | Add `CostModel`, worst-case capability, `NatMeasure`, `CostedT`, `RandCostedT`, Nat aliases, cost mapping, and resource-pair tests. | Foundation modules, compatibility tests, `Crypto`, and `CryptoTest` build. | implemented; focused tests pass |
-| 3. Typed algebra | Add `Signature`, sums, handlers, laws, operation bounds, sampler split, and old-backend adapters. | Deterministic, sampling, dependent-operation, and multi-resource tests pass. | implemented; focused tests pass |
-| 4. Generic Program | Replace the fixed AST, implement exact semantics/executions and input-dependent bounds, and adapt `ProgramMachine`. | Program tests cover erasure, exact paths, sequencing, branching, and measured machine conversion. | implemented; focused tests pass |
-| 5. Concrete algorithms | Migrate ElGamal, then OTP, then DLog and DDH; introduce the shared parameter hierarchy only after the representative slices build. | Existing correctness/security theorem statements and concrete cost regressions pass. | implemented; focused tests pass |
-| 6. Oracle composition | Finish costed environments, explicit query cost, independent total-query bounds, and corrected composed bounds. | Exact erasure and internal-cost tests plus generic and Nat coarse bounds pass. | implemented; focused tests pass |
-| 7. Compatibility cleanup | Remove internal obsolete uses, retain public Nat wrappers, update imports/README, and run the final audit. | Full build and trust/diff audits pass with no orphaned tests. | complete; full repository verified |
+| Cost | `Cost/Model.lean`, `Cost/Costed.lean`, `Cost/Distribution.lean`, `Cost/Projection.lean`, `Cost/Basic.lean` | generic exact model only; `CostModel.nat` and `NatMeasure.nat` as concrete definitions | complete; verified |
+| Randomized | `Computation/Randomized.lean` | generic `RandomizedComputationT` families only | complete; verified |
+| Algebra | `Algebra/Signature.lean`, `Algebra/Operation.lean`, `Algebra/Group.lean`, `Algebra/Basic.lean` | typed signatures, exact handlers, laws, and independent bounds | complete; verified |
+| Removed algebra files | `Algebra/Backend.lean`, `Algebra/Costed.lean`, `Algebra/Module.lean` | delete after all imports are migrated | complete; deleted and aggregate build passes |
+| Program | `Computation/Program.lean` | generic AST, sole interpreter, exact execution, and nonduplicated bounds | complete; verified |
+| Complexity | `Complexity/CostBound.lean`, `Complexity/ProgramMachine.lean`, `Complexity/Machine.lean`, `Asymptotic/Bounds.lean` | explicit generic measurement and mandatory oracle resource proofs | complete; verified |
+| Oracle | `Oracle/Interface.lean`, `Oracle/Costed.lean`, `Oracle/Basic.lean` | unsuffixed generic types, explicit query costs, exact erasure and composition | complete; verified |
+| Parameter hierarchy | `Assumption/DL/Parameter.lean` | mathematical cyclic-action base and DDH extension only | complete; verified |
+| DLog | `Assumption/DL/DLog.lean` and test | one parameter/family algebra, dependent programs, unchanged assumption | complete; verified |
+| DDH | `Assumption/DL/DDH.lean` and test | one parameter/family algebra, real/random programs, unchanged assumption | complete; verified |
+| OTP | construction, scheme, correctness, one-time security, and test files | generic scheme, no dummy capability, one algebra and direct programs | complete; verified |
+| ElGamal | construction, scheme, correctness, IND-CPA, and test files | reuse DDH algebra; generic scheme and direct programs | complete; verified |
+| Generic tests | generic cost, cost composition, Program, and resource-bound tests | remove fixed-model aliases and verify vector costs, erasure, branch bounds, and measurement | complete; verified |
+| Oracle tests | costed-oracle and resource-bound tests | verify traces, explicit costs, mandatory total bounds, exact and coarse composition | complete; verified |
+| Aggregation | `Crypto/Basic.lean`, `CryptoTest.lean`, layer `Basic.lean` files | export only final modules and import every regression | complete; root import audit passes |
+| Documentation | `README.md` and this ledger | describe only the zero-compatibility architecture | complete; final evidence recorded |
 
-Each milestone is landed as a buildable workspace state.  A later milestone may
-not weaken or delete the tests established by an earlier one.
-
-## Per-file ledger
-
-The status column is updated before a file is edited.  `verify only` means the
-file is a semantic compatibility boundary and is not expected to change unless
-an import or explicit adapter is required.
-
-| Area | Files | Planned action | Status |
-| --- | --- | --- | --- |
-| Cost foundation | `Crypto/Infrastructure/Computation/Cost/Model.lean` | define the generic model and Nat instance | implemented; focused build passed |
-| Cost foundation | `Crypto/Infrastructure/Computation/Cost/Projection.lean` | add monotone additive Nat measurements | new; implemented and tested |
-| Cost foundation | `Crypto/Infrastructure/Computation/Cost/Costed.lean` | generalize the writer and retain the Nat alias | implemented; monad laws tested |
-| Cost foundation | `Crypto/Infrastructure/Computation/Cost/Distribution.lean` | generalize random costed computations and erasure | implemented; joint distribution tested |
-| Cost foundation | `Crypto/Infrastructure/Computation/Cost/Basic.lean` | export the new cost modules | complete |
-| Cost foundation | `Crypto/Infrastructure/Computation/Randomized.lean` | connect randomized computations to the Nat compatibility layer/generic family | complete |
-| Algebra | `Crypto/Infrastructure/Computation/Algebra/Signature.lean` | add typed signatures, sums, handlers, laws, and operation bounds | new; implemented and tested |
-| Algebra | `Crypto/Infrastructure/Computation/Algebra/Operation.lean` | provide typed arithmetic and sampling capabilities plus Nat adapters | new; implemented and tested |
-| Algebra | `Crypto/Infrastructure/Computation/Algebra/Backend.lean` | adapt backends and split sampler bounds | complete |
-| Algebra | `Crypto/Infrastructure/Computation/Algebra/Costed.lean` | retain legacy operation-cost adapters | compatibility boundary; unchanged |
-| Algebra | `Crypto/Infrastructure/Computation/Algebra/Group.lean` | introduce/reuse the finite additive parameter base | `AdditiveGroupParam` complete; `CyclicAction` and `DecisionalCyclicAction` extend it in `DL/Parameter.lean` |
-| Algebra | `Crypto/Infrastructure/Computation/Algebra/Module.lean` | align scalar-action capabilities and legacy cost-model bridge | compatibility boundary; unchanged |
-| Algebra | `Crypto/Infrastructure/Computation/Algebra/Basic.lean` | export the typed algebra API | complete |
-| Program | `Crypto/Infrastructure/Computation/Program.lean` | implement `Program A Input Output`, exact execution, and nonduplicated bounds | implemented and tested |
-| Complexity | `Crypto/Infrastructure/Complexity/CostBound.lean` | connect generic exact bounds to Nat asymptotic bounds | compatibility boundary; reused through `NatMeasure` |
-| Complexity | `Crypto/Infrastructure/Complexity/ProgramMachine.lean` | add measured generic-program machine adapters | implemented; erasure theorem tested |
-| Complexity | `Crypto/Infrastructure/Complexity/Machine.lean` | add independent total-query bounds while preserving legacy machines | original unconditional runtime-query lemmas and optional certificates tested |
-| Asymptotic | `Crypto/Infrastructure/Asymptotic/Bounds.lean` | retain and validate closure lemmas needed by composed bounds | polynomial closure lemmas implemented |
-| Oracle | `Crypto/Infrastructure/Computation/Oracle/Interface.lean` | separate explicit query cost from trace/count resources | complete; generic explicit-cost core and exact legacy unit-cost syntax tested |
-| Oracle | `Crypto/Infrastructure/Computation/Oracle/Costed.lean` | integrate exact environment costs and erasure | complete; generic exact interpreter and bounds tested |
-| Oracle | `Crypto/Infrastructure/Computation/Oracle/Basic.lean` | correct exact/coarse composition interpreters and bounds | complete; aggregation build passed |
-| Assumptions | `Crypto/Assumption/DL/Parameter.lean` | share cyclic-action and decisional parameter hierarchy | new; implemented and tested |
-| Assumptions | `Crypto/Assumption/DL/DLog.lean` | migrate setup and complete sampling/search to dependent typed operations | family-level setup/sample programs and assumption bridges implemented; test build passed |
-| Assumptions | `Crypto/Assumption/DL/DDH.lean` | migrate setup plus real/random sampling and preserve assumptions | family-level setup/real/random programs and assumption bridges implemented; test build passed |
-| Assumptions | `Crypto/Assumption/DL/Basic.lean` | update aggregation import only if needed | complete |
-| OTP | `Crypto/Primitive/Encryption/SymmetricEncryption/Instantiations/OneTimePad/Construction.lean` | remove dummy scalar and define one program body | implemented; no dummy scalar remains |
-| OTP | `Crypto/Primitive/Encryption/SymmetricEncryption/Instantiations/OneTimePad/Scheme.lean` | expose the erased/timed adapters from that program | implemented; focused tests passed |
-| ElGamal | `Crypto/Primitive/Encryption/AsymmetricEncryption/Instantiations/ElGamal/Construction.lean` | adapt shared DDH parameters | verified through shared parameter alias |
-| ElGamal | `Crypto/Primitive/Encryption/AsymmetricEncryption/Instantiations/ElGamal/Scheme.lean` | migrate setup, key generation, encryption, decryption, and bounds | implemented using the DDH setup program plus local typed programs; exact-cost/correctness tests passed |
-| Tests | `CryptoTest/Infrastructure/Computation/CostedOracle.lean` | preserve existing exact/erasure tests and update corrected query bounds | Nat, vector, noncommutative exact-order, erasure, and coarse-bound cases pass |
-| Tests | `CryptoTest/Infrastructure/Computation/GenericCost.lean` | test vector costs, laws, projection, machine erasure, and value/cost correlation | new; multi-outcome joint-distribution regression passes |
-| Tests | `CryptoTest/Infrastructure/Computation/CostComposition.lean` | retain Nat compatibility composition cases | unchanged compatibility test |
-| Tests | `CryptoTest/Infrastructure/Computation/Program.lean` | migrate to typed signatures and input-dependent bounds | complete; passes |
-| Tests | `CryptoTest/Infrastructure/Complexity/ResourceBounds.lean` | test total-query certificates and polynomial transfer | unconditional legacy runtime-query and optional-certificate cases pass |
-| Tests | `CryptoTest/Primitive/Encryption/AsymmetricEncryption/ElGamal.lean` | retain exact bound, erasure, timed, and correctness regression | complete; passes |
-| Tests | `CryptoTest/Primitive/Encryption/SymmetricEncryption/OneTimePad.lean` | verify no dummy algebra and retain perfect security | complete; focused build passed |
-| Tests | `CryptoTest/Assumption/DL/DLog.lean` | retain search/sample semantics and costs | complete; passes |
-| Tests | `CryptoTest/Assumption/DL/DDH.lean` | retain real/random distributions and exact operation costs | complete; passes |
-| Tests | `CryptoTest.lean` | import all regression modules, beginning with `CostedOracle` | complete; both new suites imported |
-| Documentation | `README.md` | describe only completed, verified architecture | complete; pre-existing Oracle documentation integrated and corrected |
-| Documentation | `docs/refactor/cost-aware-algebra-plan.md` | maintain decisions, status, and verification evidence | complete; final evidence recorded below |
-
-The symmetric/asymmetric syntax modules, their general security-property
-modules, `Crypto/Infrastructure/GameBased/**`, and
-`Crypto/Infrastructure/UC/**` are verification-only boundaries.  If an adapter
-edit becomes necessary, it must preserve theorem statements and be entered in
-this ledger before modification.
-
-## Oracle correction contract
-
-- `CostedOracleEnv.erase` recovers the existing stateful semantic environment.
-- Local machine work and query trace/count are independent resources.
-- A generic `OracleProgramT` query receives its cost explicitly. The legacy
-  `OracleProgram` retains only its original unit-cost `query` constructor;
-  explicit-cost Nat callers use `OracleProgramT natCostModel`.
-- `TimedOracleMachine` and `PPTOracleMachine` retain their original fields and
-  adversary domain. Legacy runtime therefore still bounds total and per-name
-  query counts. A separate optional `TotalQueryBoundCertificate` can provide a
-  dedicated bound for composed-oracle accounting.
-- `PolyTotalQueryBoundCertificate` adds polynomial boundedness of that
-  independent total-query certificate.
-- The exact interpreter accumulates the actual returned internal environment
-  costs in sequential order for every `CostModel`.
-- A uniform environment bound yields
-  `localBudget + totalQueryBound • envBudget` when an explicit exchange law
-  permits local and oracle contributions to be regrouped; the Nat compatibility
-  theorem is `localBudget + totalQueryBound * envBudget`.
-- Runtime-derived query bounds remain unconditional for the legacy unit-cost
-  syntax, but do not transfer to generic explicit-cost programs.
+The scheme syntax and property modules, GameBased, Advantage, Reduction, and UC
+are semantic boundaries. Necessary type-argument and import edits are allowed,
+but theorem statements and quantified adversary classes must remain unchanged.
 
 ## Verification matrix
 
-Run the narrowest relevant target after each edit, followed at every milestone
-by:
+After each focused edit, run the smallest relevant module or test target. Final
+acceptance requires, in order:
 
 ```text
 lake build Crypto
@@ -310,119 +304,102 @@ lake build CryptoTest
 lake build
 ```
 
-Required behavioral tests:
+Required behavioral coverage:
 
-- ordered sequential monoid laws, monotonicity, Nat compatibility, and optional
-  worst-case join;
-- a componentwise `Steps x Queries` model and its Nat projection;
-- writer bind charging each component once and random computations retaining
-  the value/path-cost joint distribution;
-- typed signature sums, dependent result types, handler dispatch, erasure laws,
-  and independent operation bounds;
-- exact `Program.Execution`, input-dependent bounds, sequential addition,
-  branch join, and value-preserving machine conversion;
-- ElGamal's sampler, two scalar multiplications, addition, exact path formula,
-  existing numerical upper bound, erased PMF, timed adapter, and correctness;
-- OTP construction without `UnusedScalar`, including its perfect one-time
-  security theorem;
-- DLog/DDH sampling erasure, exact primitive costs, and unchanged assumption
-  declarations;
-- oracle erasure, traces, per-name and total-query bounds, exact internal cost,
-  and corrected coarse composition;
-- unchanged adversary domain for legacy `Hard` and related security predicates.
+- ordered sequential identity and associativity, left/right monotonicity, and
+  optional worst-case supremum;
+- componentwise `Steps × Queries`, `NatMeasure` projection, and value
+  distribution preservation;
+- deterministic writer bind charging each step once and randomized execution
+  retaining value/cost correlation;
+- typed signature sum, dependent result types, operation dispatch, erasure
+  laws, and independent bounds;
+- exact `Program.Code.Execution`, input-dependent budgets, sequencing, branch common
+  bounds and supremum, and measured machine conversion;
+- OTP with no dummy capability and unchanged perfect one-time security;
+- DLog/DDH setup and sampling erasure, exact operation costs, and unchanged
+  assumption definitions;
+- ElGamal setup, scalar sampling, two scalar actions, addition/subtraction,
+  exact path cost, bounds, erased PMFs, timed conversion, and correctness;
+- oracle erasure, query traces, per-name and total bounds, exact internal cost,
+  coarse composition, and polynomial closure;
+- unchanged arbitrary-PPT quantification for `Hard` and public security
+  predicates.
 
 Final static checks:
 
 ```text
 rg -n '\b(sorry|admit)\b|^\s*axiom\b|\bunsafe\b' Crypto CryptoTest
+rg -n '(^|[^[:alnum:]_.])(Costed|RandCosted)\b|\b(natCostModel|AddCost|MulCost|NegCost|SubCost|SMulCost|AdditiveBackend|MultiplicativeBackend|UniformSampler|OracleProgramT|OracleProfileT|CostedOracleEnvT|TotalQueryBoundCertificate|PolyTotalQueryBoundCertificate)\b' Crypto CryptoTest
+rg -n '\bProgram\.cost\b|\bUnusedScalar\b|\bofNatBoundedProgram\b' Crypto CryptoTest
+rg -n '\b(keygen|encrypt|decrypt|setup|sample|real|random)Computation\b' Crypto CryptoTest --glob '*.lean'
 git diff --check
 git status --short
 ```
 
-### Final verification evidence
+The first four source scans must have no hits.
+The root test module must import every regression file.
 
-The completed workspace was checked in increasing scope:
+### Final verification evidence
 
 | Command | Result |
 | --- | --- |
-| focused generic-cost, Program, Oracle, resource-bound, OTP, DLog, DDH, and ElGamal targets | passed (3190 jobs) |
-| `lake build Crypto` | passed (1778 jobs, no warnings) |
-| `lake build CryptoTest` | passed (3193 jobs, no warnings) |
-| `lake build` | passed (3223 jobs, no warnings) |
-| trust-marker scan over `Crypto` and `CryptoTest` | no `sorry`, `admit`, `axiom`, or `unsafe` hits |
+| focused generic-cost, Program, Oracle, OTP, DLog, DDH, and ElGamal targets | passed, 3186 jobs, no warnings |
+| `lake build Crypto` | passed, 1775 jobs, no warnings |
+| `lake build CryptoTest` | passed, 3189 jobs, no warnings |
+| `lake build` | passed, 3220 jobs, no warnings |
+| trust-marker scan | passed; no `sorry`, `admit`, `axiom`, or `unsafe` hits |
+| superseded-API source scan | passed; no hits |
+| duplicate algorithm/interpreter scan | passed; no hits |
 | `git diff --check` | passed |
-| root test-import audit | every regression file is imported by `CryptoTest.lean` |
+| root test-import audit | passed; all nine regression modules imported |
 
-The stable GameBased, Advantage, correctness/security-property, and UC files
-were audited against `d8ba0802be01`. Their security predicates and arbitrary
-legacy PPT-machine quantification domains are unchanged. DLog/DDH assumption
-definitions and OTP/ElGamal correctness conclusions retain their original
-strength; adapter and scoped-instance changes only connect them to the new
-exact interpreters.
+The trust audit also reviewed newly noncomputable declarations. They construct
+or package `PMF` computations (including finite uniform sampling), typed
+handlers containing those computations, or programs and certificates depending
+on those handlers. They introduce no `unsafe` execution path and no additional
+probability or cost interpreter.
 
-### Compatibility and deferred work
+## Risks and controls
 
-- `Cost`, `Costed`, and `RandCosted` remain the Nat specializations, and the
-  old operation-cost typeclasses and backend constructors remain as one-stage
-  compatibility adapters. Repository algorithms take exact costs from
-  `CostedAlgebra.exec`; there are no remaining concrete internal users that
-  treat the legacy classes as a second authoritative cost source.
-- Legacy `OracleProgram` remains unit-cost. Generic explicit query costs use
-  `OracleProgramT`; optional total-query certificates are analysis data and do
-  not narrow the legacy adversary structures.
-- Expected cost, tail bounds, parallel-resource composition, first-order
-  machine syntax, and an IND-CPA-from-DDH reduction are intentionally deferred.
-  The current higher-order `Program` accounts for all explicit calls but does
-  not attempt to cost arbitrary host-language computation inside continuations.
-- New `noncomputable` declarations are limited to PMF/finite-distribution
-  constructions, lifted handlers, or proof-carrying bound packages; none is a
-  trust escape hatch.
-
-Review the final diff for duplicate cost sources, `Program.cost` drift, dummy
-types, blanket global instances, typeclass diamonds, changed probabilities,
-weakened theorem statements, simp loops, dead imports, and unreferenced tests.
-Any newly necessary `noncomputable` declaration must be attributable to PMF or
-finite-distribution construction and documented in the milestone report.
-
-## Risks and mitigations
-
-| Risk | Consequence | Mitigation |
+| Risk | Consequence | Control |
 | --- | --- | --- |
-| Repacking DLog/DDH parameters changes dependent projections | casts replace formerly definitional equalities | migrate ElGamal first through adapters; introduce the shared hierarchy only after exact erasure tests pass |
-| A generic cost model accidentally assumes commutativity | invalid model for ordered sequential resources | require only `AddMonoid`; test a deliberately componentwise resource model |
-| Two evaluators become independent | value semantics may silently differ from exact semantics | define `valueDist` exclusively as cost erasure and prove adapter erasure theorems |
-| Program-derived machines replace arbitrary PPT adversaries | security definitions become weaker | preserve legacy machine types and security predicate bodies; provide embeddings only |
-| Runtime is reused as a query bound for generic explicit-cost programs | zero-cost queries invalidate the bound and could expand an adversary domain | keep explicit costs out of legacy machine syntax; use an independent total-query certificate in coarse composition |
-| Global algebra instances overlap Mathlib instances | elaboration ambiguity or proof instability | use explicit projections and local/scoped instances |
-| Old `rfl` proofs cease to elaborate | tempting but invalid theorem weakening | replace them with explicit erasure/adapter equivalences and preserve conclusions |
-| Compatibility wrappers remain indefinitely | duplicate APIs and sources of truth | track every wrapper here and remove internal uses once `rg` reports none |
-| Existing dirty work is overwritten | loss of user work and misleading validation | inspect the targeted diff before every milestone and never reset/revert it |
+| Genericization accidentally assumes commutative cost addition | invalid ordered resource semantics | require only `AddMonoid`; keep sequential-order tests |
+| A second evaluator survives in a construction | probability or cost semantics can drift | scheme fields run `Program.runCosted`; scan for duplicate computation bodies |
+| Bounds become a second source of cost | exact execution and certificates disagree | bounds quantify over handler-produced paths only |
+| DLog/DDH repacking changes dependent projections | casts obscure or alter distributions | use dependent typed operations and explicit erasure theorems |
+| ElGamal restates DDH arithmetic | duplicate implementations can diverge | delegate to the public parameter's DDH algebra |
+| Query count is inferred from cost or runtime | zero-cost queries invalidate the bound | require independent per-name and total structural proofs |
+| Mandatory oracle fields narrow a public security notion | theorem strength changes | keep public notions quantified over their established arbitrary machine type and audit statements |
+| Global algebra instances overlap Mathlib | elaboration ambiguity or proof instability | use explicit projections and scoped/local instances |
+| Old `rfl` proofs stop elaborating | tempting theorem weakening | prove the same conclusion through erasure/measurement equivalence |
+| A stale adapter survives through an aggregation import | two public APIs remain | scan declarations and imports before final build |
+| Existing user work is overwritten | loss of migration input | never reset or revert unrelated changes; inspect diffs before edits |
 
 ## Decision log
 
 | Date | Decision | Reason |
 | --- | --- | --- |
-| 2026-08-03 | Treat the current costed-oracle changes as part of the migration baseline. | They are user-owned work already present in the checkout. |
-| 2026-08-03 | Generalize the exact cost core while retaining Nat compatibility. | This supports resource vectors without breaking current machines and APIs. |
-| 2026-08-03 | Use typed heterogeneous primitive signatures for `Program`. | Algorithms need capability-specific and dependent operations without dummy types. |
-| 2026-08-03 | Execute a full-repository migration through buildable milestones. | All concrete algorithms should converge on one architecture while keeping failures localized. |
-| 2026-08-03 | Keep existing semantic security predicates and arbitrary PPT quantification unchanged. | Replacing them by program-derived machines would weaken theorem strength. |
-| 2026-08-03 | Keep probability semantics orthogonal to exact resource and asymptotic layers. | Joint path costs are useful, while expected/tail complexity is outside this migration. |
-| 2026-08-03 | Do not add parallel-cost semantics in this migration. | It is not required by current algorithms; the generic core leaves room for a later capability. |
-| 2026-08-03 | Keep total-query evidence in a separate certificate rather than adding fields to legacy oracle machines. | The machine types are part of the security adversary domain; changing their required fields would narrow that domain. |
-| 2026-08-03 | Preserve exact Oracle total cost in execution order and require an explicit exchange law only for grouped coarse bounds. | A noncommutative sequential monoid does not justify moving all local work before all oracle work. |
-| 2026-08-04 | Keep legacy `OracleProgram` exactly unit-cost and place explicit costs only in `OracleProgramT`. | Adding zero-cost calls to legacy syntax would make polynomial runtime insufficient to bound queries and would expand the `PPTOracleMachine` adversary domain. |
+| 2026-08-03 | Treat the existing costed-oracle and bound changes as migration inputs. | They were user-owned work already present in the checkout. |
+| 2026-08-03 | Use ordered generic exact costs, typed heterogeneous operations, and one program interpreter. | This supports dependent cryptographic operations and vector resources without duplicating semantics. |
+| 2026-08-03 | Keep probability semantics, exact costs, finite bounds, and asymptotic bounds separate. | Each layer has a different mathematical role. |
+| 2026-08-03 | Preserve semantic games and arbitrary PPT quantification. | Program-only adversaries would weaken public security notions. |
+| 2026-08-04 | Remove every superseded compatibility surface instead of retaining natural-number aliases or adapters. | The repository should expose one current architecture with one source of exact cost. |
+| 2026-08-04 | Treat `CostModel.nat` as an ordinary model and `NatMeasure` as observation into existing complexity interfaces. | Natural-number use should not create a parallel API. |
+| 2026-08-04 | Make all scheme stages `RandCostedT M` and run construction programs directly. | Deterministic stages are point distributions in the same exact semantics. |
+| 2026-08-04 | Use one generic oracle syntax with explicit query cost and mandatory total-query evidence. | Query count is structural and cannot soundly be recovered from runtime. |
+| 2026-08-04 | Reuse one algebra across DLog, DDH, OTP, and ElGamal within their parameter families. | Duplicate arithmetic implementations would recreate multiple cost sources. |
 
 ## Completion report requirements
 
 The final implementation report must include:
 
-1. the final architecture and declaration migration map;
-2. exact files changed, including which pre-existing edits were preserved;
-3. reused, adapted, deprecated, and removed declarations;
-4. narrow and full build commands with their outcomes;
-5. confirmation that security predicate statements and adversary domains did
-   not change;
-6. trust audit results and any justified `noncomputable` additions;
-7. remaining compatibility wrappers, technical debt, and intentionally
+1. the final architecture and direct declaration replacements;
+2. exact files changed and deleted, including preserved pre-existing work;
+3. confirmation that no compatibility surface or duplicate interpreter remains;
+4. focused and full build commands with actual outcomes;
+5. confirmation that security statements and adversary domains retain their
+   original strength;
+6. trust scan, stale-API scan, diff check, and root-import audit results;
+7. any justified `noncomputable` additions and the remaining intentionally
    deferred resource notions.

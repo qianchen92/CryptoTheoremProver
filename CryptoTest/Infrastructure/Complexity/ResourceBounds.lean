@@ -4,6 +4,7 @@ namespace CryptoTest.Infrastructure.Complexity.ResourceBounds
 
 open Crypto.Infrastructure.Complexity
 open Crypto.Infrastructure.Computation
+open Crypto.Infrastructure.Computation.Cost
 open Crypto.Infrastructure.Computation.Oracle
 
 /-- A one-step machine used to ensure runtime bounds cover actual path annotations. -/
@@ -18,13 +19,13 @@ noncomputable def oneStepMachine : TimedMachine Unit Bool where
 
 /-- The same costed computation cannot satisfy a zero runtime bound. -/
 theorem oneStepMachine_not_zeroRuntime :
-    ¬ RandomizedComputation.CostBound oneStepMachine.run (fun _sec => 0) := by
+    ¬ RandomizedComputationT.CostBound oneStepMachine.run (fun _sec => 0) := by
   intro hzero
   have hbound := hzero 0 () ⟨true, 1⟩ (by
     change
-      Crypto.Infrastructure.Computation.Cost.Costed.mk true 1 ∈
+      CostedT.mk (M := CostModel.nat) true 1 ∈
         (PMF.pure
-          (Crypto.Infrastructure.Computation.Cost.Costed.mk true 1)).support
+          (CostedT.mk (M := CostModel.nat) true 1)).support
     rw [PMF.mem_support_pure_iff])
   exact Nat.not_succ_le_zero 0 hbound
 
@@ -52,8 +53,8 @@ def testOracleSpec : OracleSpec where
   Response
     | TestOracle.query => Unit
 
-def oneQueryProgram : OracleProgram testOracleSpec (ULift Unit) :=
-  OracleProgram.query TestOracle.query ()
+def oneQueryProgram : OracleProgram CostModel.nat testOracleSpec (ULift Unit) :=
+  OracleProgram.query (M := CostModel.nat) (1 : Nat) TestOracle.query ()
 
 /-- One query has exactly one unit of profiled local cost. -/
 theorem oneQueryProgram_costBound :
@@ -68,13 +69,15 @@ theorem oneQueryProgram_not_zeroCost :
   intro hzero
   have hexecution :
       OracleProgram.Execution oneQueryProgram
-        (ULift.up ()) (OracleProfile.ofUnitCostQuery TestOracle.query) := by
+        (ULift.up ()) (OracleProfile.ofQuery (M := CostModel.nat) 1 TestOracle.query) := by
     unfold oneQueryProgram
     exact
       OracleProgram.Execution.query
-        (Spec := testOracleSpec) TestOracle.query () ()
+        (M := CostModel.nat) (Spec := testOracleSpec)
+        (1 : Nat) TestOracle.query () ()
   have hbound :=
-    hzero (ULift.up ()) (OracleProfile.ofUnitCostQuery TestOracle.query)
+    hzero (ULift.up ())
+      (OracleProfile.ofQuery (M := CostModel.nat) 1 TestOracle.query)
     hexecution
   exact Nat.not_succ_le_zero 0 hbound
 
@@ -99,9 +102,12 @@ def adaptiveOracleSpec : OracleSpec where
     | AdaptiveOracle.bit => Bool
 
 /-- The second query is chosen from the response to the first query. -/
-def adaptiveTwoQueryProgram : OracleProgram adaptiveOracleSpec (ULift Bool) :=
-  OracleProgram.bind (OracleProgram.query AdaptiveOracle.bit false) fun first =>
-    OracleProgram.query AdaptiveOracle.bit first.down
+def adaptiveTwoQueryProgram :
+    OracleProgram CostModel.nat adaptiveOracleSpec (ULift Bool) :=
+  OracleProgram.bind
+      (OracleProgram.query (M := CostModel.nat) (1 : Nat) AdaptiveOracle.bit false)
+      fun first =>
+    OracleProgram.query (M := CostModel.nat) (1 : Nat) AdaptiveOracle.bit first.down
 
 /-- A deterministic stateful environment that negates each queried bit. -/
 noncomputable def adaptiveOracleEnv : OracleEnv adaptiveOracleSpec where
@@ -114,13 +120,16 @@ noncomputable def adaptiveOracleEnv : OracleEnv adaptiveOracleSpec where
 /-- A timed machine whose structural path consists of exactly two adaptive queries. -/
 noncomputable def adaptiveTimedMachine :
     TimedOracleMachine
+      CostModel.nat NatMeasure.nat
       (fun _sec => Unit)
       (fun _sec => Bool)
       (fun _sec _input => adaptiveOracleSpec) where
   run := fun _sec _input => adaptiveTwoQueryProgram
+  costBound := fun _sec _input => 2
   runtime := fun _sec => 2
   queryBound := fun _sec _input _name => 2
-  runtime_sound := by
+  totalQueryBound := fun _sec => 2
+  costBound_sound := by
     intro sec input value profile execution
     change OracleProgram.Execution adaptiveTwoQueryProgram value profile at execution
     unfold adaptiveTwoQueryProgram at execution
@@ -129,6 +138,9 @@ noncomputable def adaptiveTimedMachine :
         cases firstExecution
         cases secondExecution
         exact Nat.le_refl 2
+  costBound_le_runtime := by
+    intro sec input
+    exact Nat.le_refl 2
   queryBound_sound := by
     classical
     intro sec input value profile execution name
@@ -140,11 +152,6 @@ noncomputable def adaptiveTimedMachine :
         cases secondExecution
         cases name
         simp [OracleProfile.queryCount, OracleProfile.append]
-
-/-- Total-query evidence is optional analysis data, not part of the machine type. -/
-noncomputable def adaptiveTotalQueryCertificate :
-    TotalQueryBoundCertificate adaptiveTimedMachine where
-  totalQueryBound := fun _sec => 2
   totalQueryBound_sound := by
     intro sec input value profile execution
     change OracleProgram.Execution adaptiveTwoQueryProgram value profile at execution
@@ -155,13 +162,13 @@ noncomputable def adaptiveTotalQueryCertificate :
         cases secondExecution
         exact Nat.le_refl 2
 
-def adaptiveExpectedProfile : OracleProfile adaptiveOracleSpec :=
+def adaptiveExpectedProfile : OracleProfile CostModel.nat adaptiveOracleSpec :=
   OracleProfile.append
-    (OracleProfile.ofUnitCostQuery AdaptiveOracle.bit)
-    (OracleProfile.ofUnitCostQuery AdaptiveOracle.bit)
+    (OracleProfile.ofQuery (M := CostModel.nat) 1 AdaptiveOracle.bit)
+    (OracleProfile.ofQuery (M := CostModel.nat) 1 AdaptiveOracle.bit)
 
 def adaptiveExpectedResult :
-    OracleProgram.RunResult adaptiveOracleSpec Nat (ULift Bool) :=
+    OracleProgram.RunResult CostModel.nat adaptiveOracleSpec Nat (ULift Bool) :=
   ⟨ULift.up false, 2, adaptiveExpectedProfile⟩
 
 theorem adaptiveExpectedResult_mem_support :
@@ -176,7 +183,7 @@ theorem adaptiveExpectedResult_mem_support :
       adaptiveExpectedResult, adaptiveExpectedProfile, adaptiveTimedMachine,
       adaptiveTwoQueryProgram, adaptiveOracleEnv, OracleProgram.runProfiledWithEnv,
       OracleProgram.runProfiled, OracleProfile.append,
-      OracleProfile.ofUnitCostQuery, PMF.pure_bind,
+      OracleProfile.ofQuery, PMF.pure_bind,
       Bool.not_false, Bool.not_true]
     change PMF.bind (PMF.pure _) _ = _
     rw [PMF.pure_bind]
@@ -190,21 +197,21 @@ certificate to this concrete profiled interpreter result.
 -/
 theorem adaptiveExpectedResult_cost_le_runtime :
     adaptiveExpectedResult.profile.cost ≤ adaptiveTimedMachine.runtime 0 :=
-  adaptiveTimedMachine.runProfiled_cost_le_runtime
+  adaptiveTimedMachine.runProfiled_measuredCost_le_runtime
     0 () adaptiveOracleEnv adaptiveExpectedResult adaptiveExpectedResult_mem_support
 
-/-- The legacy runtime again bounds total queries unconditionally. -/
-theorem adaptiveExpectedResult_totalQueries_le_runtime :
+/-- The independent total-query budget bounds every profiled path. -/
+theorem adaptiveExpectedResult_totalQueries_le :
     adaptiveExpectedResult.profile.totalQueries ≤
-      adaptiveTimedMachine.runtime 0 :=
-  adaptiveTimedMachine.runProfiled_totalQueries_le_runtime
+      adaptiveTimedMachine.totalQueryBound 0 :=
+  adaptiveTimedMachine.runProfiled_totalQueries_le
     0 () adaptiveOracleEnv adaptiveExpectedResult adaptiveExpectedResult_mem_support
 
-/-- The legacy runtime also bounds each named query count unconditionally. -/
-theorem adaptiveExpectedResult_queryCount_le_runtime :
+/-- The total-query budget also bounds each named query count. -/
+theorem adaptiveExpectedResult_queryCount_le_totalQueryBound :
     adaptiveExpectedResult.profile.queryCount AdaptiveOracle.bit ≤
-      adaptiveTimedMachine.runtime 0 :=
-  adaptiveTimedMachine.runProfiled_queryCount_le_runtime
+      adaptiveTimedMachine.totalQueryBound 0 :=
+  adaptiveTimedMachine.runProfiled_queryCount_le_totalQueryBound
     0 () adaptiveOracleEnv adaptiveExpectedResult
     adaptiveExpectedResult_mem_support AdaptiveOracle.bit
 
