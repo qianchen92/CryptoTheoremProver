@@ -6,19 +6,23 @@ namespace CryptoTest.Primitive.Encryption.SymmetricEncryption.OneTimePad
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Primitive.Encryption.SymmetricEncryption
 open Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+open scoped OneTimePadParameter
 
 /-- A concrete two-element OTP parameter with native exact-cost operations. -/
 noncomputable def testPublicParam : PublicParam where
   Carrier := ZMod 2
   addGroup := inferInstance
   fintypeCarrier := inferInstance
-  backend := AdditiveBackend.ofConstantCosts 1 1 1 0
+  nonemptyCarrier := inferInstance
+  backend := Backend.ofConstantCosts 1 1
   keySampler := UniformSampler.ofConstantCost 2
+  keySamplerLaws := UniformSamplerLaws.ofConstantCost 2
 
-/-- Local additive-operation bounds certified once for the test parameter. -/
+/-- Local sampler and additive-operation bounds for the test parameter. -/
 noncomputable def testParamEfficiency :
-    ParamEfficiencyCertificate testPublicParam where
-  additiveBounds := AdditiveCostBounds.ofConstantCosts 1 1 1 0
+  ParamEfficiencyCertificate testPublicParam where
+  keySamplerBounds := UniformSamplerBounds.ofConstantCost 2
+  additiveBounds := BackendBounds.ofConstantCosts 1 1
 
 /-- A fixed native costed OTP family with a three-unit setup path. -/
 noncomputable def testFamily : Family :=
@@ -27,6 +31,41 @@ noncomputable def testFamily : Family :=
 /-- Global setup efficiency for `testFamily`. -/
 noncomputable def testEfficiency : EfficiencyCertificate testFamily :=
   EfficiencyCertificate.ofFixed testPublicParam 3
+
+/-- The bounded wrapper indexes the same encryption program rather than copying it. -/
+example :
+    (encryptBoundedProgram testPublicParam testParamEfficiency).program =
+      encryptProgram testPublicParam :=
+  rfl
+
+/-- One exact encryption call carries the backend's one-unit addition cost. -/
+example
+    (key message : testPublicParam.Carrier) :
+    Crypto.Infrastructure.Computation.Program.runCosted
+        (encryptProgram testPublicParam) (key, message) =
+      Crypto.Infrastructure.Computation.Cost.RandCosted.liftCosted
+        ⟨key + message, 1⟩ :=
+  rfl
+
+/-- The structural encryption certificate bounds every exact execution path. -/
+example
+    (key message : testPublicParam.Carrier)
+    (result : Crypto.Infrastructure.Computation.Cost.Costed testPublicParam.Carrier)
+    (hresult :
+      result ∈
+        (Crypto.Infrastructure.Computation.Program.runCosted
+          (encryptProgram testPublicParam) (key, message)).support) :
+    result.cost ≤ 1 :=
+  encryptComputation_costBound
+    testPublicParam testParamEfficiency key message result hresult
+
+/-- Key sampling retains its exact two-unit path bound after program interpretation. -/
+example
+    (result : Crypto.Infrastructure.Computation.Cost.Costed testPublicParam.Carrier)
+    (hresult : result ∈ (keygenComputation testPublicParam).support) :
+    result.cost ≤ 2 :=
+  keygenComputation_costBound
+    testPublicParam testParamEfficiency result hresult
 
 /-- The scheme exposes the expected cost-erased encryption distribution. -/
 example

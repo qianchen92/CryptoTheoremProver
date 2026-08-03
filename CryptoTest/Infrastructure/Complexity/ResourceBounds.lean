@@ -68,10 +68,13 @@ theorem oneQueryProgram_not_zeroCost :
   intro hzero
   have hexecution :
       OracleProgram.Execution oneQueryProgram
-        (ULift.up ()) (OracleProfile.ofQuery TestOracle.query) := by
+        (ULift.up ()) (OracleProfile.ofUnitCostQuery TestOracle.query) := by
     unfold oneQueryProgram
-    exact OracleProgram.Execution.query (Spec := testOracleSpec) TestOracle.query () ()
-  have hbound := hzero (ULift.up ()) (OracleProfile.ofQuery TestOracle.query)
+    exact
+      OracleProgram.Execution.query
+        (Spec := testOracleSpec) TestOracle.query () ()
+  have hbound :=
+    hzero (ULift.up ()) (OracleProfile.ofUnitCostQuery TestOracle.query)
     hexecution
   exact Nat.not_succ_le_zero 0 hbound
 
@@ -80,10 +83,9 @@ theorem oneQueryProgram_queryBound :
     OracleProgram.QueryBound oneQueryProgram (fun _name => 1) := by
   classical
   intro value profile hexecution name
-  cases hexecution with
-  | query queriedName oracleQuery response =>
-      simpa [OracleProfile.queryCount, OracleProfile.ofQuery] using
-        (List.count_le_length (a := name) (l := [queriedName]))
+  apply le_trans (OracleProfile.queryCount_le_totalQueries profile name)
+  cases hexecution
+  exact Nat.le_refl 1
 
 inductive AdaptiveOracle where
   | bit
@@ -137,12 +139,26 @@ noncomputable def adaptiveTimedMachine :
         cases firstExecution
         cases secondExecution
         cases name
-        simp [OracleProfile.queryCount, OracleProfile.append, OracleProfile.ofQuery]
+        simp [OracleProfile.queryCount, OracleProfile.append]
+
+/-- Total-query evidence is optional analysis data, not part of the machine type. -/
+noncomputable def adaptiveTotalQueryCertificate :
+    TotalQueryBoundCertificate adaptiveTimedMachine where
+  totalQueryBound := fun _sec => 2
+  totalQueryBound_sound := by
+    intro sec input value profile execution
+    change OracleProgram.Execution adaptiveTwoQueryProgram value profile at execution
+    unfold adaptiveTwoQueryProgram at execution
+    cases execution with
+    | bind firstExecution secondExecution =>
+        cases firstExecution
+        cases secondExecution
+        exact Nat.le_refl 2
 
 def adaptiveExpectedProfile : OracleProfile adaptiveOracleSpec :=
   OracleProfile.append
-    (OracleProfile.ofQuery AdaptiveOracle.bit)
-    (OracleProfile.ofQuery AdaptiveOracle.bit)
+    (OracleProfile.ofUnitCostQuery AdaptiveOracle.bit)
+    (OracleProfile.ofUnitCostQuery AdaptiveOracle.bit)
 
 def adaptiveExpectedResult :
     OracleProgram.RunResult adaptiveOracleSpec Nat (ULift Bool) :=
@@ -159,9 +175,12 @@ theorem adaptiveExpectedResult_mem_support :
     simp only [
       adaptiveExpectedResult, adaptiveExpectedProfile, adaptiveTimedMachine,
       adaptiveTwoQueryProgram, adaptiveOracleEnv, OracleProgram.runProfiledWithEnv,
-      OracleProgram.runProfiled, OracleProfile.append, OracleProfile.ofQuery,
-      PMF.pure_bind]
-    exact (PMF.pure_bind _ _).trans rfl
+      OracleProgram.runProfiled, OracleProfile.append,
+      OracleProfile.ofUnitCostQuery, PMF.pure_bind,
+      Bool.not_false, Bool.not_true]
+    change PMF.bind (PMF.pure _) _ = _
+    rw [PMF.pure_bind]
+    rfl
   rw [hrun]
   exact (PMF.mem_support_pure_iff adaptiveExpectedResult adaptiveExpectedResult).2 rfl
 
@@ -173,6 +192,21 @@ theorem adaptiveExpectedResult_cost_le_runtime :
     adaptiveExpectedResult.profile.cost ≤ adaptiveTimedMachine.runtime 0 :=
   adaptiveTimedMachine.runProfiled_cost_le_runtime
     0 () adaptiveOracleEnv adaptiveExpectedResult adaptiveExpectedResult_mem_support
+
+/-- The legacy runtime again bounds total queries unconditionally. -/
+theorem adaptiveExpectedResult_totalQueries_le_runtime :
+    adaptiveExpectedResult.profile.totalQueries ≤
+      adaptiveTimedMachine.runtime 0 :=
+  adaptiveTimedMachine.runProfiled_totalQueries_le_runtime
+    0 () adaptiveOracleEnv adaptiveExpectedResult adaptiveExpectedResult_mem_support
+
+/-- The legacy runtime also bounds each named query count unconditionally. -/
+theorem adaptiveExpectedResult_queryCount_le_runtime :
+    adaptiveExpectedResult.profile.queryCount AdaptiveOracle.bit ≤
+      adaptiveTimedMachine.runtime 0 :=
+  adaptiveTimedMachine.runProfiled_queryCount_le_runtime
+    0 () adaptiveOracleEnv adaptiveExpectedResult
+    adaptiveExpectedResult_mem_support AdaptiveOracle.bit
 
 /--
 The same concrete interpreter result satisfies the machine's per-oracle query

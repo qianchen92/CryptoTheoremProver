@@ -1,5 +1,6 @@
 import Crypto.Infrastructure.Asymptotic.Bounds
 import Crypto.Infrastructure.Complexity.CostBound
+import Crypto.Infrastructure.Computation.Oracle.Costed
 import Crypto.Infrastructure.Computation.Oracle.Interface
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
@@ -119,11 +120,12 @@ structure ProbabilisticOracleMachine
       uOracle, uQuery, uResponse, uOut} (Spec sec input) (ULift.{uResponse} (Output sec))
 
 /--
-An oracle machine with a sound uniform runtime and explicit per-oracle query
-bounds, which may depend on the input.
+An oracle machine with sound bounds for local work and per-oracle queries.
 
-Both bounds must hold for every structural execution path of the machine's
-adaptive oracle program.
+This is the legacy public adversary interface used by security definitions.
+Its unit-cost query syntax makes `runtime` a sound total-query bound.  Optional
+independent total-query information is attached separately below for
+compositional oracle-cost analyses without changing this adversary class.
 -/
 structure TimedOracleMachine
     (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
@@ -146,12 +148,10 @@ structure TimedOracleMachine
 /--
 A probabilistic polynomial-time oracle machine in the profiled path-cost model.
 
-`runtime_sound` and `queryBound_sound` connect the declared bounds to `run`;
-`runtime_isPoly` provides a uniform polynomial bound on both path cost and
-query count because each oracle query contributes one unit of cost.
-`queryBound` can record a tighter, per-oracle certificate.  As for
-ordinary machines, local cost annotations remain the trusted boundary of this
-model.
+The inherited soundness fields connect the declared bounds to `run`;
+the unit-cost query syntax and `runtime_isPoly` retain the original polynomial
+query guarantee and public adversary domain.  A separate certificate can
+record a different polynomial total-query bound for composition analyses.
 -/
 structure PPTOracleMachine
     (Input : Crypto.SecPar → Type uIn) (Output : Crypto.SecPar → Type uOut)
@@ -161,6 +161,37 @@ structure PPTOracleMachine
       Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse})
     extends TimedOracleMachine Input Output Spec where
   runtime_isPoly : IsPolyBounded runtime
+
+/--
+An optional total-query certificate for an existing timed oracle machine.
+
+Keeping this certificate separate is semantically important: it can provide a
+dedicated or tighter bound for composed-oracle accounting without adding a
+required field to the legacy machine type quantified by security notions.
+-/
+structure TotalQueryBoundCertificate
+    {Input : Crypto.SecPar → Type uIn} {Output : Crypto.SecPar → Type uOut}
+    {Spec :
+      (sec : Crypto.SecPar) →
+      Input sec →
+      Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse}}
+    (M : TimedOracleMachine Input Output Spec) where
+  totalQueryBound : Crypto.SecPar → Nat
+  totalQueryBound_sound :
+    ∀ sec input,
+      Crypto.Infrastructure.Computation.Oracle.OracleProgram.TotalQueryBound
+        (M.run sec input) (totalQueryBound sec)
+
+/-- A polynomial total-query certificate for an existing PPT oracle machine. -/
+structure PolyTotalQueryBoundCertificate
+    {Input : Crypto.SecPar → Type uIn} {Output : Crypto.SecPar → Type uOut}
+    {Spec :
+      (sec : Crypto.SecPar) →
+      Input sec →
+      Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse}}
+    (M : PPTOracleMachine Input Output Spec)
+    extends TotalQueryBoundCertificate M.toTimedOracleMachine where
+  totalQueryBound_isPoly : IsPolyBounded totalQueryBound
 
 namespace ProbabilisticOracleMachine
 
@@ -183,6 +214,35 @@ noncomputable def runWithEnv
   PMF.map ULift.down
     (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runWithEnv
       (M.run sec input) sec env)
+
+/--
+Interpret an oracle machine against an implemented, internally costed oracle.
+The resulting path cost includes both the machine profile and oracle work.
+-/
+noncomputable def runCostedWithCostedEnv
+    (M : ProbabilisticOracleMachine Input Output Spec)
+    (sec : Crypto.SecPar)
+    (input : Input sec)
+    (env :
+      Crypto.Infrastructure.Computation.Oracle.CostedOracleEnv.{uOracle,
+        uQuery, uResponse, uState} (Spec sec input)) :
+    Crypto.Infrastructure.Computation.Cost.RandCosted (Output sec) :=
+  Crypto.Infrastructure.Computation.Cost.RandCosted.map ULift.down
+    (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runCostedWithCostedEnv
+      (M.run sec input) sec env)
+
+/-- Erasing composed costs recovers the ordinary machine/environment semantics. -/
+@[simp] theorem valueDist_runCostedWithCostedEnv
+    (M : ProbabilisticOracleMachine Input Output Spec)
+    (sec : Crypto.SecPar)
+    (input : Input sec)
+    (env :
+      Crypto.Infrastructure.Computation.Oracle.CostedOracleEnv.{uOracle,
+        uQuery, uResponse, uState} (Spec sec input)) :
+    Crypto.Infrastructure.Computation.Cost.RandCosted.valueDist
+        (M.runCostedWithCostedEnv sec input env) =
+      M.runWithEnv sec input env.erase := by
+  simp [runCostedWithCostedEnv, runWithEnv]
 
 end ProbabilisticOracleMachine
 
@@ -234,6 +294,47 @@ theorem runProfiled_cost_le_runtime
   M.runtime_sound sec input result.value result.profile
     (M.execution_of_mem_support_runProfiled sec input env result hresult)
 
+/-- The runtime bound also bounds the total number of legacy oracle calls. -/
+theorem runProfiled_totalQueries_le_runtime
+    (M : TimedOracleMachine Input Output Spec)
+    (sec : Crypto.SecPar)
+    (input : Input sec)
+    (env :
+      Crypto.Infrastructure.Computation.Oracle.OracleEnv.{uOracle,
+        uQuery, uResponse, uState} (Spec sec input))
+    (result :
+      Crypto.Infrastructure.Computation.Oracle.OracleProgram.RunResult
+        (Spec sec input) env.State (ULift.{uResponse} (Output sec)))
+    (hresult :
+      result ∈
+        (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runProfiledWithEnv
+          (M.run sec input) sec env).support) :
+    result.profile.totalQueries ≤ M.runtime sec := by
+  exact le_trans
+    (M.execution_of_mem_support_runProfiled sec input env result hresult
+      |>.totalQueries_le_cost)
+    (M.runProfiled_cost_le_runtime sec input env result hresult)
+
+/-- The runtime bound also bounds the number of calls to each legacy oracle. -/
+theorem runProfiled_queryCount_le_runtime
+    (M : TimedOracleMachine Input Output Spec)
+    (sec : Crypto.SecPar)
+    (input : Input sec)
+    (env :
+      Crypto.Infrastructure.Computation.Oracle.OracleEnv.{uOracle,
+        uQuery, uResponse, uState} (Spec sec input))
+    (result :
+      Crypto.Infrastructure.Computation.Oracle.OracleProgram.RunResult
+        (Spec sec input) env.State (ULift.{uResponse} (Output sec)))
+    (hresult :
+      result ∈
+        (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runProfiledWithEnv
+          (M.run sec input) sec env).support)
+    (name : (Spec sec input).Name) :
+    result.profile.queryCount name ≤ M.runtime sec :=
+  le_trans (result.profile.queryCount_le_totalQueries name)
+    (M.runProfiled_totalQueries_le_runtime sec input env result hresult)
+
 /-- Every profiled interpreter result respects all per-oracle query bounds. -/
 theorem runProfiled_queryCount_le
     (M : TimedOracleMachine Input Output Spec)
@@ -254,9 +355,10 @@ theorem runProfiled_queryCount_le
   M.queryBound_sound sec input result.value result.profile
     (M.execution_of_mem_support_runProfiled sec input env result hresult) name
 
-/-- The runtime bound also bounds the total number of oracle calls. -/
-theorem runProfiled_totalQueries_le_runtime
+/-- Every profiled interpreter result respects the total-query bound. -/
+theorem runProfiled_totalQueries_le
     (M : TimedOracleMachine Input Output Spec)
+    (certificate : TotalQueryBoundCertificate M)
     (sec : Crypto.SecPar)
     (input : Input sec)
     (env :
@@ -269,15 +371,47 @@ theorem runProfiled_totalQueries_le_runtime
       result ∈
         (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runProfiledWithEnv
           (M.run sec input) sec env).support) :
-    result.profile.totalQueries ≤ M.runtime sec := by
-  have hexecution :=
-    M.execution_of_mem_support_runProfiled sec input env result hresult
-  exact le_trans hexecution.totalQueries_le_cost
-    (M.runProfiled_cost_le_runtime sec input env result hresult)
+    result.profile.totalQueries ≤ certificate.totalQueryBound sec :=
+  certificate.totalQueryBound_sound sec input result.value result.profile
+    (M.execution_of_mem_support_runProfiled sec input env result hresult)
 
-/-- The runtime bound also bounds the number of calls to each oracle. -/
-theorem runProfiled_queryCount_le_runtime
+/--
+Running a timed oracle machine with a uniformly bounded costed oracle has the
+composed path bound `runtime + totalQueryBound * oracleBudget`.
+-/
+theorem runCostedWithCostedEnv_cost_le_composed
     (M : TimedOracleMachine Input Output Spec)
+    (certificate : TotalQueryBoundCertificate M)
+    (sec : Crypto.SecPar)
+    (input : Input sec)
+    (env :
+      Crypto.Infrastructure.Computation.Oracle.CostedOracleEnv.{uOracle,
+        uQuery, uResponse, uState} (Spec sec input))
+    (oracleBudget : Crypto.SecPar → Nat)
+    (envBound : env.QueryCostBoundAt sec oracleBudget)
+    (result : Crypto.Infrastructure.Computation.Cost.Costed (Output sec))
+    (hresult :
+      result ∈
+        (M.toProbabilisticOracleMachine.runCostedWithCostedEnv
+          sec input env).support) :
+    result.cost ≤
+      M.runtime sec + certificate.totalQueryBound sec * oracleBudget sec := by
+  simp only [ProbabilisticOracleMachine.runCostedWithCostedEnv,
+    Crypto.Infrastructure.Computation.Cost.RandCosted.map,
+    Crypto.Infrastructure.Computation.Cost.RandCostedT.map] at hresult
+  rw [PMF.mem_support_map_iff] at hresult
+  rcases hresult with ⟨liftedResult, hliftedResult, hresult⟩
+  subst result
+  exact
+    Crypto.Infrastructure.Computation.Oracle.OracleProgram.runCostedWithCostedEnv_cost_le
+      (M.run sec input) sec env (M.runtime sec) (certificate.totalQueryBound sec)
+      oracleBudget (M.runtime_sound sec input)
+      (certificate.totalQueryBound_sound sec input) envBound liftedResult hliftedResult
+
+/-- The total-query bound also bounds the number of calls to each oracle. -/
+theorem runProfiled_queryCount_le_totalQueryBound
+    (M : TimedOracleMachine Input Output Spec)
+    (certificate : TotalQueryBoundCertificate M)
     (sec : Crypto.SecPar)
     (input : Input sec)
     (env :
@@ -291,9 +425,9 @@ theorem runProfiled_queryCount_le_runtime
         (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runProfiledWithEnv
           (M.run sec input) sec env).support)
     (name : (Spec sec input).Name) :
-    result.profile.queryCount name ≤ M.runtime sec :=
+    result.profile.queryCount name ≤ certificate.totalQueryBound sec :=
   le_trans (result.profile.queryCount_le_totalQueries name)
-    (M.runProfiled_totalQueries_le_runtime sec input env result hresult)
+    (M.runProfiled_totalQueries_le certificate sec input env result hresult)
 
 end TimedOracleMachine
 
@@ -306,12 +440,7 @@ variable
       Input sec →
       Crypto.Infrastructure.Computation.Oracle.OracleSpec.{uOracle, uQuery, uResponse}}
 
-/--
-Every per-oracle query count is bounded by the machine's polynomial runtime.
-
-Together with `runtime_isPoly`, this makes `runtime` the uniform polynomial
-query bound; the inherited `queryBound` may record a tighter bound.
--/
+/-- Every per-oracle query count is bounded by the machine's polynomial runtime. -/
 theorem runProfiled_queryCount_le_runtime
     (M : PPTOracleMachine Input Output Spec)
     (sec : Crypto.SecPar)
@@ -330,6 +459,44 @@ theorem runProfiled_queryCount_le_runtime
     result.profile.queryCount name ≤ M.runtime sec :=
   M.toTimedOracleMachine.runProfiled_queryCount_le_runtime
     sec input env result hresult name
+
+/--
+Every per-oracle query count is bounded by the machine's polynomial total-query
+bound.
+
+The inherited `queryBound` may record a tighter bound for a particular oracle.
+-/
+theorem runProfiled_queryCount_le_totalQueryBound
+    (M : PPTOracleMachine Input Output Spec)
+    (certificate : PolyTotalQueryBoundCertificate M)
+    (sec : Crypto.SecPar)
+    (input : Input sec)
+    (env :
+      Crypto.Infrastructure.Computation.Oracle.OracleEnv.{uOracle,
+        uQuery, uResponse, uState} (Spec sec input))
+    (result :
+      Crypto.Infrastructure.Computation.Oracle.OracleProgram.RunResult
+        (Spec sec input) env.State (ULift.{uResponse} (Output sec)))
+    (hresult :
+      result ∈
+        (Crypto.Infrastructure.Computation.Oracle.OracleProgram.runProfiledWithEnv
+          (M.run sec input) sec env).support)
+    (name : (Spec sec input).Name) :
+    result.profile.queryCount name ≤ certificate.totalQueryBound sec :=
+  M.toTimedOracleMachine.runProfiled_queryCount_le_totalQueryBound
+    certificate.toTotalQueryBoundCertificate sec input env result hresult name
+
+/-- The composed runtime of a PPT machine and a polynomial-cost oracle is polynomial. -/
+theorem composedRuntime_isPoly
+    (M : PPTOracleMachine Input Output Spec)
+    (certificate : PolyTotalQueryBoundCertificate M)
+    (oracleBudget : Crypto.SecPar → Nat)
+    (oracleBudget_isPoly : IsPolyBounded oracleBudget) :
+    IsPolyBounded
+      (fun sec =>
+        M.runtime sec + certificate.totalQueryBound sec * oracleBudget sec) :=
+  IsPolyBounded.composedOracle
+    M.runtime_isPoly certificate.totalQueryBound_isPoly oracleBudget_isPoly
 
 end PPTOracleMachine
 

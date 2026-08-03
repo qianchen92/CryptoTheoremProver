@@ -9,12 +9,15 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.SymmetricEncryption
+open scoped OneTimePadParameter
 
 universe uGroup
 
 /-- Static key-generation budget: one native uniform key sample. -/
-def keygenBudget (pp : PublicParam.{uGroup}) : Cost :=
-  pp.keySampler.sampleBudget
+def keygenBudget
+    (pp : PublicParam.{uGroup})
+    (certificate : ParamEfficiencyCertificate pp) : Cost :=
+  certificate.keySamplerBounds.sampleBudget
 
 /-- Static encryption budget: one group addition. -/
 def encryptBudget
@@ -32,95 +35,103 @@ def decryptBudget
 /-- Uniform key-sampling syntax, independent of efficiency certificates. -/
 def keygenProgram
     (pp : PublicParam.{uGroup}) :
-    Program UnusedScalar pp.Carrier pp.Carrier
-      pp.backend pp.keySampler
-      (ULift.{uGroup} pp.Carrier) :=
-  Program.sample
+    Program (costedAlgebra pp) Unit pp.Carrier where
+  body := fun _input => .call (.sampleKey)
 
 /-- Single-addition encryption syntax, independent of efficiency certificates. -/
 def encryptProgram
-    (pp : PublicParam.{uGroup})
-    (key message : pp.Carrier) :
-    Program UnusedScalar pp.Carrier pp.Carrier
-      pp.backend pp.keySampler
-      (ULift.{uGroup} pp.Carrier) :=
-  Program.add key message
+    (pp : PublicParam.{uGroup}) :
+    Program (costedAlgebra pp)
+      (pp.Carrier × pp.Carrier) pp.Carrier where
+  body := fun input => .call (.add input.1 input.2)
 
 /--
 Negation-then-addition decryption syntax, independent of efficiency
 certificates.
 -/
 def decryptProgram
-    (pp : PublicParam.{uGroup})
-    (key ciphertext : pp.Carrier) :
-    Program UnusedScalar pp.Carrier pp.Carrier
-      pp.backend pp.keySampler
-      (ULift.{uGroup} pp.Carrier) :=
-  Program.bindCarrier
-    (Program.neg
-      (backend := pp.backend)
-      (sampler := pp.keySampler)
-      key)
-    (fun negatedKey =>
-      Program.add
-        (backend := pp.backend)
-        (sampler := pp.keySampler)
-        negatedKey ciphertext)
+    (pp : PublicParam.{uGroup}) :
+    Program (costedAlgebra pp)
+      (pp.Carrier × pp.Carrier) pp.Carrier where
+  body := fun input =>
+    .bind (.call (.neg input.1)) fun negatedKey =>
+      .call (.add negatedKey input.2)
 
 /-- Statically bounded uniform key generation. -/
 def keygenBoundedProgram
-    (pp : PublicParam.{uGroup}) :
+    (pp : PublicParam.{uGroup})
+    (certificate : ParamEfficiencyCertificate pp) :
     Program.BoundedProgram
-      (backend := pp.backend)
-      (sampler := pp.keySampler)
-      (keygenBudget pp)
-      (ULift.{uGroup} pp.Carrier) :=
-  Program.BoundedProgram.sample
+      (Output := pp.Carrier)
+      (operationBounds pp certificate)
+      (fun _input : Unit => keygenBudget pp certificate) where
+  program := keygenProgram pp
+  certificate := by
+    intro input
+    simpa [keygenProgram, keygenBudget, operationBounds] using
+      (Program.Code.Bound.call
+        (bounds := operationBounds pp certificate)
+        (Operation.sampleKey (Carrier := pp.Carrier)))
 
 /-- Statically bounded single-addition encryption. -/
 def encryptBoundedProgram
     (pp : PublicParam.{uGroup})
-    (certificate : ParamEfficiencyCertificate pp)
-    (key message : pp.Carrier) :
+    (certificate : ParamEfficiencyCertificate pp) :
     Program.BoundedProgram
-      (backend := pp.backend)
-      (sampler := pp.keySampler)
-      (encryptBudget pp certificate)
-      (ULift.{uGroup} pp.Carrier) :=
-  Program.BoundedProgram.add
-    certificate.additiveBounds key message
+      (Output := pp.Carrier)
+      (operationBounds pp certificate)
+      (fun _input : pp.Carrier × pp.Carrier =>
+        encryptBudget pp certificate) where
+  program := encryptProgram pp
+  certificate := by
+    intro input
+    simpa [encryptProgram, encryptBudget, operationBounds] using
+      (Program.Code.Bound.call
+        (bounds := operationBounds pp certificate)
+        (Operation.add input.1 input.2))
 
 /-- Statically bounded negation-then-addition decryption. -/
 def decryptBoundedProgram
     (pp : PublicParam.{uGroup})
-    (certificate : ParamEfficiencyCertificate pp)
-    (key ciphertext : pp.Carrier) :
+    (certificate : ParamEfficiencyCertificate pp) :
     Program.BoundedProgram
-      (backend := pp.backend)
-      (sampler := pp.keySampler)
-      (decryptBudget pp certificate)
-      (ULift.{uGroup} pp.Carrier) :=
-  Program.BoundedProgram.bindCarrier
-    (Program.BoundedProgram.neg
-      certificate.additiveBounds key)
-    (fun negatedKey =>
-      Program.BoundedProgram.add
-        certificate.additiveBounds negatedKey ciphertext)
+      (Output := pp.Carrier)
+      (operationBounds pp certificate)
+      (fun _input : pp.Carrier × pp.Carrier =>
+        decryptBudget pp certificate) where
+  program := decryptProgram pp
+  certificate := by
+    intro input
+    simpa [decryptProgram, decryptBudget, operationBounds] using
+      (Program.Code.Bound.bind
+        (bounds := operationBounds pp certificate)
+        (Program.Code.Bound.call
+          (bounds := operationBounds pp certificate)
+          (Operation.neg input.1))
+        (fun negatedKey =>
+          Program.Code.Bound.call
+            (bounds := operationBounds pp certificate)
+            (Operation.add negatedKey input.2)))
 
-/-- Interpret key generation and remove the universe lift from its result. -/
+/-- Interpret the input-parameterized key-generation program. -/
 noncomputable def keygenComputation
     (pp : PublicParam.{uGroup}) :
     RandCosted pp.Carrier :=
-  Program.runCostedSample (keygenProgram pp)
+  Program.runCosted (keygenProgram pp) ()
 
-/-- Interpret encryption and remove the universe lift from its result. -/
+/-- Interpret the input-parameterized encryption program. -/
 noncomputable def encryptComputation
     (pp : PublicParam.{uGroup})
     (key message : pp.Carrier) :
     RandCosted pp.Carrier :=
-  Program.runCostedCarrier (encryptProgram pp key message)
+  Program.runCosted (encryptProgram pp) (key, message)
 
-/-- The deterministic costed OTP decryption result. -/
+/--
+The deterministic adapter required by the legacy symmetric-scheme boundary.
+
+`decryptProgram_runCosted` below proves that this adapter is exactly the
+interpretation of the single public decryption program.
+-/
 def decryptComputation
     (pp : PublicParam.{uGroup})
     (key ciphertext : pp.Carrier) :
@@ -132,13 +143,13 @@ def decryptComputation
 @[simp] theorem decryptProgram_runCosted
     (pp : PublicParam.{uGroup})
     (key ciphertext : pp.Carrier) :
-    Program.runCosted (decryptProgram pp key ciphertext) =
-      RandCosted.map ULift.up
-        (RandCosted.liftCosted
-          (decryptComputation pp key ciphertext)) := by
-  simp [decryptProgram, Program.bindCarrier, Program.runCosted,
-    RandCosted.bind, RandCosted.liftCosted, RandCosted.map,
-    PMF.pure_map, Costed.bind, Costed.map, decryptComputation]
+    Program.runCosted (decryptProgram pp) (key, ciphertext) =
+      RandCosted.liftCosted
+        (decryptComputation pp key ciphertext) := by
+  simp only [decryptProgram, Program.runCosted, Program.Code.runCosted,
+    costedAlgebra, RandCostedT.bind, RandCosted.liftCosted,
+    PMF.pure_bind, PMF.pure_map, decryptComputation]
+  rfl
 
 /-- The native costed one-time-pad scheme. -/
 noncomputable def scheme
@@ -159,13 +170,7 @@ noncomputable def scheme
     (pp : PublicParam.{uGroup}) :
     RandCosted.valueDist (keygenComputation pp) =
       Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier := by
-  simp only [keygenComputation, keygenProgram,
-    Program.runCostedSample, RandCosted.valueDist_map,
-    Program.valueDist_runCosted, Program.valueDist_sample]
-  rw [PMF.map_comp]
-  simpa [Function.comp_def] using
-    PMF.map_id
-      (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier)
+  exact (algebraLaws pp).exec_spec Operation.sampleKey
 
 /-- Erasing encryption costs recovers ordinary OTP addition. -/
 @[simp] theorem encryptComputation_valueDist
@@ -173,8 +178,7 @@ noncomputable def scheme
     (key message : pp.Carrier) :
     RandCosted.valueDist (encryptComputation pp key message) =
       PMF.pure (key + message) := by
-  simp [encryptComputation, encryptProgram,
-    Program.runCostedCarrier, Program.runCosted, PMF.pure_map]
+  exact (algebraLaws pp).exec_spec (Operation.add key message)
 
 /-- The deterministic costed decryption has the ordinary OTP value. -/
 @[simp] theorem decryptComputation_value
@@ -216,46 +220,39 @@ noncomputable def scheme
 
 /-- Key-generation syntax satisfies the supplied local efficiency certificate. -/
 theorem keygenProgram_costBound
-    (pp : PublicParam.{uGroup}) :
+    (pp : PublicParam.{uGroup})
+    (certificate : ParamEfficiencyCertificate pp) :
     Program.CostBound
-      (keygenProgram pp) (keygenBudget pp) := by
-  exact (keygenBoundedProgram pp).sound
+      (keygenProgram pp)
+      (fun _input => keygenBudget pp certificate) :=
+  (keygenBoundedProgram pp certificate).costBound
 
 /-- Encryption syntax satisfies the supplied local efficiency certificate. -/
 theorem encryptProgram_costBound
     (pp : PublicParam.{uGroup})
-    (certificate : ParamEfficiencyCertificate pp)
-    (key message : pp.Carrier) :
+    (certificate : ParamEfficiencyCertificate pp) :
     Program.CostBound
-      (encryptProgram pp key message)
-      (encryptBudget pp certificate) := by
-  exact
-    (encryptBoundedProgram pp certificate key message).sound
+      (encryptProgram pp)
+      (fun _input => encryptBudget pp certificate) :=
+  (encryptBoundedProgram pp certificate).costBound
 
 /-- Decryption syntax satisfies the supplied local efficiency certificate. -/
 theorem decryptProgram_costBound
     (pp : PublicParam.{uGroup})
-    (certificate : ParamEfficiencyCertificate pp)
-    (key ciphertext : pp.Carrier) :
+    (certificate : ParamEfficiencyCertificate pp) :
     Program.CostBound
-      (decryptProgram pp key ciphertext)
-      (decryptBudget pp certificate) := by
-  exact
-    (decryptBoundedProgram pp certificate key ciphertext).sound
+      (decryptProgram pp)
+      (fun _input => decryptBudget pp certificate) :=
+  (decryptBoundedProgram pp certificate).costBound
 
 /-- Every interpreted key-generation path satisfies its local budget. -/
 theorem keygenComputation_costBound
-    (pp : PublicParam.{uGroup}) :
+    (pp : PublicParam.{uGroup})
+    (certificate : ParamEfficiencyCertificate pp) :
     ∀ result, result ∈ (keygenComputation pp).support →
-      result.cost ≤ keygenBudget pp := by
-  intro result hresult
-  simp only [keygenComputation,
-    Program.runCostedSample, RandCosted.map] at hresult
-  rw [PMF.mem_support_map_iff] at hresult
-  rcases hresult with ⟨liftedResult, hliftedResult, rfl⟩
+      result.cost ≤ keygenBudget pp certificate := by
   exact
-    keygenProgram_costBound
-      pp liftedResult hliftedResult
+    (keygenBoundedProgram pp certificate).cost_le_budget_of_mem_support ()
 
 /-- Every interpreted encryption path satisfies its local budget. -/
 theorem encryptComputation_costBound
@@ -264,14 +261,9 @@ theorem encryptComputation_costBound
     (key message : pp.Carrier) :
     ∀ result, result ∈ (encryptComputation pp key message).support →
       result.cost ≤ encryptBudget pp certificate := by
-  intro result hresult
-  simp only [encryptComputation,
-    Program.runCostedCarrier, RandCosted.map] at hresult
-  rw [PMF.mem_support_map_iff] at hresult
-  rcases hresult with ⟨liftedResult, hliftedResult, rfl⟩
   exact
-    encryptProgram_costBound
-      pp certificate key message liftedResult hliftedResult
+    (encryptBoundedProgram pp certificate).cost_le_budget_of_mem_support
+      (key, message)
 
 /-- Deterministic decryption satisfies its compositional local budget. -/
 theorem decryptComputation_cost_le
@@ -290,13 +282,11 @@ noncomputable def encryptTimedMachine
     (pp : PublicParam.{uGroup})
     (certificate : ParamEfficiencyCertificate pp) :
     TimedMachine (pp.Carrier × pp.Carrier) pp.Carrier :=
-  TimedMachine.ofBoundedCarrierProgram
-    pp.backend
-    pp.keySampler
+  TimedMachine.ofNatBoundedProgram
+    (fun _sec => costedAlgebra pp)
+    (fun _sec => operationBounds pp certificate)
     (fun _sec => encryptBudget pp certificate)
-    (fun _sec input =>
-      encryptBoundedProgram
-        pp certificate input.1 input.2)
+    (fun _sec => encryptBoundedProgram pp certificate)
 
 /-- Timed encryption has exactly the scheme's cost-erased distribution. -/
 @[simp] theorem encryptTimedMachine_runDist
@@ -306,6 +296,10 @@ noncomputable def encryptTimedMachine
     (input : pp.Carrier × pp.Carrier) :
     (encryptTimedMachine pp certificate).runDist sec input =
       (scheme F).encryptDist pp input.1 input.2 :=
-  rfl
+  by
+    simp [ProbabilisticMachine.runDist, RandomizedComputation.valueDist,
+      encryptTimedMachine, TimedMachine.ofNatBoundedProgram,
+      TimedMachine.ofBoundedProgram, Scheme.encryptDist, scheme,
+      encryptComputation, encryptBoundedProgram]
 
 end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad

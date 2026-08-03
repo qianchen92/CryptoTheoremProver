@@ -1,115 +1,241 @@
+import Crypto.Infrastructure.Computation.Algebra.Basic
 import Crypto.Infrastructure.Complexity.ProgramMachine
+import Mathlib.Tactic
 
 namespace CryptoTest.Infrastructure.Computation.Program
 
+open Crypto.Infrastructure.Complexity
 open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-/-- A small backend whose local operation costs are visible in reduction tests. -/
+/-- A small backend whose exact local operation costs are visible in tests. -/
 def integerBackend : AdditiveBackend Nat Int :=
   AdditiveBackend.ofConstantCosts 2 1 2 3
 
-/-- Uniform bounds for all operations in `integerBackend`. -/
+/-- Independent uniform bounds for `integerBackend`. -/
 def integerBounds : AdditiveCostBounds integerBackend :=
   AdditiveCostBounds.ofConstantCosts 2 1 2 3
 
-/--
-The sampled type is deliberately independent of both the scalar and carrier
-types: `Scalar = Nat`, `Carrier = Int`, and `Sample = Bool`.
--/
+/-- A multiplication capability with a different exact local cost. -/
+def integerMultiplicativeBackend : MultiplicativeBackend Int :=
+  MultiplicativeBackend.ofConstantCost 5
+
+/-- The sample type is deliberately different from the arithmetic carrier. -/
 noncomputable def boolSampler : UniformSampler Bool :=
   UniformSampler.ofConstantCost 2
 
-/-- Sampling followed by addition has a statically composed budget of `2 + 2`. -/
-noncomputable def boundedSampledAddition :
-    Crypto.Infrastructure.Computation.Program.BoundedProgram
-      (backend := integerBackend) (sampler := boolSampler)
-      4 (ULift Int) :=
-  Crypto.Infrastructure.Computation.Program.BoundedProgram.bindSample
-    (Crypto.Infrastructure.Computation.Program.BoundedProgram.sample
-      (backend := integerBackend) (sampler := boolSampler))
-    (fun _ =>
-      Crypto.Infrastructure.Computation.Program.BoundedProgram.add
-        integerBounds 3 4)
+/-- Uniformity is a mathematical law separate from the exact sampler. -/
+noncomputable def boolSamplerLaws : UniformSamplerLaws boolSampler :=
+  UniformSamplerLaws.ofConstantCost 2
 
-/-- Every path produced by the interpreter satisfies the composed budget. -/
-theorem boundedSampledAddition_cost_le
-    (result : Costed (ULift Int))
+/-- Sampling bounds are separate from the sampler's exact semantics. -/
+noncomputable def boolSamplerBounds : UniformSamplerBounds boolSampler :=
+  UniformSamplerBounds.ofConstantCost 2
+
+/-- A genuinely heterogeneous signature: calls return either `Bool` or `Int`. -/
+abbrev SampleAddSignature :=
+  Signature.sum (SampleOperation.signature Bool) (AddOperation.signature Int)
+
+/-- Exact handlers compose in the same shape as their typed signatures. -/
+noncomputable def sampleAddAlgebra :
+    CostedAlgebra natCostModel SampleAddSignature :=
+  CostedAlgebra.sum
+    (SampleOperation.algebra boolSampler)
+    (AddOperation.algebra integerBackend)
+
+/-- Mathematical specifications compose independently of exact costs. -/
+noncomputable def sampleAddLaws : AlgebraLaws sampleAddAlgebra :=
+  AlgebraLaws.sum
+    (SampleOperation.laws boolSampler boolSamplerLaws)
+    (AddOperation.laws integerBackend)
+
+/-- Upper-bound certificates also compose independently. -/
+noncomputable def sampleAddBounds : OperationBounds sampleAddAlgebra :=
+  OperationBounds.sum
+    (SampleOperation.bounds boolSamplerBounds)
+    (AddOperation.bounds integerBounds)
+
+/-- An addition call in the right-hand capability of `SampleAddSignature`. -/
+noncomputable def addCode (left right : Int) :
+    Crypto.Infrastructure.Computation.Program.Code sampleAddAlgebra Int :=
+  .call (.inr (.add left right))
+
+/-- A sampling call may bind a `Bool` before the program returns an `Int`. -/
+noncomputable def sampledAdditionCode :
+    Crypto.Infrastructure.Computation.Program.Code sampleAddAlgebra Int :=
+  .bind (.call (.inl .sample)) fun sampled =>
+    addCode (if sampled then 3 else 1) 4
+
+/-- The heterogeneous program has one structural certificate with budget `2 + 2`. -/
+noncomputable def sampledAdditionCodeBound :
+    Crypto.Infrastructure.Computation.Program.Code.Bound
+      sampleAddBounds sampledAdditionCode 4 :=
+  Crypto.Infrastructure.Computation.Program.Code.Bound.bind
+    (Crypto.Infrastructure.Computation.Program.Code.Bound.call
+      (bounds := sampleAddBounds) (.inl .sample))
+    (fun sampled =>
+      Crypto.Infrastructure.Computation.Program.Code.Bound.call
+        (bounds := sampleAddBounds)
+        (.inr (.add (if sampled then 3 else 1) 4)))
+
+/-- A plain addition receives only the addition capability's budget. -/
+noncomputable def addCodeBound (left right : Int) :
+    Crypto.Infrastructure.Computation.Program.Code.Bound
+      sampleAddBounds (addCode left right) 2 :=
+  Crypto.Infrastructure.Computation.Program.Code.Bound.call
+    (bounds := sampleAddBounds) (.inr (.add left right))
+
+/-- The external input selects code with a genuinely input-dependent budget. -/
+noncomputable def inputDependentProgram :
+    Crypto.Infrastructure.Computation.Program sampleAddAlgebra Bool Int where
+  body useSampler :=
+    if useSampler then sampledAdditionCode else addCode 3 4
+
+def inputBudget (useSampler : Bool) : Nat :=
+  if useSampler then 4 else 2
+
+/-- `BoundedProgram` certifies the same program body rather than storing a copy. -/
+noncomputable def boundedInputDependentProgram :
+    Crypto.Infrastructure.Computation.Program.BoundedProgram
+      (Input := Bool) (Output := Int) sampleAddBounds inputBudget where
+  program := inputDependentProgram
+  certificate useSampler := by
+    cases useSampler with
+    | false => exact addCodeBound 3 4
+    | true => exact sampledAdditionCodeBound
+
+/-- Every exact path respects the budget selected by the program input. -/
+theorem boundedInputDependentProgram_cost_le
+    (input : Bool) (result : Costed Int)
     (hresult :
       result ∈
         (Crypto.Infrastructure.Computation.Program.runCosted
-          boundedSampledAddition.program).support) :
-    result.cost ≤ 4 :=
-  Crypto.Infrastructure.Computation.Program.BoundedProgram.cost_le_budget_of_mem_support
-    boundedSampledAddition result hresult
+          boundedInputDependentProgram.program input).support) :
+    result.cost ≤ inputBudget input :=
+  boundedInputDependentProgram.cost_le_budget_of_mem_support input result hresult
 
-/-- The algebra backend determines both the value and local cost of addition. -/
+/-- The exact addition handler is authoritative for both result and path cost. -/
 theorem integerAddition_runCosted :
-    Crypto.Infrastructure.Computation.Program.runCosted
-      (backend := integerBackend) (sampler := boolSampler)
-      (.add 3 4) =
-        RandCosted.liftCosted
-          (⟨ULift.up (7 : Int), 2⟩ : Costed (ULift Int)) :=
+    Crypto.Infrastructure.Computation.Program.Code.runCosted (addCode 3 4) =
+      RandCosted.liftCosted (⟨7, 2⟩ : Costed Int) :=
   rfl
 
-/-- A timed machine obtains its runtime certificate directly from the program budget. -/
-noncomputable def boundedSampledAdditionMachine :
-    Crypto.Infrastructure.Complexity.TimedMachine Unit (ULift Int) :=
-  Crypto.Infrastructure.Complexity.TimedMachine.ofBoundedProgram
-    integerBackend boolSampler (fun _sec => 4)
-    (fun _sec _input => boundedSampledAddition)
+/-- Cost erasure follows the separately composed mathematical laws. -/
+theorem integerAddition_valueDist :
+    Crypto.Infrastructure.Computation.Program.Code.valueDist (addCode 3 4) =
+      PMF.pure 7 := by
+  simpa [addCode, sampleAddLaws] using
+    (Crypto.Infrastructure.Computation.Program.Code.valueDist_call_eq
+      sampleAddLaws (.inr (.add (3 : Int) 4)))
 
-@[simp] theorem boundedSampledAdditionMachine_runtime
-    (sec : Crypto.SecPar) :
-    boundedSampledAdditionMachine.runtime sec = 4 :=
+/-- The remaining arithmetic capabilities retain their backend's exact costs. -/
+example :
+    Crypto.Infrastructure.Computation.Program.Code.runCosted
+        (A := NegOperation.algebra integerBackend) (.call (.neg (5 : Int))) =
+      RandCosted.liftCosted (⟨-5, 1⟩ : Costed Int) :=
   rfl
 
-/-- Carrier-valued programs erase their internal `ULift` at the machine boundary. -/
-noncomputable def boundedIntegerAdditionMachine :
-    Crypto.Infrastructure.Complexity.TimedMachine (Int × Int) Int :=
-  Crypto.Infrastructure.Complexity.TimedMachine.ofBoundedCarrierProgram
-    integerBackend boolSampler (fun _sec => integerBounds.addBudget)
-    (fun _sec input =>
-      Crypto.Infrastructure.Computation.Program.BoundedProgram.add
-        integerBounds input.1 input.2)
-
-@[simp] theorem boundedIntegerAdditionMachine_runtime
-    (sec : Crypto.SecPar) :
-    boundedIntegerAdditionMachine.runtime sec = 2 :=
+example :
+    Crypto.Infrastructure.Computation.Program.Code.runCosted
+        (A := SubOperation.algebra integerBackend) (.call (.sub (7 : Int) 4)) =
+      RandCosted.liftCosted (⟨3, 2⟩ : Costed Int) :=
   rfl
 
-/-- The generated machine certificate consumes the same program-derived path cost. -/
-theorem boundedIntegerAdditionMachine_cost_le
-    (sec : Crypto.SecPar) (input : Int × Int)
-    (result : Costed Int)
-    (hresult : result ∈ (boundedIntegerAdditionMachine.run sec input).support) :
-    result.cost ≤ boundedIntegerAdditionMachine.runtime sec :=
-  boundedIntegerAdditionMachine.runtime_sound sec input result hresult
+example :
+    Crypto.Infrastructure.Computation.Program.Code.runCosted
+        (A := SMulOperation.algebra integerBackend) (.call (.smul 2 (5 : Int))) =
+      RandCosted.liftCosted (⟨10, 3⟩ : Costed Int) :=
+  rfl
 
-/--
-A conditional receives the maximum branch budget, even though only the selected
-branch contributes to a concrete path.
--/
-noncomputable def boundedBranch :
+example :
+    Crypto.Infrastructure.Computation.Program.Code.runCosted
+        (A := MulOperation.algebra integerMultiplicativeBackend)
+        (.call (.mul (6 : Int) 7)) =
+      RandCosted.liftCosted (⟨42, 5⟩ : Costed Int) :=
+  rfl
+
+/-- Addition and scalar multiplication form another independently composed algebra. -/
+abbrev AddSMulSignature :=
+  Signature.sum
+    (AddOperation.signature Int)
+    (SMulOperation.signature Nat Int)
+
+noncomputable def addSMulAlgebra :
+    CostedAlgebra natCostModel AddSMulSignature :=
+  CostedAlgebra.sum
+    (AddOperation.algebra integerBackend)
+    (SMulOperation.algebra integerBackend)
+
+noncomputable def addSMulBounds : OperationBounds addSMulAlgebra :=
+  OperationBounds.sum
+    (AddOperation.bounds integerBounds)
+    (SMulOperation.bounds integerBounds)
+
+/-- Only the selected branch contributes exact cost; its certificate uses `max 2 3`. -/
+noncomputable def branchProgram :
+    Crypto.Infrastructure.Computation.Program addSMulAlgebra Bool Int where
+  body condition :=
+    .branch condition
+      (.call (.inl (.add 3 4)))
+      (.call (.inr (.smul 2 5)))
+
+noncomputable def boundedBranchProgram :
     Crypto.Infrastructure.Computation.Program.BoundedProgram
-      (backend := integerBackend) (sampler := boolSampler)
-      3 (ULift Int) := by
-  simpa [integerBounds] using
-    (Crypto.Infrastructure.Computation.Program.BoundedProgram.branch true
-      (Crypto.Infrastructure.Computation.Program.BoundedProgram.add
-        integerBounds 3 4)
-      (Crypto.Infrastructure.Computation.Program.BoundedProgram.smul
-        integerBounds 2 5))
+      (Input := Bool) (Output := Int)
+      addSMulBounds (fun _condition : Bool => max 2 3) where
+  program := branchProgram
+  certificate _condition :=
+    Crypto.Infrastructure.Computation.Program.Code.Bound.branchSup
+      (W := WorstCaseCostModel.nat)
+      (Crypto.Infrastructure.Computation.Program.Code.Bound.call
+        (bounds := addSMulBounds) (.inl (.add 3 4)))
+      (Crypto.Infrastructure.Computation.Program.Code.Bound.call
+        (bounds := addSMulBounds) (.inr (.smul 2 5)))
 
-/-- The `max` branch certificate still bounds every selected execution path. -/
-theorem boundedBranch_cost_le
-    (result : Costed (ULift Int))
+/-- The common `max` budget bounds either selected execution path. -/
+theorem boundedBranchProgram_cost_le
+    (condition : Bool) (result : Costed Int)
     (hresult :
       result ∈
         (Crypto.Infrastructure.Computation.Program.runCosted
-          boundedBranch.program).support) :
-    result.cost ≤ 3 :=
-  boundedBranch.sound result hresult
+          boundedBranchProgram.program condition).support) :
+    result.cost ≤ 3 := by
+  simpa using
+    boundedBranchProgram.cost_le_budget_of_mem_support condition result hresult
+
+/-- Projecting the exact cost through `NatMeasure.nat` yields a legacy machine. -/
+noncomputable def boundedInputDependentMachine : TimedMachine Bool Int :=
+  TimedMachine.ofBoundedProgram
+    NatMeasure.nat
+    (fun _sec => sampleAddAlgebra)
+    (fun _sec => sampleAddBounds)
+    (fun _sec input => inputBudget input)
+    (fun _sec => 4)
+    (fun _sec => boundedInputDependentProgram)
+    (by
+      intro sec input
+      cases input <;> simp [inputBudget, NatMeasure.nat])
+
+@[simp] theorem boundedInputDependentMachine_runtime
+    (sec : Crypto.SecPar) :
+    boundedInputDependentMachine.runtime sec = 4 :=
+  rfl
+
+/-- Cost projection at the machine boundary preserves ordinary semantics. -/
+theorem boundedInputDependentMachine_valueDist
+    (sec : Crypto.SecPar) (input : Bool) :
+    RandCosted.valueDist (boundedInputDependentMachine.run sec input) =
+      Crypto.Infrastructure.Computation.Program.valueDist
+        boundedInputDependentProgram.program input := by
+  change
+    RandCosted.valueDist
+        (RandCostedT.mapCost NatMeasure.nat
+          (Crypto.Infrastructure.Computation.Program.runCosted
+            boundedInputDependentProgram.program input)) =
+      RandCostedT.valueDist
+        (Crypto.Infrastructure.Computation.Program.runCosted
+          boundedInputDependentProgram.program input)
+  exact RandCostedT.valueDist_mapCost NatMeasure.nat _
 
 end CryptoTest.Infrastructure.Computation.Program

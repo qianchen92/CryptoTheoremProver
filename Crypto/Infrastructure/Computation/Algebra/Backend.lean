@@ -244,60 +244,120 @@ def ofConstantCosts
 end AdditiveCostBounds
 
 /--
-A costed implementation of uniform sampling from a finite nonempty type.
+An exact costed sampler from a finite nonempty type.
 
-The sampler itself is a `RandCosted` computation, so its cost is part of each
-execution path.  In particular, distinct internal paths may return the same
-value with different costs.  `sampleBudget` is the uniform path bound used by
-compositional static budgets.
+This record contains only the executable joint value/cost distribution.
+Uniformity and resource bounds are independent certificates below, so neither
+mathematical semantics nor a chosen upper bound is stored twice in the exact
+handler.
 -/
 structure UniformSampler
     (Sample : Type uSample) [Fintype Sample] [Nonempty Sample] where
   sample : RandCosted Sample
-  sample_spec :
-    RandCosted.valueDist sample =
-      Crypto.Infrastructure.Computation.Distribution.uniformPMF Sample
-  sampleBudget : Cost
-  cost_le :
-    ∀ result, result ∈ sample.support → result.cost ≤ sampleBudget
 
 namespace UniformSampler
 
 variable {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
 
-/-- Erasing path costs from a sampler gives the uniform distribution. -/
-@[simp] theorem valueDist_sample (sampler : UniformSampler Sample) :
-    RandCosted.valueDist sampler.sample =
-      Crypto.Infrastructure.Computation.Distribution.uniformPMF Sample :=
-  sampler.sample_spec
-
-/-- Build the canonical uniform sampler from an explicit local cost function and bound. -/
+/-- Build the canonical uniform sampler from an explicit local cost function. -/
 noncomputable def ofCost
-    (sampleCost : Sample → Cost)
-    (sampleBudget : Cost)
-    (sampleCost_le : ∀ value, sampleCost value ≤ sampleBudget) :
+    (sampleCost : Sample → Cost) :
     UniformSampler Sample where
   sample :=
     RandCosted.sampleWithCost
       (Crypto.Infrastructure.Computation.Distribution.uniformPMF Sample)
       sampleCost
+
+/-- Build the canonical uniform sampler with the same local cost for every outcome. -/
+noncomputable def ofConstantCost (sampleCost : Cost) :
+    UniformSampler Sample :=
+  ofCost fun _value => sampleCost
+
+end UniformSampler
+
+/--
+The cost-erased uniformity law for one exact sampler.
+
+This layer is intentionally separate from `UniformSampler`: exact execution,
+distributional specification, and asymptotic/resource certificates can evolve
+independently.
+-/
+structure UniformSamplerLaws
+    {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
+    (sampler : UniformSampler Sample) where
+  sample_spec :
+    RandCosted.valueDist sampler.sample =
+      Crypto.Infrastructure.Computation.Distribution.uniformPMF Sample
+
+namespace UniformSamplerLaws
+
+variable {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
+
+/-- Erasing path costs from a certified sampler gives the uniform distribution. -/
+@[simp] theorem valueDist_sample
+    {sampler : UniformSampler Sample} (laws : UniformSamplerLaws sampler) :
+    RandCosted.valueDist sampler.sample =
+      Crypto.Infrastructure.Computation.Distribution.uniformPMF Sample :=
+  laws.sample_spec
+
+/-- Uniformity law for the canonical sampler with an explicit cost function. -/
+noncomputable def ofCost (sampleCost : Sample → Cost) :
+    UniformSamplerLaws (UniformSampler.ofCost sampleCost) where
   sample_spec := RandCosted.valueDist_sampleWithCost _ _
+
+/-- Uniformity law for the canonical constant-cost sampler. -/
+noncomputable def ofConstantCost (sampleCost : Cost) :
+    UniformSamplerLaws
+      (UniformSampler.ofConstantCost (Sample := Sample) sampleCost) :=
+  ofCost (Sample := Sample) (fun _value => sampleCost)
+
+end UniformSamplerLaws
+
+/--
+A uniform path-cost bound for one exact uniform sampler.
+
+This certificate is separate from `UniformSampler`: exact randomized semantics
+therefore do not depend on a chosen static budget, and several analyses may
+attach different sound bounds to the same sampler.
+-/
+structure UniformSamplerBounds
+    {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
+    (sampler : UniformSampler Sample) where
+  sampleBudget : Cost
+  cost_le :
+    ∀ result, result ∈ sampler.sample.support → result.cost ≤ sampleBudget
+
+namespace UniformSamplerBounds
+
+variable {Sample : Type uSample} [Fintype Sample] [Nonempty Sample]
+
+/--
+The direct bound for a canonical sampler built from an operand-dependent cost
+function.
+-/
+noncomputable def ofCost
+    (sampleCost : Sample → Cost)
+    (sampleBudget : Cost)
+    (sampleCost_le : ∀ value, sampleCost value ≤ sampleBudget) :
+    UniformSamplerBounds (UniformSampler.ofCost sampleCost) where
   sampleBudget := sampleBudget
   cost_le := by
     intro result hresult
-    simp only [RandCosted.sampleWithCost] at hresult
+    simp only [UniformSampler.ofCost, RandCosted.sampleWithCost,
+      RandCostedT.sampleWithCost] at hresult
     rw [PMF.mem_support_map_iff] at hresult
     rcases hresult with ⟨value, _hvalue, hresult⟩
     subst result
     exact sampleCost_le value
 
-/-- Build the canonical uniform sampler with the same local cost for every outcome. -/
+/-- Exact bound for a canonical sampler with one constant local cost. -/
 noncomputable def ofConstantCost (sampleCost : Cost) :
-    UniformSampler Sample :=
-  ofCost (fun _value => sampleCost) sampleCost (by
+    UniformSamplerBounds
+      (UniformSampler.ofConstantCost (Sample := Sample) sampleCost) :=
+  ofCost (Sample := Sample) (fun _value => sampleCost) sampleCost (by
     intro
     rfl)
 
-end UniformSampler
+end UniformSamplerBounds
 
 end Crypto.Infrastructure.Computation.Algebra

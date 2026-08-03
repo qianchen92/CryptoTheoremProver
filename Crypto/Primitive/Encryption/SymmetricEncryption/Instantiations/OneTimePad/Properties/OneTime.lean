@@ -7,6 +7,7 @@ universe uGroup
 
 open Crypto.Primitive.Encryption.SymmetricEncryption
 open Crypto.Infrastructure.Computation.Distribution
+open scoped OneTimePadParameter
 
 /-- Adding a fixed group element to a uniform one-time-pad key hides the message. -/
 theorem challengeDistribution_eq

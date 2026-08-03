@@ -6,6 +6,7 @@ namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTime
 universe uGroup
 
 open Crypto.Primitive.Encryption.SymmetricEncryption
+open scoped OneTimePadParameter
 
 /-- Correctness of the group one-time pad. -/
 theorem correct

@@ -1,5 +1,7 @@
 import Crypto.Infrastructure.Asymptotic.SecurityParameter
 import Crypto.Infrastructure.Computation.Algebra.Backend
+import Crypto.Infrastructure.Computation.Algebra.Group
+import Crypto.Infrastructure.Computation.Algebra.Signature
 import Crypto.Infrastructure.Computation.Randomized
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
@@ -11,18 +13,80 @@ open Crypto.Infrastructure.Computation.Cost
 universe uGroup
 
 /--
-An unused scalar sort for the generic algebraic program interface.
+The exact additive operations used by one-time-pad encryption.
 
-One-time-pad programs use addition and negation but no scalar multiplication.
-The identity action supplies the irrelevant scalar operation without imposing
-another algebraic requirement on the message group.
+This intentionally contains only addition and negation.  In particular, OTP
+parameters no longer need to manufacture an unused scalar type or scalar
+action in order to use the generic program language.
 -/
-inductive UnusedScalar where
-  | unit
+structure Backend
+    (Carrier : Type uGroup) [AddGroup Carrier] where
+  add : Carrier → Carrier → Costed Carrier
+  add_spec : ∀ left right, (add left right).val = left + right
+  neg : Carrier → Costed Carrier
+  neg_spec : ∀ value, (neg value).val = -value
 
-instance instSMulUnusedScalar {Carrier : Type uGroup} :
-    SMul UnusedScalar Carrier where
-  smul := fun _ value => value
+namespace Backend
+
+variable {Carrier : Type uGroup} [AddGroup Carrier]
+
+/-- Build exact OTP operations from explicit operand-dependent costs. -/
+def ofCostFunctions
+    (addCost : Carrier → Carrier → Cost)
+    (negCost : Carrier → Cost) :
+    Backend Carrier where
+  add := fun left right => ⟨left + right, addCost left right⟩
+  add_spec := by
+    intros
+    rfl
+  neg := fun value => ⟨-value, negCost value⟩
+  neg_spec := by
+    intro
+    rfl
+
+/-- Build exact OTP operations with a fixed local cost for each operation kind. -/
+def ofConstantCosts (addCost negCost : Cost) : Backend Carrier :=
+  ofCostFunctions (fun _left _right => addCost) (fun _value => negCost)
+
+@[simp] theorem add_val
+    (backend : Backend Carrier) (left right : Carrier) :
+    (backend.add left right).val = left + right :=
+  backend.add_spec left right
+
+@[simp] theorem neg_val
+    (backend : Backend Carrier) (value : Carrier) :
+    (backend.neg value).val = -value :=
+  backend.neg_spec value
+
+end Backend
+
+/-- Uniform upper bounds for an exact OTP backend. -/
+structure BackendBounds
+    {Carrier : Type uGroup} [AddGroup Carrier]
+    (backend : Backend Carrier) where
+  addBudget : Cost
+  addCost_le : ∀ left right, (backend.add left right).cost ≤ addBudget
+  negBudget : Cost
+  negCost_le : ∀ value, (backend.neg value).cost ≤ negBudget
+
+namespace BackendBounds
+
+variable {Carrier : Type uGroup} [AddGroup Carrier]
+
+/-- Exact bounds for a backend constructed with constant local costs. -/
+def ofConstantCosts (addCost negCost : Cost) :
+    BackendBounds
+      (Backend.ofConstantCosts (Carrier := Carrier) addCost negCost) where
+  addBudget := addCost
+  addCost_le := by
+    intros
+    rfl
+  negBudget := negCost
+  negCost_le := by
+    intro
+    rfl
+
+end BackendBounds
 
 /--
 Public parameters for one-time-pad encryption.
@@ -31,26 +95,104 @@ The exact additive implementation and native uniform key sampler live beside
 the mathematical finite group.  Exact OTP execution therefore needs no
 parallel implementation family.
 -/
-structure PublicParam where
-  Carrier : Type uGroup
-  addGroup : AddGroup Carrier
-  fintypeCarrier : Fintype Carrier
-  backend :
-    @AdditiveBackend UnusedScalar Carrier
-      addGroup instSMulUnusedScalar
+structure PublicParam extends
+    Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.{uGroup} where
+  backend : @Backend Carrier addGroup
   keySampler :
-    @UniformSampler Carrier fintypeCarrier ⟨0⟩
+    @UniformSampler Carrier fintypeCarrier nonemptyCarrier
+  keySamplerLaws : UniformSamplerLaws keySampler
 
-attribute [instance] PublicParam.addGroup
-attribute [instance] PublicParam.fintypeCarrier
+namespace PublicParam
 
-instance (pp : PublicParam.{uGroup}) : Nonempty pp.Carrier :=
-  ⟨0⟩
+/-- Scoped additive-group projection for OTP parameters. -/
+abbrev instAddGroup (pp : PublicParam.{uGroup}) : AddGroup pp.Carrier :=
+  pp.toAdditiveGroupParam.addGroup
 
-/-- Local additive-operation bounds used only when proving OTP efficiency. -/
+/-- Scoped finiteness projection for OTP parameters. -/
+abbrev instFintypeCarrier (pp : PublicParam.{uGroup}) : Fintype pp.Carrier :=
+  pp.toAdditiveGroupParam.fintypeCarrier
+
+/-- Scoped nonemptiness projection for OTP parameters. -/
+abbrev instNonemptyCarrier (pp : PublicParam.{uGroup}) : Nonempty pp.Carrier :=
+  pp.toAdditiveGroupParam.nonemptyCarrier
+
+end PublicParam
+
+scoped[OneTimePadParameter] attribute [instance]
+  Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.PublicParam.instAddGroup
+scoped[OneTimePadParameter] attribute [instance]
+  Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.PublicParam.instFintypeCarrier
+scoped[OneTimePadParameter] attribute [instance]
+  Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.PublicParam.instNonemptyCarrier
+
+open scoped OneTimePadParameter
+
+/-- Local key-sampling and additive-operation bounds used for OTP efficiency. -/
 structure ParamEfficiencyCertificate
     (pp : PublicParam.{uGroup}) where
-  additiveBounds : AdditiveCostBounds pp.backend
+  keySamplerBounds : UniformSamplerBounds pp.keySampler
+  additiveBounds : BackendBounds pp.backend
+
+/-- The heterogeneous primitive operations available to an OTP program. -/
+inductive Operation (Carrier : Type uGroup) : Type uGroup → Type uGroup where
+  | sampleKey : Operation Carrier Carrier
+  | add (left right : Carrier) : Operation Carrier Carrier
+  | neg (value : Carrier) : Operation Carrier Carrier
+
+/-- The typed OTP primitive signature contains exactly sample, add, and neg. -/
+def signature (Carrier : Type uGroup) : Signature.{uGroup, uGroup} where
+  Op := Operation Carrier
+
+/-- The sole exact interpreter for OTP primitive operations. -/
+noncomputable def costedAlgebra
+    (pp : PublicParam.{uGroup}) :
+    CostedAlgebra natCostModel (signature pp.Carrier) where
+  exec operation :=
+    match operation with
+    | .sampleKey => pp.keySampler.sample
+    | .add left right => RandCosted.liftCosted (pp.backend.add left right)
+    | .neg value => RandCosted.liftCosted (pp.backend.neg value)
+
+/-- Mathematical, cost-erased specifications for the exact OTP interpreter. -/
+noncomputable def algebraLaws
+    (pp : PublicParam.{uGroup}) :
+    AlgebraLaws (costedAlgebra pp) where
+  semantics operation :=
+    match operation with
+    | .sampleKey =>
+        Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier
+    | .add left right => PMF.pure (left + right)
+    | .neg value => PMF.pure (-value)
+  exec_spec operation := by
+    cases operation with
+    | sampleKey => exact pp.keySamplerLaws.sample_spec
+    | add left right => simp [costedAlgebra]
+    | neg value => simp [costedAlgebra]
+
+/-- Independent primitive bounds induced by a local OTP certificate. -/
+noncomputable def operationBounds
+    (pp : PublicParam.{uGroup})
+    (certificate : ParamEfficiencyCertificate pp) :
+    OperationBounds (costedAlgebra pp) where
+  budget operation :=
+    match operation with
+    | .sampleKey => certificate.keySamplerBounds.sampleBudget
+    | .add _left _right => certificate.additiveBounds.addBudget
+    | .neg _value => certificate.additiveBounds.negBudget
+  cost_le operation result hresult := by
+    cases operation with
+    | sampleKey =>
+        exact certificate.keySamplerBounds.cost_le result hresult
+    | add left right =>
+        simp only [costedAlgebra, RandCosted.liftCosted,
+          PMF.mem_support_pure_iff] at hresult
+        subst result
+        exact certificate.additiveBounds.addCost_le left right
+    | neg value =>
+        simp only [costedAlgebra, RandCosted.liftCosted,
+          PMF.mem_support_pure_iff] at hresult
+        subst result
+        exact certificate.additiveBounds.negCost_le value
 
 /-- A security-parameter-indexed family of native costed OTP parameters. -/
 structure Family where
@@ -71,16 +213,20 @@ def publicParam
     [∀ sec, AddGroup (GroupFamily sec)]
     [∀ sec, Fintype (GroupFamily sec)]
     (backend :
-      ∀ sec, AdditiveBackend UnusedScalar (GroupFamily sec))
+      ∀ sec, Backend (GroupFamily sec))
     (keySampler :
       ∀ sec, UniformSampler (GroupFamily sec))
+    (keySamplerLaws :
+      ∀ sec, UniformSamplerLaws (keySampler sec))
     (sec : Crypto.SecPar) :
     PublicParam.{uGroup} where
   Carrier := GroupFamily sec
   addGroup := inferInstance
   fintypeCarrier := inferInstance
+  nonemptyCarrier := ⟨0⟩
   backend := backend sec
   keySampler := keySampler sec
+  keySamplerLaws := keySamplerLaws sec
 
 /--
 The native costed OTP family induced by a type-level group family.
@@ -93,14 +239,17 @@ noncomputable def Family.ofGroupFamily
     [∀ sec, AddGroup (GroupFamily sec)]
     [∀ sec, Fintype (GroupFamily sec)]
     (backend :
-      ∀ sec, AdditiveBackend UnusedScalar (GroupFamily sec))
+      ∀ sec, Backend (GroupFamily sec))
     (keySampler :
       ∀ sec, UniformSampler (GroupFamily sec))
+    (keySamplerLaws :
+      ∀ sec, UniformSamplerLaws (keySampler sec))
     (setupCost : Crypto.SecPar → Cost) :
     Family.{uGroup} where
   setup := fun sec =>
     RandCosted.liftCosted
-      ⟨publicParam GroupFamily backend keySampler sec, setupCost sec⟩
+      ⟨publicParam GroupFamily backend keySampler keySamplerLaws sec,
+        setupCost sec⟩
 
 /-- The mathematical setup distribution obtained by erasing native setup costs. -/
 noncomputable def Family.setupDist

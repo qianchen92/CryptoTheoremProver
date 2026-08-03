@@ -121,17 +121,25 @@ Reusable semantic infrastructure for cryptographic formalization.
   module cost conventions are explicit named models rather than global
   instances, so selecting an implementation is a local and visible choice.
 - `Algebra.Costed` is the small typeclass-based compatibility layer.
-  `AdditiveBackend`, selected explicitly by a concrete construction, is the
-  authoritative implementation route used by algebraic programs;
-  `AdditiveBackend.ofCostModel` bridges the two.
-- `Program` is a typed algebraic program language. Its value interpreter
-  recovers ordinary probability semantics, while its costed interpreter
-  accumulates primitive costs along each path. `BoundedProgram` composes static
-  budgets by addition for sequencing and `max` for branching.
+  `AdditiveBackend` and `MultiplicativeBackend` remain Nat-facing handler
+  constructors, and `AdditiveBackend.ofCostModel` bridges the old operation
+  typeclasses. The selected `CostedAlgebra.exec` is the authoritative primitive
+  interpreter; `AlgebraLaws` and `OperationBounds` are independent evidence.
+- `Program A Input Output` is a typed heterogeneous algebraic program language.
+  `runCosted` is its only execution semantics, and ordinary probability
+  semantics is defined by erasing the exact path cost. `BoundedProgram` stores
+  that same program together with an input-dependent certificate: sequencing
+  uses the selected cost monoid, while branches use either an explicit common
+  upper bound or a model-provided supremum.
 - `Computation.Oracle` defines oracle interfaces, stateful environments, and
-  adaptive oracle-program syntax.
+  adaptive oracle-program syntax. `CostedOracleEnv` is the implementation
+  interface for reductions that must account for work performed inside oracle
+  calls; erasing it recovers an ordinary `OracleEnv` with the same value
+  semantics.
 - `Randomized` packages security-parameter-indexed randomized computations
-  with cost information.
+  with cost information. The generic `CostedT`/`RandCostedT` layer supports
+  ordered additive resource models, while `Costed`/`RandCosted` remain the
+  backwards-compatible natural-number specializations.
 - `Game` packages security experiments as security-parameter-indexed
   distributions.
 
@@ -146,30 +154,43 @@ Semantic complexity notions used by constructions and security games.
   oracle PPT machine interfaces.
 - `CostBound` connects core costed computations to polynomial bounds.
 - `ProgramMachine` constructs timed and PPT machines from statically bounded
-  programs, tying the machine runtime function to the program's budget index.
+  generic programs. An explicit monotone additive `NatMeasure` projects their
+  resource costs to the legacy natural-number runtime without changing the
+  value distribution.
 - Timed machines prove that their runtime bounds cover every explicitly costed
   execution path; PPT machines additionally prove those bounds polynomial.
 - Oracle programs record annotated local cost and the exact query trace.
+  The legacy `OracleProgram` retains exactly its original unit-cost `query`
+  constructor, so runtime still bounds total query count and the
+  `PPTOracleMachine` adversary domain is unchanged. Explicit caller-side query
+  costs, including zero, exist only in `OracleProgramT`; Nat callers use
+  `OracleProgramT natCostModel`.
   Timed oracle machines prove runtime and per-oracle query bounds for every
   structural execution path, and the profiled interpreter is proved to follow
-  those paths. An oracle call contributes one unit in this call-count model;
-  consequently, the polynomial runtime bound of a PPT oracle machine is also a
-  uniform polynomial query bound, without a second redundant certificate. The
-  internal implementation cost of the supplied oracle environment is not
-  included.
+  those paths. An optional `TotalQueryBoundCertificate` can record a dedicated
+  or tighter total-query bound for composition without adding a field to the
+  existing machine interfaces. The ordinary interpreter still excludes the
+  internal implementation cost of its supplied `OracleEnv`. For implemented
+  reductions, the generic costed-oracle interpreter preserves the exact
+  sequential total cost and separately records local and oracle costs for
+  analysis. With an explicit exchange law for regrouping noncommutative costs,
+  it derives `localBudget + totalQueryBound • envBudget`; the Nat compatibility
+  theorem is `localBudget + totalQueryBound * envBudget`. Polynomial closure
+  lemmas discharge the corresponding PPT bound.
 
 This layer may depend on `Crypto.Infrastructure.Asymptotic` and
 `Crypto.Infrastructure.Computation`, but should not depend on specific
 primitives or assumptions. The current model is an explicit, trusted path-cost
 semantics: runtime and query certificates are now connected to the annotated
 computation and oracle-program execution, rather than being unrelated metadata.
-For `Program` computations, costs are generated by the selected algebra backend
+For `Program` computations, costs are generated by the selected algebra handler
 and sampler and accumulated by the interpreter; callers do not attach a total
-cost after defining the algorithm. A `BoundedProgram` derives a uniform bound
-compositionally from the primitive bounds; the machine constructor statically
-ties its runtime field to that same budget index. It does not synthesize a
-closed-form security-parameter bound independently of the supplied program
-family.
+cost after defining the algorithm. Exact handlers, cost-erased algebra laws,
+and operation bounds are separate records. A `BoundedProgram` derives an
+input-dependent bound compositionally from the primitive bounds; the machine
+constructor statically relates its runtime field to the measured budget. It
+does not synthesize a closed-form security-parameter bound independently of the
+supplied program family.
 
 The current program language is nevertheless an engineering-level higher-order
 syntax: values passed to `pure`, continuation functions, and branch conditions
@@ -223,17 +244,22 @@ message syntax, schedulers, ideal functionalities, and simulators.
 Computational assumptions, organized by family.
 
 Discrete logarithm and DDH live directly in `Assumption.DL.DLog` and
-`Assumption.DL.DDH`; there are no companion `Costed` submodules. Public
-parameters carry the exact costed algebra backends and samplers used by the
-native computations, while each family has a native `RandCosted` setup. Search
-and distinguishing distributions are obtained only by erasing costs from
-those computations.
+`Assumption.DL.DDH`; there are no companion `Costed` submodules. They share a
+cyclic-action parameter layer, while the decisional layer adds exactly the
+stronger commutative multiplication/action capabilities. Public parameters
+carry the exact typed algebra handlers and samplers used by the native
+programs, while each family has a native `RandCosted` setup. Search and
+distinguishing distributions are obtained only by erasing costs from those
+computations.
 
 DLog and DDH separate exact execution from efficiency evidence explicitly.
 Their public parameters contain exact algebra backends and samplers, but no
 local algebraic bounds. A `ParamEfficiencyCertificate` supplies the backend
-bounds used to derive fixed-parameter challenge and sampling bounds, while
-each `Family` contains only its costed setup computation. A family-level
+bounds used to derive fixed-parameter challenge and sampling bounds. Each
+`Family` stores its native costed setup computation; family-level typed
+signatures and handlers dispatch setup and the parameter-dependent operations
+selected by that result. DLog's complete sample and DDH's complete real and
+random samples are `Program`s over those dependent handlers. A family-level
 `EfficiencyCertificate` supplies global setup and sampling `CostBound` proofs.
 Consequently, both assumptions and exact constructions such as the ElGamal
 `scheme` depend on native families but not on either efficiency certificate.
@@ -283,11 +309,15 @@ public parameters; an IND-CPA-from-DDH reduction remains future work.
 
 Both construction-level `scheme` definitions directly inhabit the costed
 interface. Their setup/sampling and algebraic programs obtain path costs from
-explicit parameter-local backends, prove value-distribution equations used by
-correctness and security. In particular, the exact DDH-based ElGamal scheme
-depends only on `DDH.Family`, not on a DDH efficiency certificate. Separate
-local and global certificates can supply verified uniform bounds when
-constructing timed or PPT machines.
+explicit parameter-local backends and have value-distribution equations used
+by correctness and security. OTP uses typed key-generation, encryption, and
+decryption programs without a dummy scalar capability. ElGamal reuses the DDH
+family setup program and has typed key-generation, encryption, and decryption
+programs; its bounded wrappers pair those same programs with proofs instead of
+copying their syntax. In particular, the exact DDH-based ElGamal scheme depends
+only on `DDH.Family`, not on a DDH efficiency certificate. Separate local and
+global certificates can supply verified uniform bounds when constructing timed
+or PPT machines.
 
 The primitive-level `UC.lean` files are reserved for primitive-specific UC
 formulations, such as ideal functionalities or emulation statements for the
@@ -385,9 +415,9 @@ architecture, but several namespaces are intentionally sparse. Ordinary,
 dependent-output, and oracle machines now share the explicit path-cost model;
 oracle runtime and query bounds are tied to structural executions and to the
 profiled interpreter. OTP, ElGamal, DLog, and DDH now exercise the
-backend-to-costed-computation path, with efficiency bounds treated as
-certificates over those exact executions; OTP and ElGamal additionally use the
-typed `Program` layer. The next useful refinements are to choose a
+typed-algebra-to-costed-computation path, with efficiency bounds treated as
+certificates over those exact executions; all four use the same typed
+`Program` layer. The next useful refinements are to choose a
 first-order operational machine model when host-independent PPT soundness is
 required, complete reusable reduction and hybrid infrastructure, prove ElGamal
 IND-CPA security from DDH, and move common proof patterns into

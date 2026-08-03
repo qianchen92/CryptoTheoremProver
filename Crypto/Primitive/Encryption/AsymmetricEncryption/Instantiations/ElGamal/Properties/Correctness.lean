@@ -6,6 +6,7 @@ namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGama
 universe uScalar uGroup
 
 open Crypto.Primitive.Encryption.AsymmetricEncryption
+open scoped DDHParameter
 
 /-- Correctness of ElGamal under the scalar action law carried by public parameters. -/
 theorem correct

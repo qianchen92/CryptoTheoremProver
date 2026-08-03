@@ -4,9 +4,11 @@ import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.B
 namespace CryptoTest.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open Crypto.Infrastructure.Computation.Algebra
+open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.AsymmetricEncryption
 open Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
 open CryptoTest.Assumption.DL
+open scoped DDHParameter
 
 /-- The derived encryption budget is sample plus two scalar actions plus addition. -/
 example :
@@ -18,11 +20,47 @@ example :
     decryptBudget DDH.testPublicParam DDH.testParamEfficiency = 17 :=
   rfl
 
+/-- Every concrete encryption path has the exact four-operation cost 2+11+11+5. -/
+example
+    (publicKey message : DDH.testPublicParam.Carrier)
+    (result : Costed
+      (DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier))
+    (hresult : result ∈
+      (encryptComputation DDH.testPublicParam publicKey message).support) :
+    result.cost = 29 := by
+  rcases encryptComputation_exactCost
+      DDH.testPublicParam publicKey message result hresult with
+    ⟨sampleResult, hsampleResult, _hvalue, hcost⟩
+  have hsampleCost : sampleResult.cost = 2 := by
+    change sampleResult ∈
+      (UniformSampler.ofConstantCost
+        (Sample := DDH.testPublicParam.Scalar) 2).sample.support at hsampleResult
+    simp only [UniformSampler.ofConstantCost, UniformSampler.ofCost,
+      RandCosted.sampleWithCost, RandCostedT.sampleWithCost] at hsampleResult
+    rw [PMF.mem_support_map_iff] at hsampleResult
+    rcases hsampleResult with ⟨sampleValue, _hsampleValue, hsampleResult⟩
+    subst sampleResult
+    rfl
+  rw [hcost, hsampleCost]
+  rfl
+
 /-- The scheme boundary erases setup costs without changing the DDH distribution. -/
 example (sec : Crypto.SecPar) :
     (scheme DDH.testFamily).setupDist sec =
       DDH.testFamily.setupDist sec :=
   scheme_setupDist DDH.testFamily sec
+
+/-- ElGamal executes setup through the typed DDH family program exactly. -/
+example (sec : Crypto.SecPar) :
+    (scheme DDH.testFamily).setup sec =
+      Crypto.Infrastructure.Computation.Program.runCosted
+        (Crypto.Assumption.DL.DDH.setupProgram DDH.testFamily) sec :=
+  rfl
+
+/-- Typed setup dispatch preserves the native setup computation path-for-path. -/
+example (sec : Crypto.SecPar) :
+    (scheme DDH.testFamily).setup sec = DDH.testFamily.setup sec :=
+  scheme_setup_eq_family_setup DDH.testFamily sec
 
 /-- The scheme boundary exposes the cost-erased ElGamal key distribution. -/
 example :

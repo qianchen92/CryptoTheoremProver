@@ -12,12 +12,15 @@ universe uGroup
 structure AdditiveGroupParam where
   Carrier : Type uGroup
   addGroup : AddGroup Carrier
-  fintype : Fintype Carrier
-  nonempty : Nonempty Carrier
+  fintypeCarrier : Fintype Carrier
+  nonemptyCarrier : Nonempty Carrier
 
-attribute [instance] AdditiveGroupParam.addGroup
-attribute [instance] AdditiveGroupParam.fintype
-attribute [instance] AdditiveGroupParam.nonempty
+scoped[AdditiveGroupParam] attribute [instance]
+  Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.addGroup
+scoped[AdditiveGroupParam] attribute [instance]
+  Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.fintypeCarrier
+scoped[AdditiveGroupParam] attribute [instance]
+  Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.nonemptyCarrier
 
 /--
 One abstract algebraic-operation unit.

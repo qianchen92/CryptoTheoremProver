@@ -1,5 +1,4 @@
-import Crypto.Infrastructure.Computation.Algebra.Backend
-import Crypto.Infrastructure.Computation.Cost.Distribution
+import Crypto.Infrastructure.Computation.Algebra.Signature
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Infrastructure.Computation
@@ -7,300 +6,145 @@ namespace Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-universe uScalar uCarrier uSample
-
-/--
-A typed program whose computational algebra and scalar sampler are explicit.
-
-This is the engineering-level, higher-order representation: algebraic work and
-sampling are syntax constructors, while `pure`, continuations, and branch
-conditions are still Lean-level values.  A first-order language can later
-replace those three host-language boundaries without changing the interpreters'
-resource interface.
--/
-inductive Program
-    (Scalar : Type uScalar) (Carrier : Type uCarrier) (Sample : Type uSample)
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    [Fintype Sample] [Nonempty Sample]
-    (backend : AdditiveBackend Scalar Carrier)
-    (sampler : UniformSampler Sample) :
-    Type (max uScalar (max uCarrier uSample)) →
-      Type (max uScalar (max uCarrier uSample) + 1) where
-  | pure {α : Type (max uScalar (max uCarrier uSample))} :
-      α → Program Scalar Carrier Sample backend sampler α
-  | bind
-      {α β : Type (max uScalar (max uCarrier uSample))} :
-      Program Scalar Carrier Sample backend sampler α →
-      (α → Program Scalar Carrier Sample backend sampler β) →
-      Program Scalar Carrier Sample backend sampler β
-  | add :
-      Carrier → Carrier →
-        Program Scalar Carrier Sample backend sampler
-          (ULift.{max uScalar uSample} Carrier)
-  | neg :
-      Carrier →
-        Program Scalar Carrier Sample backend sampler
-          (ULift.{max uScalar uSample} Carrier)
-  | sub :
-      Carrier → Carrier →
-        Program Scalar Carrier Sample backend sampler
-          (ULift.{max uScalar uSample} Carrier)
-  | smul :
-      Scalar → Carrier →
-        Program Scalar Carrier Sample backend sampler
-          (ULift.{max uScalar uSample} Carrier)
-  | sample :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uCarrier} Sample)
-  | branch
-      {α : Type (max uScalar (max uCarrier uSample))} :
-      Bool →
-      Program Scalar Carrier Sample backend sampler α →
-      Program Scalar Carrier Sample backend sampler α →
-      Program Scalar Carrier Sample backend sampler α
+universe uCost uResult uOp uIn
 
 namespace Program
 
-variable
-    {Scalar : Type uScalar} {Carrier : Type uCarrier} {Sample : Type uSample}
-    [AddGroup Carrier] [SMul Scalar Carrier]
-    [Fintype Sample] [Nonempty Sample]
-    {backend : AdditiveBackend Scalar Carrier}
-    {sampler : UniformSampler Sample}
+/-- Reified program code after the external input has been supplied. -/
+inductive Code
+    {M : CostModel.{uCost}}
+    {S : Signature.{uResult, uOp}}
+    (A : CostedAlgebra M S) :
+    Type uResult → Type (max uResult uOp + 1) where
+  | pure {Result : Type uResult} : Result → Code A Result
+  | bind {First Result : Type uResult} :
+      Code A First → (First → Code A Result) → Code A Result
+  | call {Result : Type uResult} : S.Op Result → Code A Result
+  | branch {Result : Type uResult} :
+      Bool → Code A Result → Code A Result → Code A Result
+
+end Program
 
 /--
-Costed semantics of a typed program.
+A typed, higher-order program over one explicit cost-aware primitive algebra.
 
-Only primitive constructors introduce local cost.  Sequential composition uses
-the writer bind of `RandCosted`, so path costs are accumulated exactly once.
+`Input` is represented at the outer boundary; the reified body contains only
+pure values, sequencing, primitive calls, and conditionals.  Primitive calls
+are heterogeneous because their signature is indexed by the result type.
 -/
-noncomputable def runCosted
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (program : Program Scalar Carrier Sample backend sampler α) :
-    RandCosted α :=
-  match program with
-  | .pure value =>
-      RandCosted.pure value
-  | .bind first next =>
-      RandCosted.bind (runCosted first) fun value =>
-        runCosted (next value)
-  | .add left right =>
-      RandCosted.liftCosted
-        (Costed.map ULift.up (backend.add left right))
-  | .neg value =>
-      RandCosted.liftCosted
-        (Costed.map ULift.up (backend.neg value))
-  | .sub left right =>
-      RandCosted.liftCosted
-        (Costed.map ULift.up (backend.sub left right))
-  | .smul scalar value =>
-      RandCosted.liftCosted
-        (Costed.map ULift.up (backend.smul scalar value))
-  | .sample =>
-      RandCosted.map ULift.up sampler.sample
-  | .branch condition thenProgram elseProgram =>
-      if condition then runCosted thenProgram else runCosted elseProgram
+structure Program
+    {M : CostModel.{uCost}}
+    {S : Signature.{uResult, uOp}}
+    (A : CostedAlgebra M S)
+    (Input : Type uIn) (Output : Type uResult) where
+  body : Input → Program.Code A Output
 
-/-- Ordinary value semantics, obtained solely by erasing path costs. -/
+namespace Program
+
+namespace Code
+
+variable
+    {M : CostModel.{uCost}}
+    {S : Signature.{uResult, uOp}}
+    {A : CostedAlgebra M S}
+
+instance : Monad (Code A) where
+  pure := Code.pure
+  bind := Code.bind
+
+/-- Execute code using the algebra's sole exact primitive handler. -/
+noncomputable def runCosted
+    {Result : Type uResult} (code : Code A Result) : RandCostedT M Result :=
+  match code with
+  | .pure value => RandCostedT.pure M value
+  | .bind first next =>
+      RandCostedT.bind (runCosted first) fun value => runCosted (next value)
+  | .call operation => A.exec operation
+  | .branch condition thenCode elseCode =>
+      if condition then runCosted thenCode else runCosted elseCode
+
+/-- Ordinary semantics is obtained only by erasing exact path costs. -/
 noncomputable def valueDist
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (program : Program Scalar Carrier Sample backend sampler α) :
-    PMF α :=
-  RandCosted.valueDist (runCosted program)
+    {Result : Type uResult} (code : Code A Result) : PMF Result :=
+  RandCostedT.valueDist (runCosted code)
 
 @[simp] theorem valueDist_pure
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (value : α) :
-    valueDist
-      (backend := backend) (sampler := sampler)
-      (Program.pure value) = PMF.pure value := by
+    {Result : Type uResult} (value : Result) :
+    valueDist (A := A) (.pure value) = PMF.pure value := by
   simp [valueDist, runCosted]
 
 @[simp] theorem valueDist_bind
-    {α β : Type (max uScalar (max uCarrier uSample))}
-    (first : Program Scalar Carrier Sample backend sampler α)
-    (next : α → Program Scalar Carrier Sample backend sampler β) :
+    {First Result : Type uResult}
+    (first : Code A First) (next : First → Code A Result) :
     valueDist (.bind first next) =
       PMF.bind (valueDist first) fun value => valueDist (next value) := by
   simp [valueDist, runCosted]
 
-@[simp] theorem valueDist_add (left right : Carrier) :
-    valueDist
-      (Program.add (backend := backend) (sampler := sampler) left right) =
-        PMF.pure (ULift.up (left + right)) := by
-  simp [valueDist, runCosted]
-
-@[simp] theorem valueDist_neg (value : Carrier) :
-    valueDist
-      (Program.neg (backend := backend) (sampler := sampler) value) =
-        PMF.pure (ULift.up (-value)) := by
-  simp [valueDist, runCosted]
-
-@[simp] theorem valueDist_sub (left right : Carrier) :
-    valueDist
-      (Program.sub (backend := backend) (sampler := sampler) left right) =
-        PMF.pure (ULift.up (left - right)) := by
-  simp [valueDist, runCosted]
-
-@[simp] theorem valueDist_smul (scalar : Scalar) (value : Carrier) :
-    valueDist
-      (Program.smul (backend := backend) (sampler := sampler) scalar value) =
-        PMF.pure (ULift.up (scalar • value)) := by
-  simp [valueDist, runCosted]
-
-@[simp] theorem valueDist_sample :
-    valueDist (Program.sample (backend := backend) (sampler := sampler)) =
-      PMF.map ULift.up (Distribution.uniformPMF Sample) := by
-  simp [valueDist, runCosted]
-
-@[simp] theorem valueDist_branch
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (condition : Bool)
-    (thenProgram elseProgram : Program Scalar Carrier Sample backend sampler α) :
-    valueDist (.branch condition thenProgram elseProgram) =
-      if condition then valueDist thenProgram else valueDist elseProgram := by
-  cases condition <;> simp [valueDist, runCosted]
-
-/-- Bind a carrier-producing program without exposing the `ULift` plumbing. -/
-def bindCarrier
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (first :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uSample} Carrier))
-    (next : Carrier → Program Scalar Carrier Sample backend sampler α) :
-    Program Scalar Carrier Sample backend sampler α :=
-  .bind first fun value => next value.down
-
-/-- Bind a sampler-producing program without exposing the `ULift` plumbing. -/
-def bindSample
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (first :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uCarrier} Sample))
-    (next : Sample → Program Scalar Carrier Sample backend sampler α) :
-    Program Scalar Carrier Sample backend sampler α :=
-  .bind first fun value => next value.down
-
-/-- Ordinary carrier-valued semantics with the common-universe lift erased. -/
-noncomputable def carrierValueDist
-    (program :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uSample} Carrier)) :
-    PMF Carrier :=
-  PMF.map ULift.down (valueDist program)
-
-/-- Costed carrier-valued semantics with the common-universe lift erased. -/
-noncomputable def runCostedCarrier
-    (program :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uSample} Carrier)) :
-    RandCosted Carrier :=
-  RandCosted.map ULift.down (runCosted program)
-
-/-- Ordinary sampler-valued semantics with the common-universe lift erased. -/
-noncomputable def sampleValueDist
-    (program :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uCarrier} Sample)) :
-    PMF Sample :=
-  PMF.map ULift.down (valueDist program)
-
-/-- Costed sampler-valued semantics with the common-universe lift erased. -/
-noncomputable def runCostedSample
-    (program :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uCarrier} Sample)) :
-    RandCosted Sample :=
-  RandCosted.map ULift.down (runCosted program)
-
-/-- Forgetting costs from the costed interpreter recovers the ordinary semantics. -/
-theorem valueDist_runCosted
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (program : Program Scalar Carrier Sample backend sampler α) :
-    RandCosted.valueDist (runCosted program) = valueDist program :=
+@[simp] theorem valueDist_call
+    {Result : Type uResult} (operation : S.Op Result) :
+    valueDist (A := A) (.call operation) =
+      RandCostedT.valueDist (A.exec operation) :=
   rfl
 
-/-- Erasing costs after carrier lowering recovers the lowered value semantics. -/
-@[simp] theorem valueDist_runCostedCarrier
-    (program :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uSample} Carrier)) :
-    RandCosted.valueDist (runCostedCarrier program) = carrierValueDist program := by
-  simp [runCostedCarrier, carrierValueDist, valueDist]
+@[simp] theorem valueDist_branch
+    {Result : Type uResult} (condition : Bool)
+    (thenCode elseCode : Code A Result) :
+    valueDist (.branch condition thenCode elseCode) =
+      if condition then valueDist thenCode else valueDist elseCode := by
+  cases condition <;> simp [valueDist, runCosted]
 
-/-- Erasing costs after sample lowering recovers the lowered value semantics. -/
-@[simp] theorem valueDist_runCostedSample
-    (program :
-      Program Scalar Carrier Sample backend sampler
-        (ULift.{max uScalar uCarrier} Sample)) :
-    RandCosted.valueDist (runCostedSample program) = sampleValueDist program := by
-  simp [runCostedSample, sampleValueDist, valueDist]
+/-- A primitive call satisfies the mathematical specification in `laws`. -/
+@[simp] theorem valueDist_call_eq
+    (laws : AlgebraLaws A)
+    {Result : Type uResult} (operation : S.Op Result) :
+    valueDist (A := A) (.call operation) = laws.semantics operation :=
+  laws.exec_spec operation
 
-/-- A structural execution path and its exact accumulated cost. -/
+/-- A structural execution path and its exact accumulated resource cost. -/
 inductive Execution :
-    {α : Type (max uScalar (max uCarrier uSample))} →
-    Program Scalar Carrier Sample backend sampler α →
-    α → Cost → Prop where
-  | pure
-      {α : Type (max uScalar (max uCarrier uSample))}
-      (value : α) :
-      Execution (.pure value) value 0
+    {Result : Type uResult} → Code A Result → Result → M.Cost → Prop where
+  | pure {Result : Type uResult} (value : Result) :
+      Execution (.pure value) value M.instAddMonoid.zero
   | bind
-      {α β : Type (max uScalar (max uCarrier uSample))}
-      {first : Program Scalar Carrier Sample backend sampler α}
-      {next : α → Program Scalar Carrier Sample backend sampler β}
-      {firstValue : α} {value : β}
-      {firstCost nextCost : Cost}
+      {First Result : Type uResult}
+      {first : Code A First} {next : First → Code A Result}
+      {firstValue : First} {value : Result}
+      {firstCost nextCost : M.Cost}
       (firstExecution : Execution first firstValue firstCost)
       (nextExecution : Execution (next firstValue) value nextCost) :
-      Execution (.bind first next) value (firstCost + nextCost)
-  | add (left right : Carrier) :
-      Execution (.add left right)
-        (ULift.up (backend.add left right).val) (backend.add left right).cost
-  | neg (value : Carrier) :
-      Execution (.neg value)
-        (ULift.up (backend.neg value).val) (backend.neg value).cost
-  | sub (left right : Carrier) :
-      Execution (.sub left right)
-        (ULift.up (backend.sub left right).val) (backend.sub left right).cost
-  | smul (scalar : Scalar) (value : Carrier) :
-      Execution (.smul scalar value)
-        (ULift.up (backend.smul scalar value).val) (backend.smul scalar value).cost
-  | sample
-      (result : Costed Sample)
-      (result_mem : result ∈ sampler.sample.support) :
-      Execution .sample (ULift.up result.val) result.cost
+      Execution (.bind first next) value
+        (M.instAddMonoid.add firstCost nextCost)
+  | call
+      {Result : Type uResult} (operation : S.Op Result)
+      (result : CostedT M Result)
+      (result_mem : result ∈ (A.exec operation).support) :
+      Execution (.call operation) result.val result.cost
   | branchTrue
-      {α : Type (max uScalar (max uCarrier uSample))}
-      {thenProgram elseProgram : Program Scalar Carrier Sample backend sampler α}
-      {value : α} {cost : Cost}
-      (execution : Execution thenProgram value cost) :
-      Execution (.branch true thenProgram elseProgram) value cost
+      {Result : Type uResult} {thenCode elseCode : Code A Result}
+      {value : Result} {cost : M.Cost}
+      (execution : Execution thenCode value cost) :
+      Execution (.branch true thenCode elseCode) value cost
   | branchFalse
-      {α : Type (max uScalar (max uCarrier uSample))}
-      {thenProgram elseProgram : Program Scalar Carrier Sample backend sampler α}
-      {value : α} {cost : Cost}
-      (execution : Execution elseProgram value cost) :
-      Execution (.branch false thenProgram elseProgram) value cost
+      {Result : Type uResult} {thenCode elseCode : Code A Result}
+      {value : Result} {cost : M.Cost}
+      (execution : Execution elseCode value cost) :
+      Execution (.branch false thenCode elseCode) value cost
 
-/--
-Every result produced by the costed interpreter follows a structural execution
-path carrying exactly the recorded cost.
--/
+/-- Every interpreter result has a structural execution with the same cost. -/
 theorem execution_of_mem_support_runCosted
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (program : Program Scalar Carrier Sample backend sampler α)
-    (result : Costed α)
-    (hresult : result ∈ (runCosted program).support) :
-    Execution program result.val result.cost := by
-  induction program with
+    {Result : Type uResult} (code : Code A Result)
+    (result : CostedT M Result)
+    (hresult : result ∈ (runCosted code).support) :
+    Execution code result.val result.cost := by
+  induction code with
   | pure value =>
-      simp only [runCosted, RandCosted.pure, RandCosted.liftCosted, Costed.pure] at hresult
+      simp only [runCosted, RandCostedT.pure, RandCostedT.liftCosted,
+        CostedT.pure] at hresult
       rw [PMF.mem_support_pure_iff] at hresult
       subst result
       exact Execution.pure value
   | bind first next ihFirst ihNext =>
-      simp only [runCosted, RandCosted.bind] at hresult
+      simp only [runCosted, RandCostedT.bind] at hresult
       rw [PMF.mem_support_bind_iff] at hresult
       rcases hresult with ⟨firstResult, hfirstResult, hnextResult⟩
       rw [PMF.mem_support_map_iff] at hnextResult
@@ -309,33 +153,9 @@ theorem execution_of_mem_support_runCosted
       exact Execution.bind
         (ihFirst firstResult hfirstResult)
         (ihNext firstResult.val nextResult hnextResult)
-  | add left right =>
-      simp only [runCosted, RandCosted.liftCosted] at hresult
-      rw [PMF.mem_support_pure_iff] at hresult
-      subst result
-      exact Execution.add left right
-  | neg value =>
-      simp only [runCosted, RandCosted.liftCosted] at hresult
-      rw [PMF.mem_support_pure_iff] at hresult
-      subst result
-      exact Execution.neg value
-  | sub left right =>
-      simp only [runCosted, RandCosted.liftCosted] at hresult
-      rw [PMF.mem_support_pure_iff] at hresult
-      subst result
-      exact Execution.sub left right
-  | smul scalar value =>
-      simp only [runCosted, RandCosted.liftCosted] at hresult
-      rw [PMF.mem_support_pure_iff] at hresult
-      subst result
-      exact Execution.smul scalar value
-  | sample =>
-      simp only [runCosted, RandCosted.map] at hresult
-      rw [PMF.mem_support_map_iff] at hresult
-      rcases hresult with ⟨sampledResult, hsampledResult, hresult⟩
-      subst result
-      exact Execution.sample sampledResult hsampledResult
-  | branch condition thenProgram elseProgram ihThen ihElse =>
+  | call operation =>
+      exact Execution.call operation result hresult
+  | branch condition thenCode elseCode ihThen ihElse =>
       cases condition with
       | false =>
           simp only [runCosted] at hresult
@@ -344,206 +164,189 @@ theorem execution_of_mem_support_runCosted
           simp only [runCosted, if_true] at hresult
           exact Execution.branchTrue (ihThen result hresult)
 
-/-- Every interpreter path is bounded by `budget`. -/
+/-- Every interpreter path of `code` is bounded by `budget`. -/
 def CostBound
-    {α : Type (max uScalar (max uCarrier uSample))}
-    (program : Program Scalar Carrier Sample backend sampler α)
-    (budget : Cost) : Prop :=
-  ∀ result, result ∈ (runCosted program).support → result.cost ≤ budget
+    {Result : Type uResult} (code : Code A Result) (budget : M.Cost) : Prop :=
+  ∀ result, result ∈ (runCosted code).support →
+    M.instPartialOrder.le result.cost budget
 
-/-- A typed program paired with a statically verified uniform path budget. -/
+/--
+An upper-bound certificate over an existing program body.
+
+The program is an index, not a field, so a certificate cannot contain or
+interpret a second copy of the algorithm.  The constructors below build these
+proofs compositionally.
+-/
+structure Bound (bounds : OperationBounds A)
+    {Result : Type uResult} (code : Code A Result) (budget : M.Cost) : Prop where
+  sound : CostBound code budget
+
+namespace Bound
+
+/-- Pure code has zero cost. -/
+def pure
+    {bounds : OperationBounds A}
+    {Result : Type uResult} (value : Result) :
+    Bound bounds (.pure value) M.instAddMonoid.zero where
+  sound := by
+    letI := M.instPartialOrder
+    intro result hresult
+    simp only [runCosted, RandCostedT.pure, RandCostedT.liftCosted,
+      CostedT.pure] at hresult
+    rw [PMF.mem_support_pure_iff] at hresult
+    subst result
+    exact le_refl _
+
+/-- A primitive call uses its independently supplied operation bound. -/
+def call
+    {bounds : OperationBounds A}
+    {Result : Type uResult} (operation : S.Op Result) :
+    Bound bounds (.call operation) (bounds.budget operation) where
+  sound := bounds.cost_le operation
+
+/-- Sequential composition combines certified budgets with the cost monoid. -/
+def bind
+    {bounds : OperationBounds A}
+    {First Result : Type uResult}
+    {first : Code A First} {next : First → Code A Result}
+    {firstBudget nextBudget : M.Cost}
+    (firstBound : Bound bounds first firstBudget)
+    (nextBound : ∀ value, Bound bounds (next value) nextBudget) :
+    Bound bounds (.bind first next)
+      (M.instAddMonoid.add firstBudget nextBudget) where
+  sound := by
+    change
+      ∀ result,
+        result ∈
+            (RandCostedT.bind (runCosted first)
+              (fun value => runCosted (next value))).support →
+          M.instPartialOrder.le result.cost
+            (M.instAddMonoid.add firstBudget nextBudget)
+    exact
+      RandCostedT.bind_cost_le
+        (M := M) (runCosted first) (fun value => runCosted (next value))
+        firstBudget nextBudget firstBound.sound
+        (fun value => (nextBound value).sound)
+
+/-- Both branches may share a caller-selected common budget. -/
+def branch
+    {bounds : OperationBounds A}
+    {Result : Type uResult} {condition : Bool}
+    {thenCode elseCode : Code A Result} {budget : M.Cost}
+    (thenBound : Bound bounds thenCode budget)
+    (elseBound : Bound bounds elseCode budget) :
+    Bound bounds (.branch condition thenCode elseCode) budget where
+  sound := by
+    intro result hresult
+    simp only [runCosted] at hresult
+    split at hresult
+    · exact thenBound.sound result hresult
+    · exact elseBound.sound result hresult
+
+/-- Widen an already certified budget. -/
+def weaken
+    {bounds : OperationBounds A}
+    {Result : Type uResult} {code : Code A Result}
+    {budget largerBudget : M.Cost}
+    (bound : Bound bounds code budget)
+    (budget_le : M.instPartialOrder.le budget largerBudget) :
+    Bound bounds code largerBudget where
+  sound := by
+    letI := M.instPartialOrder
+    intro result hresult
+    exact le_trans (bound.sound result hresult) budget_le
+
+/-- Build a branch certificate from two bounds and a supplied common bound. -/
+def branchOfBounds
+    {bounds : OperationBounds A}
+    {Result : Type uResult} {condition : Bool}
+    {thenCode elseCode : Code A Result}
+    {thenBudget elseBudget commonBudget : M.Cost}
+    (thenBound : Bound bounds thenCode thenBudget)
+    (elseBound : Bound bounds elseCode elseBudget)
+    (then_le : M.instPartialOrder.le thenBudget commonBudget)
+    (else_le : M.instPartialOrder.le elseBudget commonBudget) :
+    Bound bounds (.branch condition thenCode elseCode) commonBudget :=
+  branch (weaken thenBound then_le) (weaken elseBound else_le)
+
+/--
+Automatically derive a branch budget by taking the least common upper bound
+provided by a worst-case cost model.
+-/
+def branchSup
+    {W : WorstCaseCostModel.{uCost}}
+    {S : Signature.{uResult, uOp}}
+    {A : CostedAlgebra W.toCostModel S}
+    {bounds : OperationBounds A}
+    {Result : Type uResult} {condition : Bool}
+    {thenCode elseCode : Code A Result}
+    {thenBudget elseBudget : W.Cost}
+    (thenBound : Bound bounds thenCode thenBudget)
+    (elseBound : Bound bounds elseCode elseBudget) :
+    Bound bounds (.branch condition thenCode elseCode)
+      (W.instSemilatticeSup.sup thenBudget elseBudget) := by
+  apply branchOfBounds thenBound elseBound
+  · rw [← W.partialOrder_eq]
+    exact @le_sup_left W.Cost W.instSemilatticeSup thenBudget elseBudget
+  · rw [← W.partialOrder_eq]
+    exact @le_sup_right W.Cost W.instSemilatticeSup thenBudget elseBudget
+
+end Bound
+
+end Code
+
+variable
+    {M : CostModel.{uCost}}
+    {S : Signature.{uResult, uOp}}
+    {A : CostedAlgebra M S}
+    {Input : Type uIn} {Output : Type uResult}
+
+/-- Execute an input-parameterized program with exact resource annotations. -/
+noncomputable def runCosted
+    (program : Program A Input Output) (input : Input) : RandCostedT M Output :=
+  Code.runCosted (program.body input)
+
+/-- The ordinary program semantics, defined solely by exact-cost erasure. -/
+noncomputable def valueDist
+    (program : Program A Input Output) (input : Input) : PMF Output :=
+  RandCostedT.valueDist (runCosted program input)
+
+/-- An input-dependent upper bound for all exact program paths. -/
+def CostBound
+    (program : Program A Input Output) (budget : Input → M.Cost) : Prop :=
+  ∀ input, Code.CostBound (program.body input) (budget input)
+
+/--
+A single program paired with an input-dependent structural cost certificate.
+
+The algorithm body is stored once; the certificate refers to that same body.
+-/
 structure BoundedProgram
-    (budget : Cost)
-    (α : Type (max uScalar (max uCarrier uSample))) where
-  program : Program Scalar Carrier Sample backend sampler α
-  sound : CostBound program budget
+    (bounds : OperationBounds A) (budget : Input → M.Cost) where
+  program : Program A Input Output
+  certificate :
+    ∀ input, Code.Bound bounds (program.body input) (budget input)
 
 namespace BoundedProgram
 
 variable
-    {firstBudget nextBudget budget largerBudget : Cost}
-    {α β : Type (max uScalar (max uCarrier uSample))}
+    {bounds : OperationBounds A}
+    {budget : Input → M.Cost}
 
-/-- A returned value has zero program cost. -/
-def pure (value : α) :
-    BoundedProgram (backend := backend) (sampler := sampler) 0 α where
-  program := .pure value
-  sound := by
-    intro result hresult
-    simp only [runCosted, RandCosted.pure, RandCosted.liftCosted, Costed.pure] at hresult
-    rw [PMF.mem_support_pure_iff] at hresult
-    subst result
-    exact Nat.le_refl 0
+/-- A bounded program's certificate implies its semantic path bound. -/
+theorem costBound
+    (program : BoundedProgram (Output := Output) bounds budget) :
+    Program.CostBound program.program budget := by
+  intro input
+  exact (program.certificate input).sound
 
-/-- Sequential composition adds the two verified budgets. -/
-def bind
-    (first :
-      BoundedProgram (backend := backend) (sampler := sampler) firstBudget α)
-    (next :
-      α →
-        BoundedProgram (backend := backend) (sampler := sampler) nextBudget β) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      (firstBudget + nextBudget) β where
-  program := .bind first.program fun value => (next value).program
-  sound := by
-    intro result hresult
-    simp only [runCosted, RandCosted.bind] at hresult
-    rw [PMF.mem_support_bind_iff] at hresult
-    rcases hresult with ⟨firstResult, hfirstResult, hnextResult⟩
-    rw [PMF.mem_support_map_iff] at hnextResult
-    rcases hnextResult with ⟨nextResult, hnextResult, hresult⟩
-    subst result
-    exact Nat.add_le_add
-      (first.sound firstResult hfirstResult)
-      ((next firstResult.val).sound nextResult hnextResult)
-
-/-- Sequentially bind a carrier result without exposing its `ULift`. -/
-def bindCarrier
-    (first :
-      BoundedProgram
-        (backend := backend) (sampler := sampler)
-        firstBudget (ULift.{max uScalar uSample} Carrier))
-    (next :
-      Carrier →
-        BoundedProgram (backend := backend) (sampler := sampler) nextBudget α) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      (firstBudget + nextBudget) α :=
-  bind first fun value => next value.down
-
-/-- Sequentially bind a sampled result without exposing its `ULift`. -/
-def bindSample
-    (first :
-      BoundedProgram
-        (backend := backend) (sampler := sampler)
-        firstBudget (ULift.{max uScalar uCarrier} Sample))
-    (next :
-      Sample →
-        BoundedProgram (backend := backend) (sampler := sampler) nextBudget α) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      (firstBudget + nextBudget) α :=
-  bind first fun value => next value.down
-
-/-- Widen a verified program budget. -/
-def weaken
-    (program :
-      BoundedProgram (backend := backend) (sampler := sampler) budget α)
-    (budget_le : budget ≤ largerBudget) :
-    BoundedProgram (backend := backend) (sampler := sampler) largerBudget α where
-  program := program.program
-  sound := by
-    intro result hresult
-    exact le_trans (program.sound result hresult) budget_le
-
-/-- Addition is bounded by the backend's uniform addition budget. -/
-def add
-    (bounds : AdditiveCostBounds backend)
-    (left right : Carrier) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      bounds.addBudget (ULift.{max uScalar uSample} Carrier) where
-  program := .add left right
-  sound := by
-    intro result hresult
-    simp only [runCosted, RandCosted.liftCosted] at hresult
-    rw [PMF.mem_support_pure_iff] at hresult
-    subst result
-    exact bounds.addCost_le left right
-
-/-- Negation is bounded by the backend's uniform negation budget. -/
-def neg
-    (bounds : AdditiveCostBounds backend)
-    (value : Carrier) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      bounds.negBudget (ULift.{max uScalar uSample} Carrier) where
-  program := .neg value
-  sound := by
-    intro result hresult
-    simp only [runCosted, RandCosted.liftCosted] at hresult
-    rw [PMF.mem_support_pure_iff] at hresult
-    subst result
-    exact bounds.negCost_le value
-
-/-- Subtraction is bounded by the backend's uniform subtraction budget. -/
-def sub
-    (bounds : AdditiveCostBounds backend)
-    (left right : Carrier) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      bounds.subBudget (ULift.{max uScalar uSample} Carrier) where
-  program := .sub left right
-  sound := by
-    intro result hresult
-    simp only [runCosted, RandCosted.liftCosted] at hresult
-    rw [PMF.mem_support_pure_iff] at hresult
-    subst result
-    exact bounds.subCost_le left right
-
-/-- Scalar multiplication is bounded by the backend's uniform scalar-multiplication budget. -/
-def smul
-    (bounds : AdditiveCostBounds backend)
-    (scalar : Scalar) (value : Carrier) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      bounds.smulBudget (ULift.{max uScalar uSample} Carrier) where
-  program := .smul scalar value
-  sound := by
-    intro result hresult
-    simp only [runCosted, RandCosted.liftCosted] at hresult
-    rw [PMF.mem_support_pure_iff] at hresult
-    subst result
-    exact bounds.smulCost_le scalar value
-
-/-- Uniform sampling is bounded by the sampler's declared uniform budget. -/
-def sample :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      sampler.sampleBudget (ULift.{max uScalar uCarrier} Sample) where
-  program := .sample
-  sound := by
-    intro result hresult
-    simp only [runCosted, RandCosted.map] at hresult
-    rw [PMF.mem_support_map_iff] at hresult
-    rcases hresult with ⟨sampledResult, hsampledResult, hresult⟩
-    subst result
-    exact sampler.cost_le sampledResult hsampledResult
-
-/-- A conditional program uses the maximum of its two branch budgets. -/
-def branch
-    (condition : Bool)
-    (thenProgram :
-      BoundedProgram (backend := backend) (sampler := sampler) firstBudget α)
-    (elseProgram :
-      BoundedProgram (backend := backend) (sampler := sampler) nextBudget α) :
-    BoundedProgram
-      (backend := backend) (sampler := sampler)
-      (max firstBudget nextBudget) α where
-  program := .branch condition thenProgram.program elseProgram.program
-  sound := by
-    intro result hresult
-    cases condition with
-    | false =>
-        simp only [runCosted] at hresult
-        exact le_trans
-          (elseProgram.sound result hresult)
-          (Nat.le_max_right firstBudget nextBudget)
-    | true =>
-        simp only [runCosted, if_true] at hresult
-        exact le_trans
-          (thenProgram.sound result hresult)
-          (Nat.le_max_left firstBudget nextBudget)
-
-/-- Interpreter results of a bounded program respect its static budget. -/
+/-- Every concrete result respects the bounded program's input-specific budget. -/
 theorem cost_le_budget_of_mem_support
-    (program :
-      BoundedProgram (backend := backend) (sampler := sampler) budget α)
-    (result : Costed α)
-    (hresult : result ∈ (runCosted program.program).support) :
-    result.cost ≤ budget :=
-  program.sound result hresult
+    (program : BoundedProgram (Output := Output) bounds budget)
+    (input : Input) (result : CostedT M Output)
+    (hresult : result ∈ (Program.runCosted program.program input).support) :
+    M.instPartialOrder.le result.cost (budget input) :=
+  program.costBound input result hresult
 
 end BoundedProgram
 

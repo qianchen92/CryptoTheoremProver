@@ -1,5 +1,7 @@
 import CryptoTest.Infrastructure.Complexity.ResourceBounds
 import CryptoTest.Infrastructure.Computation.CostComposition
+import CryptoTest.Infrastructure.Computation.CostedOracle
+import CryptoTest.Infrastructure.Computation.GenericCost
 import CryptoTest.Infrastructure.Computation.Program
 import CryptoTest.Assumption.DL.DDH
 import CryptoTest.Assumption.DL.DLog
