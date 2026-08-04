@@ -19,3 +19,6 @@ jobs:
       - uses: actions/checkout@v5
       - uses: leanprover/lean-action@v1
       - uses: leanprover-community/docgen-action@v1
+        # `docs/` contains source notes, not a Jekyll site.
+        with:
+          homepage: generated-docs
