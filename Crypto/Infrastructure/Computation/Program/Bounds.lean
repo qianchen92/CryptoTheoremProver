@@ -35,24 +35,24 @@ structure Bound (bounds : OperationBounds A)
 
 namespace Bound
 
+variable
+    {bounds : OperationBounds A}
+    {First Result : Type uResult}
+
 /-- Pure code has zero cost. -/
 def pure
-    {bounds : OperationBounds A}
-    {Result : Type uResult} (value : Result) :
+    (value : Result) :
     Bound bounds (.pure value) M.instAddMonoid.zero where
   sound := RandCosted.CostBound.pure value
 
 /-- A primitive call uses its independently supplied operation bound. -/
 def call
-    {bounds : OperationBounds A}
-    {Result : Type uResult} (operation : S.Op Result) :
+    (operation : S.Op Result) :
     Bound bounds (.call operation) (bounds.budget operation) where
   sound := bounds.cost_le operation
 
 /-- Sequential composition combines certified budgets in execution order. -/
 def bind
-    {bounds : OperationBounds A}
-    {First Result : Type uResult}
     {first : Code A First} {next : First → Code A Result}
     {firstBudget nextBudget : M.Cost}
     (firstBound : Bound bounds first firstBudget)
@@ -70,8 +70,7 @@ def bind
 
 /-- Both branches may share a caller-selected common budget. -/
 def branch
-    {bounds : OperationBounds A}
-    {Result : Type uResult} {condition : Bool}
+    {condition : Bool}
     {thenCode elseCode : Code A Result} {budget : M.Cost}
     (thenBound : Bound bounds thenCode budget)
     (elseBound : Bound bounds elseCode budget) :
@@ -83,8 +82,7 @@ def branch
 
 /-- Widen an already certified budget. -/
 def weaken
-    {bounds : OperationBounds A}
-    {Result : Type uResult} {code : Code A Result}
+    {code : Code A Result}
     {budget largerBudget : M.Cost}
     (bound : Bound bounds code budget)
     (budget_le : M.instPartialOrder.le budget largerBudget) :
@@ -93,8 +91,7 @@ def weaken
 
 /-- Build a branch certificate from two bounds and an explicit common bound. -/
 def branchOfBounds
-    {bounds : OperationBounds A}
-    {Result : Type uResult} {condition : Bool}
+    {condition : Bool}
     {thenCode elseCode : Code A Result}
     {thenBudget elseBudget commonBudget : M.Cost}
     (thenBound : Bound bounds thenCode thenBudget)

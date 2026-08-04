@@ -68,9 +68,11 @@ theorem repeatCost_nat_mono (cost : Nat) :
   intro first second hle
   simpa only [repeatCost_nat] using Nat.mul_le_mul_right cost hle
 
+variable {α : Type (max uValue uResponse)}
+
 /-- Exact interleaved cost is bounded by separated local and oracle projections. -/
 theorem totalCost_le_separated
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (exchange : CostExchange M)
@@ -125,7 +127,7 @@ theorem totalCost_le_separated
 
 /-- Internal oracle work is bounded by total query count repeated addition. -/
 theorem oracleCost_le_totalQueries_nsmul
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (budget : M.Cost)
@@ -178,7 +180,7 @@ theorem oracleCost_le_totalQueries_nsmul
 
 /-- Coarse composition from independent local, query-count, and environment bounds. -/
 theorem totalCost_le_composedBudget
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (localBudget : M.Cost) (totalQueryBudget : Nat)
@@ -216,7 +218,7 @@ theorem totalCost_le_composedBudget
 
 /-- Every result of the public exact-cost projection satisfies the coarse bound. -/
 theorem runCosted_cost_le_composedBudget
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (localBudget : M.Cost) (totalQueryBudget : Nat)

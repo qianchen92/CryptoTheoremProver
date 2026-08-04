@@ -158,7 +158,11 @@ noncomputable def toyNetworkAdapter (_sec : Crypto.SecPar) :
   control := id
   leakage := fun target _leakage => .resume target
 
-def mapMachineOutput {sec : Crypto.SecPar} :
+section ConfigurationRenaming
+
+variable {sec : Crypto.SecPar} {address : ToyAddress}
+
+def mapMachineOutput :
     MachineOutput toyFamily sec → MachineOutput toyFamily sec
   | ⟨source, value⟩ =>
       match source with
@@ -172,19 +176,19 @@ def mapQueuedEvent : QueuedEvent toySchema → QueuedEvent toySchema
   | .corruptionRequest source target =>
       .corruptionRequest (renameAddress source) (renameAddress target)
 
-def mapLeakage {sec : Crypto.SecPar} {address : ToyAddress} :
+def mapLeakage :
     toyFamily.Leakage sec address →
       toyFamily.Leakage sec (renameAddress address) :=
   fun _leakage => ()
 
-def mapErasure {sec : Crypto.SecPar} {address : ToyAddress} :
+def mapErasure :
     toyFamily.Erasure sec address →
       toyFamily.Erasure sec (renameAddress address) :=
   fun _request => ()
 
 /-- The test trace map is the production structural transport, not an
 independently chosen event rewrite. -/
-noncomputable def mapTraceEvent {sec : Crypto.SecPar} :
+noncomputable def mapTraceEvent :
     TraceEvent toyFamily sec → TraceEvent toyFamily sec :=
   KernelSimulation.mapTraceEvent toyWorldRenaming.global toyPortTransport
     (fun _sec _address leakage => mapLeakage leakage)
@@ -201,11 +205,11 @@ example (sec : Crypto.SecPar) :
         (.spawned (.system false) (.system true) .resume) =
       TraceEvent.spawned (.system true) (.system false) .resume := rfl
 
-def mapStore {sec : Crypto.SecPar} (store : LocalStore toyFamily sec) :
+def mapStore (store : LocalStore toyFamily sec) :
     LocalStore toyFamily sec :=
   fun address => store (renameAddress address)
 
-noncomputable def mapConfiguration {sec : Crypto.SecPar}
+noncomputable def mapConfiguration
     (configuration : Configuration toyFamily outerPolicy sec) :
     Configuration toyFamily innerPolicy sec where
   state := mapStore configuration.state
@@ -234,22 +238,22 @@ noncomputable def mapConfiguration {sec : Crypto.SecPar}
         rw [outerCorrupted]
         simp)
 
-@[simp] theorem mapConfiguration_queue {sec : Crypto.SecPar}
+@[simp] theorem mapConfiguration_queue
     (configuration : Configuration toyFamily outerPolicy sec) :
     (mapConfiguration configuration).queue =
       configuration.queue.map mapQueuedEvent := rfl
 
-@[simp] theorem mapConfiguration_corrupted {sec : Crypto.SecPar}
+@[simp] theorem mapConfiguration_corrupted
     (configuration : Configuration toyFamily outerPolicy sec) :
     (mapConfiguration configuration).corrupted =
       configuration.corrupted.image renameAddress := rfl
 
-@[simp] theorem mapConfiguration_output {sec : Crypto.SecPar}
+@[simp] theorem mapConfiguration_output
     (configuration : Configuration toyFamily outerPolicy sec) :
     (mapConfiguration configuration).output =
       configuration.output.map mapMachineOutput := rfl
 
-@[simp] theorem mapConfiguration_get {sec : Crypto.SecPar}
+@[simp] theorem mapConfiguration_get
     (configuration : Configuration toyFamily outerPolicy sec)
     (address : ToyAddress) :
     (mapConfiguration configuration).get (renameAddress address) =
@@ -258,6 +262,8 @@ noncomputable def mapConfiguration {sec : Crypto.SecPar}
     Option.map (fun state => state) (configuration.state address)
   rw [renameAddress_involutive]
   cases configuration.state address <;> rfl
+
+end ConfigurationRenaming
 
 noncomputable def outerInitial (sec : Crypto.SecPar) :
     Configuration toyFamily outerPolicy sec where

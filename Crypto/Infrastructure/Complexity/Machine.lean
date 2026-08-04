@@ -21,11 +21,13 @@ structure ProbabilisticMachine
 
 namespace ProbabilisticMachine
 
-/-- Forget exact path costs and expose the ordinary dependent output distribution. -/
-noncomputable def runDist
+variable
     {M : CostModel.{uCost}}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+
+/-- Forget exact path costs and expose the ordinary dependent output distribution. -/
+noncomputable def runDist
     (machine : ProbabilisticMachine M Input Output)
     (sec : Crypto.SecPar) (input : Input sec) :
     PMF (Output sec input) :=
@@ -43,9 +45,6 @@ noncomputable def ofFunction
 
 /-- Apply a dependent value-only map while preserving every exact path cost. -/
 noncomputable def map
-    {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
@@ -66,9 +65,6 @@ noncomputable def map
   exact RandomizedComputation.valueDist_pure M function sec input
 
 @[simp] theorem runDist_map
-    {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
@@ -91,28 +87,24 @@ structure TimedMachine
 
 namespace TimedMachine
 
-/-- The exact input-dependent budget certified for this machine. -/
-def costBound
+variable
     {M : CostModel.{uCost}} {measure : NatMeasure M}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+
+/-- The exact input-dependent budget certified for this machine. -/
+def costBound
     (machine : TimedMachine M measure Input Output) :
     (sec : Crypto.SecPar) → Input sec → M.Cost :=
   machine.certificate.budget
 
 /-- The uniform natural-number runtime obtained through the chosen measure. -/
 def runtime
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : TimedMachine M measure Input Output) : Crypto.SecPar → Nat :=
   machine.certificate.runtime
 
 /-- Every concrete exact path respects the stored exact budget. -/
 theorem cost_le_bound
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : TimedMachine M measure Input Output)
     (sec : Crypto.SecPar) (input : Input sec)
     (result : Costed M (Output sec input))
@@ -122,9 +114,6 @@ theorem cost_le_bound
 
 /-- Measuring any concrete exact path yields at most the uniform runtime. -/
 theorem measuredCost_le_runtime
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : TimedMachine M measure Input Output)
     (sec : Crypto.SecPar) (input : Input sec)
     (result : Costed M (Output sec input))
@@ -145,9 +134,6 @@ noncomputable def ofFunction
 
 /-- Dependent value mapping preserves the machine's exact and measured bounds. -/
 noncomputable def map
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
@@ -206,28 +192,24 @@ structure PPTMachine
 
 namespace PPTMachine
 
-/-- The exact input-dependent budget certified for this PPT machine. -/
-def costBound
+variable
     {M : CostModel.{uCost}} {measure : NatMeasure M}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+
+/-- The exact input-dependent budget certified for this PPT machine. -/
+def costBound
     (machine : PPTMachine M measure Input Output) :
     (sec : Crypto.SecPar) → Input sec → M.Cost :=
   machine.certificate.budget
 
 /-- The uniform polynomial natural-number runtime. -/
 def runtime
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : PPTMachine M measure Input Output) : Crypto.SecPar → Nat :=
   machine.certificate.runtime
 
 /-- The stored runtime is polynomially bounded. -/
 theorem runtime_isPoly
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : PPTMachine M measure Input Output) :
     Crypto.Infrastructure.Asymptotic.IsPolyBounded machine.runtime :=
   machine.runtime_poly
@@ -238,9 +220,6 @@ admitted that exact machine.  Polynomiality of the measured bound and PPT
 admission are intentionally separate obligations.
 -/
 def ofAdmittedTimedMachine
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : TimedMachine M measure Input Output)
     (runtime_isPoly :
       Crypto.Infrastructure.Asymptotic.IsPolyBounded machine.runtime)
@@ -251,17 +230,11 @@ def ofAdmittedTimedMachine
   admission := admission
 
 @[simp] theorem toTimedMachine_run
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : PPTMachine M measure Input Output) :
     machine.toTimedMachine.run = machine.run :=
   rfl
 
 @[simp] theorem toTimedMachine_runtime
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (machine : PPTMachine M measure Input Output) :
     machine.toTimedMachine.runtime = machine.runtime :=
   rfl

@@ -34,6 +34,10 @@ variable {M : CostModel.{uCost}}
 variable {Spec : OracleSpec.{uOracle, uQuery, uResponse}}
 variable {issueAlgebra : CostedAlgebra M (QueryIssue.signature Spec)}
 
+section ExactRun
+
+variable {α : Type (max uValue uResponse)}
+
 /--
 Interpret one oracle program exactly against an exact-cost environment.
 
@@ -76,7 +80,7 @@ noncomputable def runExact
 
 /-- Run the exact interpreter from the environment's initial state. -/
 noncomputable def runExactFromInit
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     PMF (ExactRunResult M Spec env.State α) :=
@@ -84,7 +88,7 @@ noncomputable def runExactFromInit
 
 /-- Retain only the returned value and exact ordered total cost. -/
 noncomputable def runCosted
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     RandCosted M α :=
@@ -93,7 +97,7 @@ noncomputable def runCosted
 
 /-- Erase all costs and the final state from an exact environment execution. -/
 noncomputable def runWithCostedEnv
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     PMF α :=
@@ -101,14 +105,14 @@ noncomputable def runWithCostedEnv
 
 /-- Ordinary oracle semantics is exact execution against the zero-cost lift. -/
 noncomputable def runWithEnv
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec) : PMF α :=
   runWithCostedEnv program sec (env.zeroCost M)
 
 /-- Retain returned values and query traces while erasing all costs. -/
 noncomputable def runTraceWithCostedEnv
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     PMF (α × QueryTrace Spec) :=
@@ -117,7 +121,7 @@ noncomputable def runTraceWithCostedEnv
 
 /-- Ordinary value/trace semantics is exact execution against the zero-cost lift. -/
 noncomputable def runTrace
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec) :
     PMF (α × QueryTrace Spec) :=
@@ -125,7 +129,7 @@ noncomputable def runTrace
 
 /-- Erasing the exact total cost recovers the value projection of the same run. -/
 @[simp] theorem valueDist_runCosted
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     RandCosted.valueDist (runCosted program sec env) =
@@ -133,6 +137,8 @@ noncomputable def runTrace
   simp only [RandCosted.valueDist, runCosted, runWithCostedEnv,
     runExactFromInit, PMF.map_comp]
   rfl
+
+end ExactRun
 
 /-- Binding a costed distribution through a value-only continuation erases cost. -/
 private theorem bind_value_only
@@ -143,12 +149,14 @@ private theorem bind_value_only
   simpa only [Function.comp_apply] using
     (PMF.bind_map dist Costed.val continuation).symm
 
+variable {α : Type (max uValue uResponse)}
+
 /--
 Replacing a costed environment by the zero-cost lift of its erasure preserves
 every value, final-state, and query-trace continuation.
 -/
 theorem bind_runExact_erase
-    {α : Type (max uValue uResponse)} {β : Type uObserved}
+    {β : Type uObserved}
     (program : Program issueAlgebra α) (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
     (state : env.State)
@@ -247,7 +255,7 @@ theorem bind_runExact_erase
 
 /-- Erasing internal environment costs preserves the program's value distribution. -/
 @[simp] theorem runWithCostedEnv_eq_runWithEnv_erase
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     runWithCostedEnv program sec env = runWithEnv program sec env.erase := by
@@ -258,7 +266,7 @@ theorem bind_runExact_erase
 
 /-- The public exact-cost execution erases to ordinary environment semantics. -/
 @[simp] theorem valueDist_runCosted_eq_runWithEnv_erase
-    {α : Type (max uValue uResponse)} (program : Program issueAlgebra α)
+    (program : Program issueAlgebra α)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec) :
     RandCosted.valueDist (runCosted program sec env) =

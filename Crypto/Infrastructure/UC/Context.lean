@@ -14,7 +14,9 @@ structure AddressRenaming (Source Target : Type uAddress) where
 
 namespace AddressRenaming
 
-instance {Source Target : Type uAddress} :
+variable {Source Target : Type uAddress}
+
+instance :
     CoeFun (AddressRenaming Source Target) (fun _ => Source → Target) where
   coe := fun addressMap => addressMap.toFun
 
@@ -28,8 +30,7 @@ def comp {First Middle Last : Type uAddress}
   toFun := second.toFun ∘ first.toFun
   injective := second.injective.comp first.injective
 
-@[ext] theorem ext {Source Target : Type uAddress}
-    {left right : AddressRenaming Source Target}
+@[ext] theorem ext {left right : AddressRenaming Source Target}
     (functions : left.toFun = right.toFun) : left = right := by
   cases left
   cases right
@@ -43,14 +44,12 @@ def comp {First Middle Last : Type uAddress}
     (second : AddressRenaming Middle Last) (address : First) :
     first.comp second address = second (first address) := rfl
 
-theorem comp_identity {Source Target : Type uAddress}
-    (addressMap : AddressRenaming Source Target) :
+theorem comp_identity (addressMap : AddressRenaming Source Target) :
     addressMap.comp (identity Target) = addressMap := by
   ext address
   rfl
 
-theorem identity_comp {Source Target : Type uAddress}
-    (addressMap : AddressRenaming Source Target) :
+theorem identity_comp (addressMap : AddressRenaming Source Target) :
     (identity Source).comp addressMap = addressMap := by
   ext address
   rfl
@@ -255,8 +254,9 @@ structure PortTransport
 
 namespace PortTransport
 
+variable {Address : Type uAddress}
+
 def identity
-    {Address : Type uAddress}
     (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address) :
     PortTransport schema (AddressRenaming.identity Address) where
   mapActivation := id
@@ -266,9 +266,9 @@ def identity
   routing_preserved := by intro source emission; rfl
   mapSendAs := fun authorization => authorization
 
+variable {schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address}
+
 def comp
-    {Address : Type uAddress}
-    {schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address}
     {outerToMiddle middleToInner : AddressRenaming Address Address}
     (outer : PortTransport schema outerToMiddle)
     (inner : PortTransport schema middleToInner) :
@@ -1065,22 +1065,24 @@ structure RealExecutionData
 
 namespace RealExecutionData
 
+variable
+  {policy : CorruptionPolicy
+    (WorldAddress EnvironmentAddress SystemAddress
+      AdversarialAddress NetworkAddress)}
+  {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
+  {protocol : Protocol.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput}
+    M worldSchema SystemAddress ClosedWorldAddress.system}
+  {adversary : PPTAdversary.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
+  {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput}
+    M worldSchema NetworkAddress ClosedWorldAddress.network}
+
 noncomputable def world
-    {policy : CorruptionPolicy
-      (WorldAddress EnvironmentAddress SystemAddress
-        AdversarialAddress NetworkAddress)}
-    {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
-    {protocol : Protocol.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema SystemAddress ClosedWorldAddress.system}
-    {adversary : PPTAdversary.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
-    {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema NetworkAddress ClosedWorldAddress.network}
     (data : RealExecutionData policy environment protocol adversary network) :
     RealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput}
@@ -1090,21 +1092,6 @@ noncomputable def world
     policy data.kernelAlgebra data.initial
 
 noncomputable def certified
-    {policy : CorruptionPolicy
-      (WorldAddress EnvironmentAddress SystemAddress
-        AdversarialAddress NetworkAddress)}
-    {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
-    {protocol : Protocol.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema SystemAddress ClosedWorldAddress.system}
-    {adversary : PPTAdversary.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
-    {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema NetworkAddress ClosedWorldAddress.network}
     (data : RealExecutionData policy environment protocol adversary network) :
     CertifiedRealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput}
@@ -1114,21 +1101,6 @@ noncomputable def certified
   certificate := data.certificate
 
 noncomputable def bound
-    {policy : CorruptionPolicy
-      (WorldAddress EnvironmentAddress SystemAddress
-        AdversarialAddress NetworkAddress)}
-    {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
-    {protocol : Protocol.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema SystemAddress ClosedWorldAddress.system}
-    {adversary : PPTAdversary.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
-    {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema NetworkAddress ClosedWorldAddress.network}
     (data : RealExecutionData policy environment protocol adversary network) :
     BoundRealExecution policy environment protocol adversary network where
   certified := data.certified
@@ -1174,22 +1146,24 @@ structure IdealExecutionData
 
 namespace IdealExecutionData
 
+variable
+  {policy : CorruptionPolicy
+    (WorldAddress EnvironmentAddress SystemAddress
+      AdversarialAddress NetworkAddress)}
+  {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
+  {functionality : IdealFunctionality.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    M worldSchema SystemAddress ClosedWorldAddress.system}
+  {simulator : PPTSimulator.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
+  {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput}
+    M worldSchema NetworkAddress ClosedWorldAddress.network}
+
 noncomputable def world
-    {policy : CorruptionPolicy
-      (WorldAddress EnvironmentAddress SystemAddress
-        AdversarialAddress NetworkAddress)}
-    {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
-    {functionality : IdealFunctionality.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M worldSchema SystemAddress ClosedWorldAddress.system}
-    {simulator : PPTSimulator.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
-    {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema NetworkAddress ClosedWorldAddress.network}
     (data : IdealExecutionData policy environment functionality simulator network) :
     IdealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput}
@@ -1199,21 +1173,6 @@ noncomputable def world
     network policy data.kernelAlgebra data.initial
 
 noncomputable def certified
-    {policy : CorruptionPolicy
-      (WorldAddress EnvironmentAddress SystemAddress
-        AdversarialAddress NetworkAddress)}
-    {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
-    {functionality : IdealFunctionality.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M worldSchema SystemAddress ClosedWorldAddress.system}
-    {simulator : PPTSimulator.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
-    {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema NetworkAddress ClosedWorldAddress.network}
     (data : IdealExecutionData policy environment functionality simulator network) :
     CertifiedIdealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput}
@@ -1223,21 +1182,6 @@ noncomputable def certified
   certificate := data.certificate
 
 noncomputable def bound
-    {policy : CorruptionPolicy
-      (WorldAddress EnvironmentAddress SystemAddress
-        AdversarialAddress NetworkAddress)}
-    {environment : PPTEnvironment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema EnvironmentAddress ClosedWorldAddress.environment}
-    {functionality : IdealFunctionality.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M worldSchema SystemAddress ClosedWorldAddress.system}
-    {simulator : PPTSimulator.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      M measure worldSchema AdversarialAddress ClosedWorldAddress.adversary}
-    {network : Network.{uCost, uAddress, uPayload, uPort, uCapability,
-      uState, uLeakage, uErasure, uOutput}
-      M worldSchema NetworkAddress ClosedWorldAddress.network}
     (data : IdealExecutionData policy environment functionality simulator network) :
     BoundIdealExecution policy environment functionality simulator network where
   certified := data.certified
@@ -1416,10 +1360,12 @@ structure ContextBuilder
 
 namespace ContextBuilder
 
+variable
+  {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    (M := M) (measure := measure) (worldSchema := worldSchema)}
+
 noncomputable def build
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (builder : ContextBuilder inner) :
     ExecutableExperiment.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput}
@@ -1443,9 +1389,6 @@ noncomputable def identity
   idealData := inner.idealData
 
 noncomputable def comp
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (innerBuilder : ContextBuilder inner)
     (outerBuilder : ContextBuilder innerBuilder.build) :
     ContextBuilder inner where
@@ -1462,9 +1405,6 @@ noncomputable def comp
     (identity inner).build = inner := rfl
 
 @[simp] theorem build_comp
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (innerBuilder : ContextBuilder inner)
     (outerBuilder : ContextBuilder innerBuilder.build) :
     (innerBuilder.comp outerBuilder).build = outerBuilder.build := rfl
@@ -1508,16 +1448,18 @@ noncomputable def comp
     RealExecutionSimulation (outerToMiddle.comp middleToInner) outer inner where
   kernel := outerMiddle.kernel.comp middleInner.kernel
 
+variable
+  {addressMap : AddressRenaming
+    (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
+      NetworkAddress)
+    (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
+      NetworkAddress)}
+  {outer inner : CertifiedRealWorld.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress
+      worldSchema}
+
 def comparisonFuel
-    {addressMap : AddressRenaming
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)}
-    {outer inner : CertifiedRealWorld.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress
-        worldSchema}
     (_simulation : RealExecutionSimulation addressMap outer inner)
     (sec : Crypto.SecPar) : Nat :=
   max (outer.certificate.activationLimit sec)
@@ -1525,15 +1467,6 @@ def comparisonFuel
 
 /-- Step simulation plus both fuel-stability certificates imply game equality. -/
 theorem execution_eq
-    {addressMap : AddressRenaming
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)}
-    {outer inner : CertifiedRealWorld.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress
-        worldSchema}
     (simulation : RealExecutionSimulation addressMap outer inner) :
     outer.execution = inner.execution := by
   let fuel := simulation.comparisonFuel
@@ -1590,31 +1523,24 @@ noncomputable def comp
     IdealExecutionSimulation (outerToMiddle.comp middleToInner) outer inner where
   kernel := outerMiddle.kernel.comp middleInner.kernel
 
+variable
+  {addressMap : AddressRenaming
+    (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
+      NetworkAddress)
+    (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
+      NetworkAddress)}
+  {outer inner : CertifiedIdealWorld.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress
+      worldSchema}
+
 def comparisonFuel
-    {addressMap : AddressRenaming
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)}
-    {outer inner : CertifiedIdealWorld.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress
-        worldSchema}
     (_simulation : IdealExecutionSimulation addressMap outer inner)
     (sec : Crypto.SecPar) : Nat :=
   max (outer.certificate.activationLimit sec)
     (inner.certificate.activationLimit sec)
 
 theorem execution_eq
-    {addressMap : AddressRenaming
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)
-      (WorldAddress EnvironmentAddress SystemAddress AdversarialAddress
-        NetworkAddress)}
-    {outer inner : CertifiedIdealWorld.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress
-        worldSchema}
     (simulation : IdealExecutionSimulation addressMap outer inner) :
     outer.execution = inner.execution := by
   let fuel := simulation.comparisonFuel
@@ -1681,12 +1607,14 @@ structure Context
 
 namespace Context
 
+variable
+  {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
+    uCapability, uState, uLeakage, uErasure, uOutput}
+    (M := M) (measure := measure) (worldSchema := worldSchema)}
+
 /-- The outer executable experiment is definitionally built by filling the
 context's typed system hole with `inner`'s protocol and functionality. -/
 noncomputable def outer
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (context : Context inner) :
     ExecutableExperiment.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput}
@@ -1694,9 +1622,6 @@ noncomputable def outer
   context.builder.build
 
 noncomputable def plug
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (context : Context inner) :=
   context.outer.toExperiment
 
@@ -1760,9 +1685,6 @@ formed from the two configuration-level `Kernel.stepOne` squares; no
 whole-experiment equality is accepted as input.
 -/
 noncomputable def compose
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (innerContext : Context inner)
     (outerContext : Context innerContext.outer) : Context inner where
   builder := innerContext.builder.comp outerContext.builder
@@ -1792,18 +1714,12 @@ noncomputable def compose
       outerToMiddle.comp middleToInner
 
 @[simp] theorem plug_compose
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (innerContext : Context inner)
     (outerContext : Context innerContext.outer) :
     (innerContext.compose outerContext).plug = outerContext.plug := rfl
 
 /-- Plugging is associative at the actual structurally assembled outer world. -/
 @[simp] theorem plug_assoc
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (first : Context inner)
     (second : Context first.outer)
     (third : Context second.outer) :
@@ -1812,9 +1728,6 @@ noncomputable def compose
 
 /-- Both associations induce the same role-preserving address transport. -/
 theorem compose_addressRenaming_assoc
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (first : Context inner)
     (second : Context first.outer)
     (third : Context second.outer) :
@@ -1873,9 +1786,6 @@ private theorem idealExecution_eq_own
 
 /-- Real operational equality derived from the concrete step simulation. -/
 theorem real_operational
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (context : Context inner) (adversary) (simulator) (environment) :
     Experiment.realExecution context.plug adversary
         (context.plugSimulator simulator) environment =
@@ -1905,9 +1815,6 @@ theorem real_operational
 
 /-- Ideal operational equality derived from the concrete step simulation. -/
 theorem ideal_operational
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (context : Context inner) (adversary) (simulator) (environment) :
     Experiment.idealExecution context.plug adversary
         (context.plugSimulator simulator) environment =
@@ -1938,9 +1845,6 @@ theorem ideal_operational
 
 /-- Universal composition from executable one-step simulations. -/
 theorem uc_compose
-    {inner : ExecutableExperiment.{uCost, uAddress, uPayload, uPort,
-      uCapability, uState, uLeakage, uErasure, uOutput}
-      (M := M) (measure := measure) (worldSchema := worldSchema)}
     (context : Context inner)
     (secure : Experiment.UCEmulates inner.toExperiment) :
     Experiment.UCEmulates context.plug := by

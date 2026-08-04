@@ -15,6 +15,8 @@ def IsNegligible (f : Crypto.SecPar → Real) : Prop :=
 
 namespace IsPolyBounded
 
+variable {f g : Crypto.SecPar → Nat}
+
 /-- The zero cost function is polynomially bounded. -/
 theorem zero : IsPolyBounded (fun _ : Crypto.SecPar => 0) := by
   refine ⟨0, ?_⟩
@@ -30,7 +32,6 @@ theorem const (constant : Nat) :
 
 /-- A pointwise smaller function inherits a polynomial bound. -/
 theorem mono
-    {f g : Crypto.SecPar → Nat}
     (hg : IsPolyBounded g)
     (hfg : ∀ n, f n ≤ g n) :
     IsPolyBounded f := by
@@ -39,7 +40,6 @@ theorem mono
 
 /-- Pointwise sums of polynomially bounded cost functions remain polynomially bounded. -/
 theorem add
-    {f g : Crypto.SecPar → Nat}
     (hf : IsPolyBounded f) (hg : IsPolyBounded g) :
     IsPolyBounded (fun n => f n + g n) := by
   rcases hf with ⟨leftPolynomial, hleft⟩
@@ -50,7 +50,6 @@ theorem add
 
 /-- Pointwise products of polynomially bounded cost functions remain polynomially bounded. -/
 theorem mul
-    {f g : Crypto.SecPar → Nat}
     (hf : IsPolyBounded f) (hg : IsPolyBounded g) :
     IsPolyBounded (fun n => f n * g n) := by
   rcases hf with ⟨leftPolynomial, hleft⟩
@@ -61,7 +60,6 @@ theorem mul
 
 /-- Pointwise maxima of polynomially bounded cost functions remain polynomially bounded. -/
 theorem max
-    {f g : Crypto.SecPar → Nat}
     (hf : IsPolyBounded f) (hg : IsPolyBounded g) :
     IsPolyBounded (fun n => max (f n) (g n)) := by
   apply mono (add hf hg)

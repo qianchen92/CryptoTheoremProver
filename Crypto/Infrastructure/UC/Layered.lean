@@ -253,32 +253,31 @@ def toAddressedITM
 
 end PartyStep
 
+section ManagedComponents
+
+variable
+  (M : CostModel.{uCost})
+  {Address : Type uAddress}
+  (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+  (LocalAddress : Type uAddress)
+  (embed : LocalAddress → Address)
+
 /-- An explicit broadcast manager; fanout is serialized by its ITM state. -/
-structure BroadcastManager
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress) (embed : LocalAddress → Address) where
+structure BroadcastManager where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
 
 /-- An explicit corruption manager installed as an ordinary exact component. -/
-structure CorruptionManager
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress) (embed : LocalAddress → Address) where
+structure CorruptionManager where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
 
 /-- Session-indexed input/output boundary machines of the real protocol. -/
-structure BoundaryComponent
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress) (embed : LocalAddress → Address) where
+structure BoundaryComponent where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
+
+end ManagedComponents
 
 /--
 All exact machines installed in the real system summand of a layered world.

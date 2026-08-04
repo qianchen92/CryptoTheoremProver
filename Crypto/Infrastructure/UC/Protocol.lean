@@ -24,6 +24,15 @@ inductive ClosedWorldAddress
   | network (address : NetworkAddress)
   deriving DecidableEq, Repr
 
+section AddressedComponents
+
+variable
+  (M : CostModel.{uCost})
+  {Address : Type uAddress}
+  (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+  (LocalAddress : Type uAddress)
+  (embed : LocalAddress → Address)
+
 /--
 An exactly interpreted ITM family over one owned portion of a global address
 space.
@@ -32,12 +41,7 @@ The embedding is part of the type.  Hence activations and emitted actions use
 the global port schema while state, leakage, erasure, and output remain indexed
 by the component's local address.
 -/
-structure AddressedITM
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress)
-    (embed : LocalAddress → Address) where
+structure AddressedITM where
   State : Crypto.SecPar → LocalAddress → Type uState
   Leakage : Crypto.SecPar → LocalAddress → Type uLeakage
   Erasure : Crypto.SecPar → LocalAddress → Type uErasure
@@ -67,44 +71,24 @@ Consequently there is no unmeasured postprocessing function outside the ITM:
 computing the distinguishing bit is part of the environment's certified
 activation handler.
 -/
-structure Environment
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress)
-    (embed : LocalAddress → Address) where
+structure Environment where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
   output_isBool : ∀ sec address,
     machine.Output sec address = ULift.{uOutput} Bool
 
 /-- The real protocol component of a closed execution. -/
-structure Protocol
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress)
-    (embed : LocalAddress → Address) where
+structure Protocol where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
 
 /-- The real-world network adversary component. -/
-structure Adversary
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress)
-    (embed : LocalAddress → Address) where
+structure Adversary where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
 
 /-- The ideal-world simulator component. -/
-structure Simulator
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress)
-    (embed : LocalAddress → Address) where
+structure Simulator where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
 
@@ -116,12 +100,7 @@ network therefore cannot inject an untyped payload into the FIFO.  Broadcast
 is implemented by this component's ordinary continuation/resume states, not by
 a hidden kernel fanout.
 -/
-structure Network
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress)
-    (embed : LocalAddress → Address) where
+structure Network where
   machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
   observe : ∀ {source : Address},
@@ -129,5 +108,7 @@ structure Network
   control : QueuedActivation schema → QueuedActivation schema
   leakage : ∀ {Leakage : Address → Type uLeakage},
     (target : Address) → Leakage target → QueuedActivation schema
+
+end AddressedComponents
 
 end Crypto.Infrastructure.UC

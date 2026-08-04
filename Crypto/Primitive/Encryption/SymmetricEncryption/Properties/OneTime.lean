@@ -6,6 +6,17 @@ namespace Crypto.Primitive.Encryption.SymmetricEncryption
 
 universe uCost uAdversaryCost uParam uKey uMessage uCiphertext
 
+variable
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+    {adversaryModel :
+      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
+    {measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel}
+    {Param : Type uParam}
+    {Key : Param → Type uKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+    {E : Scheme M Crypto.SecPar Param Key Message Ciphertext}
+
 abbrev ChallengeQuery (Message : Type uMessage) :=
   Message × Message
 
@@ -16,7 +27,6 @@ inductive OneTimeOracle where
   | challenge
 
 def oneTimeOracleSpec
-    {Param : Type uParam}
     (Message : Param → Type uMessage)
     (Ciphertext : Param → Type uCiphertext)
     (_sec : Crypto.SecPar) (pp : Param) :
@@ -29,11 +39,6 @@ def oneTimeOracleSpec
 
 /-- A one-use left-or-right encryption oracle. -/
 noncomputable def oneTimeEncryptionOracle
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {Param : Type uParam}
-    {Key : Param → Type uKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext)
     (sec : Crypto.SecPar) (pp : Param) (b : Bool) :
     Crypto.Infrastructure.Computation.Oracle.OracleEnv
@@ -54,11 +59,6 @@ noncomputable def oneTimeEncryptionOracle
 
 /-- The oracle distinguishing problem induced by one-time left-or-right encryption. -/
 noncomputable def oneTimeProblem
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {Param : Type uParam}
-    {Key : Param → Type uKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext) :
     Crypto.Infrastructure.GameBased.OracleDistinguishing.Problem
       (fun _ => Param) (oneTimeOracleSpec Message Ciphertext) where
@@ -68,13 +68,6 @@ noncomputable def oneTimeProblem
 
 /-- The one-time indistinguishability security game for a fixed challenge bit. -/
 noncomputable def oneTimeSecurityGame
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
-    {Param : Type uParam}
-    {Key : Param → Type uKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
       (fun _ => Param) (fun _sec _input => Bool)
@@ -87,13 +80,6 @@ noncomputable def oneTimeSecurityGame
 
 /-- One-time left-or-right distinguishing advantage. -/
 noncomputable def OneTimeAdvantage
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
-    {Param : Type uParam}
-    {Key : Param → Type uKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
       (fun _ => Param) (fun _sec _input => Bool)
@@ -104,11 +90,6 @@ noncomputable def OneTimeAdvantage
 
 /-- Perfect one-time security against unbounded oracle machines. -/
 def PerfectOneTimeSecure
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {Param : Type uParam}
-    {Key : Param → Type uKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (adversaryModel :
       Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext) : Prop :=
@@ -119,11 +100,6 @@ def PerfectOneTimeSecure
 
 /-- One-time security against PPT oracle adversaries. -/
 def OneTimeSecure
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {Param : Type uParam}
-    {Key : Param → Type uKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (adversaryModel :
       Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
     (measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel)
@@ -132,16 +108,7 @@ def OneTimeSecure
     adversaryModel measure (oneTimeProblem E)
 
 /-- Perfect one-time security implies PPT one-time security. -/
-theorem PerfectOneTimeSecure.toOneTimeSecure
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
-    {measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel}
-    {Param : Type uParam}
-    {Key : Param → Type uKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
-    {E : Scheme M Crypto.SecPar Param Key Message Ciphertext} :
+theorem PerfectOneTimeSecure.toOneTimeSecure :
     PerfectOneTimeSecure adversaryModel E →
       OneTimeSecure adversaryModel measure E := by
   intro hPerfect A

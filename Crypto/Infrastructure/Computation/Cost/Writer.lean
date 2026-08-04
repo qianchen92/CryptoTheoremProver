@@ -11,7 +11,9 @@ structure Costed (M : CostModel.{uCost}) (α : Type uValue) where
 
 namespace Costed
 
-variable {M : CostModel.{uCost}} {α : Type uValue}
+variable
+    {M : CostModel.{uCost}}
+    {α : Type uValue} {β γ : Type uMapped}
 
 /-- A costed result is equivalent to its value/cost pair. -/
 def equivProd : Costed M α ≃ α × M.Cost where
@@ -32,13 +34,11 @@ def pure (M : CostModel.{uCost}) {α : Type uValue} (value : α) : Costed M α :
   exact ⟨value, 0⟩
 
 /-- Map a pure function over the value while preserving accumulated cost. -/
-def map {M : CostModel.{uCost}} {α : Type uValue} {β : Type uMapped}
-    (f : α → β) (result : Costed M α) : Costed M β :=
+def map (f : α → β) (result : Costed M α) : Costed M β :=
   ⟨f result.val, result.cost⟩
 
 /-- Sequence two writer computations, composing their path costs exactly once. -/
-def bind {M : CostModel.{uCost}} {α : Type uValue} {β : Type uMapped}
-    (result : Costed M α) (next : α → Costed M β) : Costed M β := by
+def bind (result : Costed M α) (next : α → Costed M β) : Costed M β := by
   letI := M.instAddMonoid
   exact
     let nextResult := next result.val
@@ -49,36 +49,38 @@ instance (M : CostModel.{uCost}) : Monad (Costed M) where
   bind := fun result next => Costed.bind result next
   map := fun f result => Costed.map f result
 
-@[simp] theorem pure_val (M : CostModel.{uCost}) {α : Type uValue} (value : α) :
+section ModelLemmas
+
+variable (M : CostModel.{uCost}) {α : Type uValue} {β : Type uMapped}
+
+@[simp] theorem pure_val (value : α) :
     (pure M value).val = value :=
   rfl
 
-@[simp] theorem pure_cost (M : CostModel.{uCost}) {α : Type uValue} (value : α) :
+@[simp] theorem pure_cost (value : α) :
     (pure M value).cost = M.instAddMonoid.zero :=
   rfl
 
-@[simp] theorem map_val (M : CostModel.{uCost})
-    {α : Type uValue} {β : Type uMapped} (f : α → β) (result : Costed M α) :
+@[simp] theorem map_val (f : α → β) (result : Costed M α) :
     (result.map f).val = f result.val :=
   rfl
 
-@[simp] theorem map_cost (M : CostModel.{uCost})
-    {α : Type uValue} {β : Type uMapped} (f : α → β) (result : Costed M α) :
+@[simp] theorem map_cost (f : α → β) (result : Costed M α) :
     (result.map f).cost = result.cost :=
   rfl
 
-@[simp] theorem bind_val (M : CostModel.{uCost})
-    {α : Type uValue} {β : Type uMapped}
+@[simp] theorem bind_val
     (result : Costed M α) (next : α → Costed M β) :
     (result.bind next).val = (next result.val).val :=
   rfl
 
-@[simp] theorem bind_cost (M : CostModel.{uCost})
-    {α : Type uValue} {β : Type uMapped}
+@[simp] theorem bind_cost
     (result : Costed M α) (next : α → Costed M β) :
     (result.bind next).cost =
       M.instAddMonoid.add result.cost (next result.val).cost :=
   rfl
+
+end ModelLemmas
 
 /-- Mapping the identity function does not change a deterministic writer result. -/
 @[simp] theorem map_id (result : Costed M α) :
@@ -87,15 +89,14 @@ instance (M : CostModel.{uCost}) : Monad (Costed M) where
   rfl
 
 /-- Deterministic writer maps compose. -/
-theorem map_comp {β γ : Type uMapped}
+theorem map_comp
     (first : α → β) (second : β → γ) (result : Costed M α) :
     map second (map first result) = map (second ∘ first) result := by
   cases result
   rfl
 
 /-- Zero-cost pure is a left identity for deterministic writer sequencing. -/
-@[simp] theorem pure_bind {β : Type uMapped}
-    (value : α) (next : α → Costed M β) :
+@[simp] theorem pure_bind (value : α) (next : α → Costed M β) :
     bind (pure M value) next = next value := by
   letI := M.instAddMonoid
   cases hnext : next value
@@ -109,7 +110,7 @@ theorem map_comp {β γ : Type uMapped}
   simp [bind, pure]
 
 /-- Deterministic writer sequencing is associative in execution order. -/
-theorem bind_assoc {β γ : Type uMapped}
+theorem bind_assoc
     (result : Costed M α) (next : α → Costed M β)
     (finish : β → Costed M γ) :
     bind (bind result next) finish =

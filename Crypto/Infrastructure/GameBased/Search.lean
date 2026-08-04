@@ -10,6 +10,10 @@ universe uCost uInstance uWitness
 
 namespace Search
 
+variable
+    {M : CostModel.{uCost}}
+    {Instance : Type uInstance}
+
 /-- A search problem consists of an instance generator and a valid-witness relation. -/
 structure Problem (Instance : Type uInstance) where
   Witness : Instance → Type uWitness
@@ -23,7 +27,6 @@ The canonical search game samples an instance and accepts exactly when the
 machine returns a valid dependent witness.
 -/
 noncomputable def securityGame
-    {M : CostModel.{uCost}} {Instance : Type uInstance}
     (problem : Problem.{uInstance, uWitness} Instance)
     (adversary : Crypto.Infrastructure.Complexity.ProbabilisticMachine M
       (fun _sec => Instance)
@@ -37,7 +40,6 @@ noncomputable def securityGame
 
 /-- Success probability of a machine in a search security game. -/
 noncomputable def SuccessProbability
-    {M : CostModel.{uCost}} {Instance : Type uInstance}
     (problem : Problem.{uInstance, uWitness} Instance)
     (adversary : Crypto.Infrastructure.Complexity.ProbabilisticMachine M
       (fun _sec => Instance)

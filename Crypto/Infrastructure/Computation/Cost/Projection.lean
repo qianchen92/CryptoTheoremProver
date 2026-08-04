@@ -7,18 +7,19 @@ universe uCost uValue uMapped
 
 namespace Costed
 
+variable
+    {M : CostModel.{uCost}} (measure : NatMeasure M)
+    {α : Type uValue} {β : Type uMapped}
+
 /-- Project an exact costed result to the natural-number cost model. -/
-def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (result : Costed M α) : Costed CostModel.nat α :=
+def mapCost (result : Costed M α) : Costed CostModel.nat α :=
   ⟨result.val, measure result.cost⟩
 
-@[simp] theorem mapCost_val {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (result : Costed M α) :
+@[simp] theorem mapCost_val (result : Costed M α) :
     (mapCost measure result).val = result.val :=
   rfl
 
-@[simp] theorem mapCost_cost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (result : Costed M α) :
+@[simp] theorem mapCost_cost (result : Costed M α) :
     (mapCost measure result).cost = measure result.cost :=
   rfl
 
@@ -29,8 +30,7 @@ def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   cases result
   rfl
 
-@[simp] theorem mapCost_pure {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (value : α) :
+@[simp] theorem mapCost_pure (value : α) :
     mapCost measure (pure M value) = Costed.pure CostModel.nat value := by
   change
     (⟨value, measure M.instAddMonoid.zero⟩ : Costed CostModel.nat α) =
@@ -38,15 +38,13 @@ def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   rw [measure.map_zero]
 
 /-- Cost projection commutes with value-only maps. -/
-@[simp] theorem mapCost_map {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} {β : Type uMapped}
+@[simp] theorem mapCost_map
     (f : α → β) (result : Costed M α) :
     mapCost measure (result.map f) = (mapCost measure result).map f := by
   cases result
   rfl
 
-@[simp] theorem mapCost_bind {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} {β : Type uMapped}
+@[simp] theorem mapCost_bind
     (result : Costed M α) (next : α → Costed M β) :
     mapCost measure (result.bind next) =
       (mapCost measure result).bind fun value => mapCost measure (next value) := by
@@ -63,9 +61,12 @@ end Costed
 
 namespace RandCosted
 
+variable
+    {M : CostModel.{uCost}} (measure : NatMeasure M)
+    {α : Type uValue} {β : Type uMapped}
+
 /-- Project every exact path cost to natural-number runtime. -/
-noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (dist : RandCosted M α) :
+noncomputable def mapCost (dist : RandCosted M α) :
     RandCosted CostModel.nat α :=
   PMF.map (Costed.mapCost measure) dist
 
@@ -82,15 +83,13 @@ noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   rw [mapIdentity, PMF.map_id]
 
 /-- Cost projection commutes with lifting an exact writer result. -/
-@[simp] theorem mapCost_liftCosted {M : CostModel.{uCost}}
-    (measure : NatMeasure M) {α : Type uValue} (result : Costed M α) :
+@[simp] theorem mapCost_liftCosted (result : Costed M α) :
     mapCost measure (liftCosted result) =
       liftCosted (Costed.mapCost measure result) := by
   exact PMF.pure_map (f := Costed.mapCost measure) result
 
 /-- Cost projection commutes with randomized pure. -/
-@[simp] theorem mapCost_pure {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (value : α) :
+@[simp] theorem mapCost_pure (value : α) :
     mapCost measure (pure M value) =
       RandCosted.pure CostModel.nat value := by
   change
@@ -99,8 +98,7 @@ noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   rw [PMF.pure_map, Costed.mapCost_pure]
 
 /-- Cost projection commutes with value-only maps. -/
-@[simp] theorem mapCost_map {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} {β : Type uMapped}
+@[simp] theorem mapCost_map
     (f : α → β) (dist : RandCosted M α) :
     mapCost measure (map f dist) =
       RandCosted.map f (mapCost measure dist) := by
@@ -108,8 +106,7 @@ noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   rfl
 
 /-- Cost projection is a writer-monad morphism for randomized sequencing. -/
-@[simp] theorem mapCost_bind {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} {β : Type uMapped} (dist : RandCosted M α)
+@[simp] theorem mapCost_bind (dist : RandCosted M α)
     (next : α → RandCosted M β) :
     mapCost measure (bind dist next) =
       RandCosted.bind (mapCost measure dist)
@@ -134,8 +131,7 @@ noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   exact Costed.mapCost_bind measure firstResult (fun _value => nextResult)
 
 /-- Explicit value-dependent costs are projected pointwise. -/
-@[simp] theorem mapCost_sampleWithCost {M : CostModel.{uCost}}
-    (measure : NatMeasure M) {α : Type uValue}
+@[simp] theorem mapCost_sampleWithCost
     (dist : PMF α) (cost : α → M.Cost) :
     mapCost measure (sampleWithCost dist cost) =
       sampleWithCost dist (fun value => measure (cost value)) := by
@@ -143,15 +139,13 @@ noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   rfl
 
 /-- Projecting costs does not alter the ordinary value distribution. -/
-@[simp] theorem valueDist_mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (dist : RandCosted M α) :
+@[simp] theorem valueDist_mapCost (dist : RandCosted M α) :
     RandCosted.valueDist (mapCost measure dist) = valueDist dist := by
   simp only [mapCost, valueDist, PMF.map_comp]
   rfl
 
 /-- The projected cost distribution is the image under the chosen measure. -/
-@[simp] theorem costDist_mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (dist : RandCosted M α) :
+@[simp] theorem costDist_mapCost (dist : RandCosted M α) :
     RandCosted.costDist (mapCost measure dist) = PMF.map measure (costDist dist) := by
   simp only [mapCost, costDist, PMF.map_comp]
   rfl
@@ -159,8 +153,8 @@ noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
 namespace CostBound
 
 /-- A monotone natural-number observation preserves every exact path bound. -/
-theorem mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} {dist : RandCosted M α} {budget : M.Cost}
+theorem mapCost
+    {dist : RandCosted M α} {budget : M.Cost}
     (bound : RandCosted.CostBound dist budget) :
     RandCosted.CostBound
       (RandCosted.mapCost measure dist) (measure budget) := by

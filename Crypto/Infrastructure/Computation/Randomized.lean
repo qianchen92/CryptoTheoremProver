@@ -25,19 +25,21 @@ namespace RandomizedComputation
 
 noncomputable section
 
-/-- Forget exact costs and expose the ordinary dependent output distribution. -/
-def valueDist {M : CostModel.{uCost}}
+variable
+    {M : CostModel.{uCost}}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
+
+/-- Forget exact costs and expose the ordinary dependent output distribution. -/
+def valueDist
     (computation : RandomizedComputation M Input Output)
     (sec : Crypto.SecPar) (input : Input sec) :
     PMF (Output sec input) :=
   RandCosted.valueDist (computation sec input)
 
 /-- Expose the exact resource distribution at one security parameter and input. -/
-def costDist {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+def costDist
     (computation : RandomizedComputation M Input Output)
     (sec : Crypto.SecPar) (input : Input sec) : PMF M.Cost :=
   RandCosted.costDist (computation sec input)
@@ -52,10 +54,7 @@ def pure
   fun sec input => RandCosted.pure M (value sec input)
 
 /-- Apply a security-parameter- and input-dependent value map without changing costs. -/
-def map {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
-    {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
+def map
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
         Output sec input → Mapped sec input)
@@ -72,10 +71,7 @@ def map {M : CostModel.{uCost}}
     valueDist (pure M value) sec input = PMF.pure (value sec input) := by
   exact RandCosted.valueDist_pure M (value sec input)
 
-@[simp] theorem valueDist_map {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
-    {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
+@[simp] theorem valueDist_map
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
         Output sec input → Mapped sec input)

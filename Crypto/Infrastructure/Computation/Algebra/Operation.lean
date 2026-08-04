@@ -21,10 +21,10 @@ def signature (Carrier : Type uCarrier) :
     Signature.{uCarrier, uCarrier + 1} where
   Op := AddOperation Carrier
 
+variable (M : CostModel.{uCost}) {Carrier : Type uCarrier} [Add Carrier]
+
 /-- Interpret mathematical addition with an exact cost in an arbitrary model. -/
 noncomputable def algebra
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Add Carrier]
     (addCost : Carrier → Carrier → M.Cost) :
     CostedAlgebra M (signature Carrier) where
   exec operation :=
@@ -35,8 +35,6 @@ noncomputable def algebra
 
 /-- The cost-erased addition handler agrees with mathematical addition. -/
 noncomputable def laws
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Add Carrier]
     (addCost : Carrier → Carrier → M.Cost) :
     AlgebraLaws (algebra M addCost) where
   semantics operation :=
@@ -48,8 +46,6 @@ noncomputable def laws
 
 /-- An independently chosen bound for the exact addition handler. -/
 noncomputable def bounds
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Add Carrier]
     (addCost addBudget : Carrier → Carrier → M.Cost)
     (addCost_le : ∀ left right,
       M.instPartialOrder.le
@@ -80,10 +76,10 @@ def signature (Carrier : Type uCarrier) :
     Signature.{uCarrier, uCarrier + 1} where
   Op := NegOperation Carrier
 
+variable (M : CostModel.{uCost}) {Carrier : Type uCarrier} [Neg Carrier]
+
 /-- Interpret mathematical negation with an exact cost in an arbitrary model. -/
 noncomputable def algebra
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Neg Carrier]
     (negCost : Carrier → M.Cost) :
     CostedAlgebra M (signature Carrier) where
   exec operation :=
@@ -94,8 +90,6 @@ noncomputable def algebra
 
 /-- The cost-erased negation handler agrees with mathematical negation. -/
 noncomputable def laws
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Neg Carrier]
     (negCost : Carrier → M.Cost) :
     AlgebraLaws (algebra M negCost) where
   semantics operation :=
@@ -107,8 +101,6 @@ noncomputable def laws
 
 /-- An independently chosen bound for the exact negation handler. -/
 noncomputable def bounds
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Neg Carrier]
     (negCost negBudget : Carrier → M.Cost)
     (negCost_le : ∀ value,
       M.instPartialOrder.le (negCost value) (negBudget value)) :
@@ -138,10 +130,10 @@ def signature (Carrier : Type uCarrier) :
     Signature.{uCarrier, uCarrier + 1} where
   Op := SubOperation Carrier
 
+variable (M : CostModel.{uCost}) {Carrier : Type uCarrier} [Sub Carrier]
+
 /-- Interpret mathematical subtraction with an exact cost in an arbitrary model. -/
 noncomputable def algebra
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Sub Carrier]
     (subCost : Carrier → Carrier → M.Cost) :
     CostedAlgebra M (signature Carrier) where
   exec operation :=
@@ -152,8 +144,6 @@ noncomputable def algebra
 
 /-- The cost-erased subtraction handler agrees with mathematical subtraction. -/
 noncomputable def laws
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Sub Carrier]
     (subCost : Carrier → Carrier → M.Cost) :
     AlgebraLaws (algebra M subCost) where
   semantics operation :=
@@ -165,8 +155,6 @@ noncomputable def laws
 
 /-- An independently chosen bound for the exact subtraction handler. -/
 noncomputable def bounds
-    (M : CostModel.{uCost})
-    {Carrier : Type uCarrier} [Sub Carrier]
     (subCost subBudget : Carrier → Carrier → M.Cost)
     (subCost_le : ∀ left right,
       M.instPartialOrder.le
@@ -199,11 +187,13 @@ def signature (Scalar : Type uScalar) (Carrier : Type uCarrier) :
     Signature.{uCarrier, max uScalar (uCarrier + 1)} where
   Op := SMulOperation Scalar Carrier
 
-/-- Interpret scalar multiplication with an exact cost in an arbitrary model. -/
-noncomputable def algebra
+variable
     (M : CostModel.{uCost})
     {Scalar : Type uScalar} {Carrier : Type uCarrier}
     [SMul Scalar Carrier]
+
+/-- Interpret scalar multiplication with an exact cost in an arbitrary model. -/
+noncomputable def algebra
     (smulCost : Scalar → Carrier → M.Cost) :
     CostedAlgebra M (signature Scalar Carrier) where
   exec operation :=
@@ -214,9 +204,6 @@ noncomputable def algebra
 
 /-- The cost-erased handler agrees with mathematical scalar multiplication. -/
 noncomputable def laws
-    (M : CostModel.{uCost})
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [SMul Scalar Carrier]
     (smulCost : Scalar → Carrier → M.Cost) :
     AlgebraLaws (algebra M smulCost) where
   semantics operation :=
@@ -228,9 +215,6 @@ noncomputable def laws
 
 /-- An independently chosen bound for the exact scalar-multiplication handler. -/
 noncomputable def bounds
-    (M : CostModel.{uCost})
-    {Scalar : Type uScalar} {Carrier : Type uCarrier}
-    [SMul Scalar Carrier]
     (smulCost smulBudget : Scalar → Carrier → M.Cost)
     (smulCost_le : ∀ scalar value,
       M.instPartialOrder.le
@@ -261,10 +245,10 @@ def signature (Value : Type uValue) :
     Signature.{uValue, uValue + 1} where
   Op := MulOperation Value
 
+variable (M : CostModel.{uCost}) {Value : Type uValue} [Mul Value]
+
 /-- Interpret mathematical multiplication with an exact cost in an arbitrary model. -/
 noncomputable def algebra
-    (M : CostModel.{uCost})
-    {Value : Type uValue} [Mul Value]
     (mulCost : Value → Value → M.Cost) :
     CostedAlgebra M (signature Value) where
   exec operation :=
@@ -275,8 +259,6 @@ noncomputable def algebra
 
 /-- The cost-erased multiplication handler agrees with mathematical multiplication. -/
 noncomputable def laws
-    (M : CostModel.{uCost})
-    {Value : Type uValue} [Mul Value]
     (mulCost : Value → Value → M.Cost) :
     AlgebraLaws (algebra M mulCost) where
   semantics operation :=
@@ -288,8 +270,6 @@ noncomputable def laws
 
 /-- An independently chosen bound for the exact multiplication handler. -/
 noncomputable def bounds
-    (M : CostModel.{uCost})
-    {Value : Type uValue} [Mul Value]
     (mulCost mulBudget : Value → Value → M.Cost)
     (mulCost_le : ∀ left right,
       M.instPartialOrder.le
@@ -320,10 +300,10 @@ def signature (Sample : Type uSample) :
     Signature.{uSample, uSample + 1} where
   Op := SampleOperation Sample
 
+variable (M : CostModel.{uCost}) {Sample : Type uSample}
+
 /-- Interpret sampling through an arbitrary exact joint value/cost distribution. -/
 noncomputable def algebra
-    (M : CostModel.{uCost})
-    {Sample : Type uSample}
     (sample : RandCosted M Sample) :
     CostedAlgebra M (signature Sample) where
   exec operation :=
@@ -332,8 +312,6 @@ noncomputable def algebra
 
 /-- A cost-erased mathematical specification for one exact sampler. -/
 noncomputable def laws
-    (M : CostModel.{uCost})
-    {Sample : Type uSample}
     (sample : RandCosted M Sample)
     (semantics : PMF Sample)
     (sample_spec : RandCosted.valueDist sample = semantics) :
@@ -347,8 +325,6 @@ noncomputable def laws
 
 /-- An independently chosen path-cost bound for one exact sampler. -/
 noncomputable def bounds
-    (M : CostModel.{uCost})
-    {Sample : Type uSample}
     (sample : RandCosted M Sample)
     (sampleBudget : M.Cost)
     (cost_le : ∀ result, result ∈ sample.support →

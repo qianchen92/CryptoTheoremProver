@@ -6,6 +6,16 @@ namespace Crypto.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uAdversaryCost uParam uPublicKey uSecretKey uMessage uCiphertext
 
+variable
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+    {adversaryModel :
+      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
+    {Param : Type uParam}
+    {PublicKey : Param → Type uPublicKey}
+    {SecretKey : Param → Type uSecretKey}
+    {Message : Param → Type uMessage}
+    {Ciphertext : Param → Type uCiphertext}
+
 abbrev ChallengeQuery (Message : Type uMessage) :=
   Message × Message
 
@@ -24,8 +34,6 @@ inductive INDCPAOracle where
   | challenge
 
 def indCPAOracleSpec
-    {Param : Type uParam}
-    {PublicKey : Param → Type uPublicKey}
     (Message : Param → Type uMessage)
     (Ciphertext : Param → Type uCiphertext)
     (sec : Crypto.SecPar) (input : PublicInput Param PublicKey sec) :
@@ -38,12 +46,6 @@ def indCPAOracleSpec
 
 /-- A one-use left-or-right public-key encryption oracle. -/
 noncomputable def indCPAEncryptionOracle
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {Param : Type uParam}
-    {PublicKey : Param → Type uPublicKey}
-    {SecretKey : Param → Type uSecretKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
     (sec : Crypto.SecPar) (input : PublicInput Param PublicKey sec) (b : Bool) :
     Crypto.Infrastructure.Computation.Oracle.OracleEnv
@@ -63,12 +65,6 @@ noncomputable def indCPAEncryptionOracle
 
 /-- The oracle distinguishing problem induced by IND-CPA public-key encryption. -/
 noncomputable def indCPAProblem
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {Param : Type uParam}
-    {PublicKey : Param → Type uPublicKey}
-    {SecretKey : Param → Type uSecretKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) :
     Crypto.Infrastructure.GameBased.OracleDistinguishing.Problem
       (PublicInput Param PublicKey) (indCPAOracleSpec Message Ciphertext) where
@@ -82,14 +78,6 @@ noncomputable def indCPAProblem
 
 /-- The IND-CPA security game for a fixed challenge bit. -/
 noncomputable def indCPASecurityGame
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
-    {Param : Type uParam}
-    {PublicKey : Param → Type uPublicKey}
-    {SecretKey : Param → Type uSecretKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
       (PublicInput Param PublicKey) (fun _sec _input => Bool)
@@ -102,14 +90,6 @@ noncomputable def indCPASecurityGame
 
 /-- IND-CPA distinguishing advantage. -/
 noncomputable def INDCPAAdvantage
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
-    {Param : Type uParam}
-    {PublicKey : Param → Type uPublicKey}
-    {SecretKey : Param → Type uSecretKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext)
     (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
       (PublicInput Param PublicKey) (fun _sec _input => Bool)
@@ -120,12 +100,6 @@ noncomputable def INDCPAAdvantage
 
 /-- IND-CPA security against PPT oracle adversaries. -/
 def INDCPASecure
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {Param : Type uParam}
-    {PublicKey : Param → Type uPublicKey}
-    {SecretKey : Param → Type uSecretKey}
-    {Message : Param → Type uMessage}
-    {Ciphertext : Param → Type uCiphertext}
     (adversaryModel :
       Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
     (measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel)

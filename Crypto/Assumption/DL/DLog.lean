@@ -36,7 +36,7 @@ def signature (math : MathematicalParam.{uScalar, uGroup}) : Signature where
 
 /-- Exact cost-erasure laws for a DLog primitive handler. -/
 structure ExactLaws
-    {M : CostModel.{uCost}} {math : MathematicalParam.{uScalar, uGroup}}
+    {math : MathematicalParam.{uScalar, uGroup}}
     (A : CostedAlgebra M (signature math)) : Prop where
   sampleScalar :
     RandCosted.valueDist (A.exec .sampleScalar) =

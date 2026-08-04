@@ -173,9 +173,11 @@ def TotalQueryBound
 
 namespace LocalCostBound
 
+variable {α : Type (max uValue uResponse)}
+
 /-- Pure programs have zero caller-local cost. -/
 theorem pure
-    {α : Type (max uValue uResponse)} (value : α) :
+    (value : α) :
     LocalCostBound (Program.pure value : Program issueAlgebra α)
       M.instAddMonoid.zero := by
   intro _value _cost _trace execution
@@ -184,7 +186,7 @@ theorem pure
 
 /-- Sequential local bounds compose in execution order. -/
 theorem bind
-    {α β : Type (max uValue uResponse)}
+    {β : Type (max uValue uResponse)}
     {first : Program issueAlgebra α} {next : α → Program issueAlgebra β}
     {firstBudget nextBudget : M.Cost}
     (firstBound : LocalCostBound first firstBudget)
@@ -203,7 +205,6 @@ theorem bind
 
 /-- A lifted randomized computation keeps its independent path-cost bound. -/
 theorem liftCosted
-    {α : Type (max uValue uResponse)}
     {dist : RandCosted M α} {budget : M.Cost}
     (bound : RandCosted.CostBound dist budget) :
     LocalCostBound (.liftCosted dist : Program issueAlgebra α) budget := by
@@ -213,7 +214,6 @@ theorem liftCosted
 
 /-- A caller-local certificate remains valid at any larger exact budget. -/
 theorem weaken
-    {α : Type (max uValue uResponse)}
     {program : Program issueAlgebra α} {budget largerBudget : M.Cost}
     (bound : LocalCostBound program budget)
     (budget_le : M.instPartialOrder.le budget largerBudget) :
@@ -226,9 +226,11 @@ end LocalCostBound
 
 namespace QueryBound
 
+variable {α : Type (max uValue uResponse)}
+
 /-- Pure programs issue no query of any name. -/
 theorem pure
-    {α : Type (max uValue uResponse)} (value : α) :
+    (value : α) :
     QueryBound (Program.pure value : Program issueAlgebra α)
       (fun _name => 0) := by
   intro _value _cost _trace execution name
@@ -237,7 +239,7 @@ theorem pure
 
 /-- Lifted local work issues no query of any name. -/
 theorem liftCosted
-    {α : Type (max uValue uResponse)} (dist : RandCosted M α) :
+    (dist : RandCosted M α) :
     QueryBound (.liftCosted dist : Program issueAlgebra α)
       (fun _name => 0) := by
   intro _value _cost _trace execution name
@@ -246,7 +248,7 @@ theorem liftCosted
 
 /-- Sequential per-name query bounds add pointwise. -/
 theorem bind
-    {α β : Type (max uValue uResponse)}
+    {β : Type (max uValue uResponse)}
     {first : Program issueAlgebra α} {next : α → Program issueAlgebra β}
     {firstBudget nextBudget : Spec.Name → Nat}
     (firstBound : QueryBound first firstBudget)
@@ -265,9 +267,11 @@ end QueryBound
 
 namespace TotalQueryBound
 
+variable {α : Type (max uValue uResponse)}
+
 /-- Pure programs issue no queries. -/
 theorem pure
-    {α : Type (max uValue uResponse)} (value : α) :
+    (value : α) :
     TotalQueryBound (Program.pure value : Program issueAlgebra α) 0 := by
   intro _value _cost _trace execution
   cases execution
@@ -275,7 +279,7 @@ theorem pure
 
 /-- Lifted local randomized computations issue no queries. -/
 theorem liftCosted
-    {α : Type (max uValue uResponse)} (dist : RandCosted M α) :
+    (dist : RandCosted M α) :
     TotalQueryBound (.liftCosted dist : Program issueAlgebra α) 0 := by
   intro _value _cost _trace execution
   cases execution
@@ -283,7 +287,7 @@ theorem liftCosted
 
 /-- Sequential total-query bounds add. -/
 theorem bind
-    {α β : Type (max uValue uResponse)}
+    {β : Type (max uValue uResponse)}
     {first : Program issueAlgebra α} {next : α → Program issueAlgebra β}
     {firstBudget nextBudget : Nat}
     (firstBound : TotalQueryBound first firstBudget)
@@ -299,9 +303,10 @@ theorem bind
 
 end TotalQueryBound
 
+variable {α : Type (max uValue uResponse)}
+
 /-- A total-query certificate induces the corresponding uniform per-name bound. -/
 theorem QueryBound.ofTotal
-    {α : Type (max uValue uResponse)}
     {program : Program issueAlgebra α} {budget : Nat}
     (bound : TotalQueryBound program budget) :
     QueryBound program (fun _name => budget) := by
@@ -310,7 +315,7 @@ theorem QueryBound.ofTotal
 
 /-- Every supported exact run respects a certified caller-local bound. -/
 theorem localCost_le_of_mem_support_runExact
-    {α : Type (max uValue uResponse)} {program : Program issueAlgebra α}
+    {program : Program issueAlgebra α}
     {budget : M.Cost} (bound : LocalCostBound program budget)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
@@ -322,7 +327,7 @@ theorem localCost_le_of_mem_support_runExact
 
 /-- Every supported exact run respects all certified per-name query bounds. -/
 theorem queryCount_le_of_mem_support_runExact
-    {α : Type (max uValue uResponse)} {program : Program issueAlgebra α}
+    {program : Program issueAlgebra α}
     {budget : Spec.Name → Nat} (bound : QueryBound program budget)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)
@@ -335,7 +340,7 @@ theorem queryCount_le_of_mem_support_runExact
 
 /-- Every supported exact run respects a certified total-query bound. -/
 theorem totalQueries_le_of_mem_support_runExact
-    {α : Type (max uValue uResponse)} {program : Program issueAlgebra α}
+    {program : Program issueAlgebra α}
     {budget : Nat} (bound : TotalQueryBound program budget)
     (sec : Crypto.SecPar)
     (env : CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState} M Spec)

@@ -45,7 +45,7 @@ def signature (math : MathematicalParam.{uScalar, uGroup}) : Signature where
 
 /-- Exact cost-erasure laws for a DDH primitive handler. -/
 structure ExactLaws
-    {M : CostModel.{uCost}} {math : MathematicalParam.{uScalar, uGroup}}
+    {math : MathematicalParam.{uScalar, uGroup}}
     (A : CostedAlgebra M (signature math)) : Prop where
   sampleScalar :
     RandCosted.valueDist (A.exec .sampleScalar) =
@@ -191,32 +191,34 @@ structure ParamEfficiencyCertificate (pp : PublicParam.{uCost, uScalar, uGroup} 
   mulBudget_sound : ∀ left right,
     M.instPartialOrder.le (bounds.budget (Op.mul left right)) mulBudget
 
-def ParamEfficiencyCertificate.realChallengeBudget
-    {pp : PublicParam.{uCost, uScalar, uGroup} M}
+namespace ParamEfficiencyCertificate
+
+variable {pp : PublicParam.{uCost, uScalar, uGroup} M}
+
+def realChallengeBudget
     (c : ParamEfficiencyCertificate pp) : M.Cost :=
   M.instAddMonoid.add c.smulBudget
     (M.instAddMonoid.add c.smulBudget
       (M.instAddMonoid.add c.mulBudget
         (M.instAddMonoid.add c.smulBudget M.instAddMonoid.zero)))
 
-def ParamEfficiencyCertificate.realSampleTailBudget
-    {pp : PublicParam.{uCost, uScalar, uGroup} M}
+def realSampleTailBudget
     (c : ParamEfficiencyCertificate pp) : M.Cost :=
   M.instAddMonoid.add c.scalarSampleBudget
     (M.instAddMonoid.add c.scalarSampleBudget c.realChallengeBudget)
 
-def ParamEfficiencyCertificate.randomChallengeBudget
-    {pp : PublicParam.{uCost, uScalar, uGroup} M}
+def randomChallengeBudget
     (c : ParamEfficiencyCertificate pp) : M.Cost :=
   M.instAddMonoid.add c.smulBudget
     (M.instAddMonoid.add c.smulBudget M.instAddMonoid.zero)
 
-def ParamEfficiencyCertificate.randomSampleTailBudget
-    {pp : PublicParam.{uCost, uScalar, uGroup} M}
+def randomSampleTailBudget
     (c : ParamEfficiencyCertificate pp) : M.Cost :=
   M.instAddMonoid.add c.scalarSampleBudget
     (M.instAddMonoid.add c.scalarSampleBudget
       (M.instAddMonoid.add c.carrierSampleBudget c.randomChallengeBudget))
+
+end ParamEfficiencyCertificate
 
 /-- A security-parameter-indexed family of cost-aware DDH parameters. -/
 structure Family (M : CostModel.{uCost}) where

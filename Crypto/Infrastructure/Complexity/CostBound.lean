@@ -27,12 +27,14 @@ structure ExactCostCertificate
 
 namespace ExactCostCertificate
 
-/-- The certified exact budget bounds each concrete execution path. -/
-theorem cost_le_budget
+variable
     {M : CostModel.{uCost}}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {run : RandomizedComputation M Input Output}
+
+/-- The certified exact budget bounds each concrete execution path. -/
+theorem cost_le_budget
     (certificate : ExactCostCertificate run)
     (sec : Crypto.SecPar) (input : Input sec)
     (result : Costed M (Output sec input))
@@ -52,11 +54,7 @@ noncomputable def pure
 
 /-- Value-only dependent maps preserve an exact cost certificate. -/
 noncomputable def map
-    {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
-    {run : RandomizedComputation M Input Output}
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
         Output sec input → Mapped sec input)
@@ -87,12 +85,14 @@ structure RuntimeCertificate
 
 namespace RuntimeCertificate
 
-/-- Every concrete exact path maps below the declared runtime. -/
-theorem measuredCost_le_runtime
+variable
     {M : CostModel.{uCost}} {measure : NatMeasure M}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {run : RandomizedComputation M Input Output}
+
+/-- Every concrete exact path maps below the declared runtime. -/
+theorem measuredCost_le_runtime
     (certificate : RuntimeCertificate measure run)
     (sec : Crypto.SecPar) (input : Input sec)
     (result : Costed M (Output sec input))
@@ -118,11 +118,7 @@ noncomputable def pure
 
 /-- Value-only dependent maps preserve exact and measured runtime certificates. -/
 noncomputable def map
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
-    {run : RandomizedComputation M Input Output}
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
         Output sec input → Mapped sec input)
@@ -147,6 +143,12 @@ structure PolyRuntimeCertificate
 
 namespace PolyRuntimeCertificate
 
+variable
+    {M : CostModel.{uCost}} {measure : NatMeasure M}
+    {Input : Crypto.SecPar → Type uIn}
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    {run : RandomizedComputation M Input Output}
+
 /-- A pure computation has polynomial zero runtime. -/
 noncomputable def pure
     (M : CostModel.{uCost}) (measure : NatMeasure M)
@@ -159,11 +161,7 @@ noncomputable def pure
 
 /-- Value-only dependent maps preserve polynomial runtime certificates. -/
 noncomputable def map
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
-    {run : RandomizedComputation M Input Output}
     (transform :
       (sec : Crypto.SecPar) → (input : Input sec) →
         Output sec input → Mapped sec input)

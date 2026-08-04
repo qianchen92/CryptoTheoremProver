@@ -8,16 +8,19 @@ namespace RandCosted
 
 noncomputable section
 
+variable
+    {M : CostModel.{uCost}}
+    {α : Type uValue} {β : Type uMapped}
+
 /-- Every path in `dist` has cost at most `budget` in the model's exact order. -/
-def CostBound {M : CostModel.{uCost}} {α : Type uValue}
-    (dist : RandCosted M α) (budget : M.Cost) : Prop :=
+def CostBound (dist : RandCosted M α) (budget : M.Cost) : Prop :=
   ∀ result, result ∈ dist.support →
     M.instPartialOrder.le result.cost budget
 
 namespace CostBound
 
 /-- A zero-cost pure computation is bounded by the sequential identity. -/
-theorem pure {M : CostModel.{uCost}} {α : Type uValue} (value : α) :
+theorem pure (value : α) :
     CostBound (RandCosted.pure M value) M.instAddMonoid.zero := by
   letI := M.instPartialOrder
   intro result hresult
@@ -27,8 +30,7 @@ theorem pure {M : CostModel.{uCost}} {α : Type uValue} (value : α) :
   exact le_refl _
 
 /-- Mapping values preserves an exact path bound. -/
-theorem map {M : CostModel.{uCost}}
-    {α : Type uValue} {β : Type uMapped}
+theorem map
     {dist : RandCosted M α} {budget : M.Cost}
     (bound : CostBound dist budget) (f : α → β) :
     CostBound (RandCosted.map f dist) budget := by
@@ -40,8 +42,7 @@ theorem map {M : CostModel.{uCost}}
   exact bound source hsource
 
 /-- Sequential composition adds the independently certified path budgets. -/
-theorem bind {M : CostModel.{uCost}}
-    {α : Type uValue} {β : Type uMapped}
+theorem bind
     {first : RandCosted M α} {next : α → RandCosted M β}
     {firstBudget nextBudget : M.Cost}
     (firstBound : CostBound first firstBudget)
@@ -64,7 +65,7 @@ theorem bind {M : CostModel.{uCost}}
     (nextBound firstResult.val nextResult hnextResult)
 
 /-- A path bound remains sound after replacing its budget by a larger one. -/
-theorem weaken {M : CostModel.{uCost}} {α : Type uValue}
+theorem weaken
     {dist : RandCosted M α} {budget largerBudget : M.Cost}
     (bound : CostBound dist budget)
     (budget_le : M.instPartialOrder.le budget largerBudget) :

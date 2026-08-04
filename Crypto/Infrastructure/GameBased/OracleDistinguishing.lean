@@ -9,6 +9,13 @@ open Crypto.Infrastructure.Computation.Oracle
 
 universe uCost uIn uOracle uQuery uResponse uState
 
+variable
+    {M : CostModel.{uCost}}
+    {Input : Crypto.SecPar → Type uIn}
+    {Spec :
+      (sec : Crypto.SecPar) → Input sec →
+        OracleSpec.{uOracle, uQuery, uResponse}}
+
 /-- An oracle distinguishing problem is setup plus two semantic environments. -/
 structure Problem
     (Input : Crypto.SecPar → Type uIn)
@@ -25,11 +32,6 @@ structure Problem
 
 /-- Run one exact-program adversary against a selected semantic environment. -/
 noncomputable def securityGame
-    {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Spec :
-      (sec : Crypto.SecPar) → Input sec →
-        OracleSpec.{uOracle, uQuery, uResponse}}
     (problem : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec)
     (env :
       (sec : Crypto.SecPar) → (input : Input sec) →
@@ -43,11 +45,6 @@ noncomputable def securityGame
 
 /-- The left-side oracle distinguishing game. -/
 noncomputable def leftSecurityGame
-    {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Spec :
-      (sec : Crypto.SecPar) → Input sec →
-        OracleSpec.{uOracle, uQuery, uResponse}}
     (problem : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec)
     (adversary : Crypto.Infrastructure.Complexity.OracleMachine M Input
       (fun _sec _input => Bool) Spec) :
@@ -56,11 +53,6 @@ noncomputable def leftSecurityGame
 
 /-- The right-side oracle distinguishing game. -/
 noncomputable def rightSecurityGame
-    {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Spec :
-      (sec : Crypto.SecPar) → Input sec →
-        OracleSpec.{uOracle, uQuery, uResponse}}
     (problem : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec)
     (adversary : Crypto.Infrastructure.Complexity.OracleMachine M Input
       (fun _sec _input => Bool) Spec) :

@@ -11,6 +11,16 @@ open Crypto.Infrastructure.GameBased
 universe uCost uAddress uPayload uPort uCapability
 universe uState uLeakage uErasure uOutput
 
+section PPTAddressedCertificate
+
+variable
+  (M : CostModel.{uCost})
+  (measure : NatMeasure M)
+  {Address : Type uAddress}
+  (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+  {LocalAddress : Type uAddress}
+  {embed : LocalAddress → Address}
+
 /--
 External operational admission for the exact handlers of one addressed ITM
 under the claimed uniform runtime.
@@ -22,10 +32,6 @@ functions.  Admission must therefore come from a host-independent operational
 model of the same machine and runtime.
 -/
 opaque PPTAddressedITMAdmissible
-    (M : CostModel.{uCost})
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    {LocalAddress : Type uAddress} {embed : LocalAddress → Address}
     (machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed)
     (runtime : Crypto.SecPar → Nat) : Prop
@@ -37,10 +43,6 @@ certificate covers every entry point through which the kernel can activate or
 inspect the component.
 -/
 structure PPTAddressedITMCertificate
-    (M : CostModel.{uCost}) (measure : NatMeasure M)
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    {LocalAddress : Type uAddress} {embed : LocalAddress → Address}
     (machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed) where
   initBudget : Crypto.SecPar → LocalAddress → M.Cost
@@ -70,35 +72,37 @@ structure PPTAddressedITMCertificate
   runtime_isPoly : IsPolyBounded runtime
   admission : PPTAddressedITMAdmissible M schema machine runtime
 
+end PPTAddressedCertificate
+
+section PPTRoles
+
+variable
+  (M : CostModel.{uCost})
+  (measure : NatMeasure M)
+  {Address : Type uAddress}
+  (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+  (LocalAddress : Type uAddress)
+  (embed : LocalAddress → Address)
+
 /-- A PPT-certified environment, kept distinct from every other UC role. -/
-structure PPTEnvironment
-    (M : CostModel.{uCost}) (measure : NatMeasure M)
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress) (embed : LocalAddress → Address) where
+structure PPTEnvironment where
   toEnvironment : Environment.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
   certificate : PPTAddressedITMCertificate M measure schema toEnvironment.machine
 
 /-- A PPT-certified real-world adversary. -/
-structure PPTAdversary
-    (M : CostModel.{uCost}) (measure : NatMeasure M)
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress) (embed : LocalAddress → Address) where
+structure PPTAdversary where
   toAdversary : Adversary.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
   certificate : PPTAddressedITMCertificate M measure schema toAdversary.machine
 
 /-- A PPT-certified ideal-world simulator. -/
-structure PPTSimulator
-    (M : CostModel.{uCost}) (measure : NatMeasure M)
-    {Address : Type uAddress}
-    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
-    (LocalAddress : Type uAddress) (embed : LocalAddress → Address) where
+structure PPTSimulator where
   toSimulator : Simulator.{uCost, uAddress, uPayload, uPort, uCapability,
     uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
   certificate : PPTAddressedITMCertificate M measure schema toSimulator.machine
+
+end PPTRoles
 
 variable {M : CostModel.{uCost}} {measure : NatMeasure M}
 variable {EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress :

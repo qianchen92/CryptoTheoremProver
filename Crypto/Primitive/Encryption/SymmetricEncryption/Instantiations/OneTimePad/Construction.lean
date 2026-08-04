@@ -16,6 +16,8 @@ open Crypto.Infrastructure.Computation.Cost
 
 universe uCost uGroup
 
+variable {M : CostModel.{uCost}}
+
 /-- The mathematical finite additive group underlying an OTP instance. -/
 abbrev MathematicalParam :=
   Crypto.Infrastructure.Computation.Algebra.Parameter.AdditiveGroupParam.{uGroup}
@@ -33,7 +35,7 @@ def signature (math : MathematicalParam.{uGroup}) : Signature.{uGroup, uGroup} w
 
 /-- Exact cost-erasure laws for an OTP primitive handler. -/
 structure ExactLaws
-    {M : CostModel.{uCost}} {math : MathematicalParam.{uGroup}}
+    {math : MathematicalParam.{uGroup}}
     (A : CostedAlgebra M (signature math)) : Prop where
   sampleKey :
     RandCosted.valueDist (A.exec .sampleKey) =

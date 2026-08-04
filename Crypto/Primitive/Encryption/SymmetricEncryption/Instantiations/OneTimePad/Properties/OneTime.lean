@@ -11,6 +11,10 @@ open Crypto.Infrastructure.Computation.Cost
 open Crypto.Infrastructure.Probability
 open scoped OneTimePadParameter
 
+variable
+    {M : CostModel.{uCost}}
+    {adversaryModel : CostModel.{uAdversaryCost}}
+
 /-- Adding a fixed group element to a uniform one-time-pad key hides the message. -/
 theorem challengeDistribution_eq
     (G : Type uGroup) [AddGroup G] [Fintype G] [Nonempty G] (m₀ m₁ : G) :
@@ -55,7 +59,6 @@ theorem challengeDistribution_eq
 
 /-- The false and true challenge oracles of the group one-time pad are extensionally equal. -/
 theorem oneTimeEncryptionOracle_false_eq_true
-    {M : CostModel.{uCost}}
     (F : Family M) (sec : Crypto.SecPar) (pp : PublicParam M) :
     oneTimeEncryptionOracle (scheme F) sec pp false =
     oneTimeEncryptionOracle (scheme F) sec pp true := by
@@ -72,8 +75,6 @@ theorem oneTimeEncryptionOracle_false_eq_true
 
 /-- The two one-time security games of the group one-time pad are identical. -/
 theorem oneTimeSecurityGame_false_eq_true
-    {M : CostModel.{uCost}}
-    {adversaryModel : CostModel.{uAdversaryCost}}
     (F : Family M)
     (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
       (fun _ => PublicParam M)
@@ -94,8 +95,6 @@ theorem oneTimeSecurityGame_false_eq_true
 
 /-- Every oracle machine has zero one-time advantage against the group one-time pad. -/
 theorem oneTimeAdvantage_eq_zero
-    {M : CostModel.{uCost}}
-    {adversaryModel : CostModel.{uAdversaryCost}}
     (F : Family M)
     (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
       (fun _ => PublicParam M)
@@ -108,7 +107,7 @@ theorem oneTimeAdvantage_eq_zero
 
 /-- Perfect one-time security of the group one-time pad. -/
 theorem perfectOneTimeSecure
-    {M : CostModel.{uCost}} (F : Family M)
+    (F : Family M)
     (adversaryModel : CostModel.{uAdversaryCost}) :
     PerfectOneTimeSecure adversaryModel (scheme F) := by
   intro A
@@ -116,7 +115,7 @@ theorem perfectOneTimeSecure
 
 /-- PPT one-time security of the group one-time pad. -/
 theorem oneTimeSecure
-    {M : CostModel.{uCost}} (F : Family M)
+    (F : Family M)
     (adversaryModel : CostModel.{uAdversaryCost})
     (measure : NatMeasure adversaryModel) :
     OneTimeSecure adversaryModel measure (scheme F) := by

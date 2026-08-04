@@ -76,13 +76,15 @@ structure TimedOracleImplementation
 
 namespace TimedOracleImplementation
 
-/-- Every supported exact query path respects the implementation budget. -/
-theorem queryCost_le_budget
+variable
     {M : CostModel.{uCost}} {measure : NatMeasure M}
     {Input : Crypto.SecPar → Type uIn}
     {Spec :
       (sec : Crypto.SecPar) → Input sec →
         OracleSpec.{uOracle, uQuery, uResponse}}
+
+/-- Every supported exact query path respects the implementation budget. -/
+theorem queryCost_le_budget
     (implementation :
       TimedOracleImplementation.{uCost, uIn, uOracle, uQuery, uResponse, uState}
         M measure Input Spec)
@@ -102,11 +104,6 @@ theorem queryCost_le_budget
 
 /-- Measuring a supported query path yields at most the uniform query runtime. -/
 theorem measuredQueryCost_le_runtime
-    {M : CostModel.{uCost}} {measure : NatMeasure M}
-    {Input : Crypto.SecPar → Type uIn}
-    {Spec :
-      (sec : Crypto.SecPar) → Input sec →
-        OracleSpec.{uOracle, uQuery, uResponse}}
     (implementation :
       TimedOracleImplementation.{uCost, uIn, uOracle, uQuery, uResponse, uState}
         M measure Input Spec)

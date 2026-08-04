@@ -12,6 +12,11 @@ universe uCost uIn uResult uOp
 
 namespace TimedMachine
 
+variable
+    {M : CostModel.{uCost}}
+    {S : Signature.{uResult, uOp}}
+    {Input : Type uIn} {Output : Type uResult}
+
 /--
 Build a timed machine from exact-cost programs over an arbitrary resource model.
 
@@ -20,9 +25,6 @@ chosen `NatMeasure` appears only in the runtime certificate and never rewrites
 the machine's execution distribution.
 -/
 noncomputable def ofBoundedProgram
-    {M : CostModel.{uCost}}
-    {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {Output : Type uResult}
     (measure : NatMeasure M)
     (A : Crypto.SecPar → CostedAlgebra M S)
     (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
@@ -48,9 +50,6 @@ noncomputable def ofBoundedProgram
 
 /-- Program-to-machine conversion preserves exact value erasure definitionally. -/
 @[simp] theorem valueDist_run_ofBoundedProgram
-    {M : CostModel.{uCost}}
-    {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {Output : Type uResult}
     (measure : NatMeasure M)
     (A : Crypto.SecPar → CostedAlgebra M S)
     (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
@@ -73,6 +72,11 @@ end TimedMachine
 
 namespace PPTMachine
 
+variable
+    {M : CostModel.{uCost}}
+    {S : Signature.{uResult, uOp}}
+    {Input : Type uIn} {Output : Type uResult}
+
 /--
 Build a PPT machine from the same exact program run, a polynomial runtime
 certificate, and an independent host-level admission proof.
@@ -81,9 +85,6 @@ certificate, and an independent host-level admission proof.
 boundary can hide computation in inputs, pure values, and continuations.
 -/
 noncomputable def ofBoundedProgram
-    {M : CostModel.{uCost}}
-    {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {Output : Type uResult}
     (measure : NatMeasure M)
     (A : Crypto.SecPar → CostedAlgebra M S)
     (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
@@ -109,9 +110,6 @@ noncomputable def ofBoundedProgram
 
 /-- PPT program conversion preserves the original exact value distribution. -/
 @[simp] theorem valueDist_run_ofBoundedProgram
-    {M : CostModel.{uCost}}
-    {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {Output : Type uResult}
     (measure : NatMeasure M)
     (A : Crypto.SecPar → CostedAlgebra M S)
     (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
