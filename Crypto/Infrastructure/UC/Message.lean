@@ -45,8 +45,10 @@ end Incoming
 
 namespace Emission
 
+variable {source : Address}
+
 /-- Forget the source index while retaining the typed capability. -/
-def toMessage {source : Address} (emission : Emission schema source) : Message schema where
+def toMessage (emission : Emission schema source) : Message schema where
   Payload := emission.Payload
   source := ⟨source, emission.sourcePort⟩
   target := emission.target
@@ -54,7 +56,7 @@ def toMessage {source : Address} (emission : Emission schema source) : Message s
   payload := emission.payload
 
 /-- Routing policy is determined by the capability carried by an emission. -/
-def routingPolicy {source : Address} (emission : Emission schema source) : RoutingPolicy :=
+def routingPolicy (emission : Emission schema source) : RoutingPolicy :=
   schema.route emission.sourcePort emission.target.port emission.capability
 
 end Emission

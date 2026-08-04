@@ -15,6 +15,7 @@ structure AddressRenaming (Source Target : Type uAddress) where
 namespace AddressRenaming
 
 variable {Source Target : Type uAddress}
+variable {First Middle Last : Type uAddress}
 
 instance :
     CoeFun (AddressRenaming Source Target) (fun _ => Source → Target) where
@@ -24,8 +25,7 @@ def identity (Address : Type uAddress) : AddressRenaming Address Address where
   toFun := id
   injective := Function.injective_id
 
-def comp {First Middle Last : Type uAddress}
-    (first : AddressRenaming First Middle)
+def comp (first : AddressRenaming First Middle)
     (second : AddressRenaming Middle Last) : AddressRenaming First Last where
   toFun := second.toFun ∘ first.toFun
   injective := second.injective.comp first.injective
@@ -39,8 +39,7 @@ def comp {First Middle Last : Type uAddress}
 @[simp] theorem identity_apply {Address : Type uAddress} (address : Address) :
     identity Address address = address := rfl
 
-@[simp] theorem comp_apply {First Middle Last : Type uAddress}
-    (first : AddressRenaming First Middle)
+@[simp] theorem comp_apply (first : AddressRenaming First Middle)
     (second : AddressRenaming Middle Last) (address : First) :
     first.comp second address = second (first address) := rfl
 

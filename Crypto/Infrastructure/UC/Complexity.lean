@@ -40,19 +40,23 @@ structure ComponentCostCertificate
     M.instPartialOrder.le (family.leak sec address state).cost
       (leakageBudget sec address)
 
+section RepeatedActivationCosts
+
+variable (M : CostModel.{uCost})
+
 /-- Repeated left-to-right use of one common activation budget. -/
 abbrev repeatActivationCost
-    (M : CostModel.{uCost}) (count : Nat) (budget : M.Cost) : M.Cost :=
+    (count : Nat) (budget : M.Cost) : M.Cost :=
   M.instAddMonoid.toNatSMul.smul count budget
 
 @[simp] theorem repeatActivationCost_zero
-    (M : CostModel.{uCost}) (budget : M.Cost) :
+    (budget : M.Cost) :
     repeatActivationCost M 0 budget = M.instAddMonoid.zero := by
   letI := M.instAddMonoid
   exact zero_nsmul budget
 
 theorem repeatActivationCost_succ
-    (M : CostModel.{uCost}) (count : Nat) (budget : M.Cost) :
+    (count : Nat) (budget : M.Cost) :
     repeatActivationCost M (count + 1) budget =
       M.instAddMonoid.add budget (repeatActivationCost M count budget) := by
   letI := M.instAddMonoid
@@ -60,7 +64,7 @@ theorem repeatActivationCost_succ
 
 /-- Repeating a budget across two consecutive segments preserves their order. -/
 theorem repeatActivationCost_add
-    (M : CostModel.{uCost}) (first second : Nat) (budget : M.Cost) :
+    (first second : Nat) (budget : M.Cost) :
     repeatActivationCost M (first + second) budget =
       M.instAddMonoid.add
         (repeatActivationCost M first budget)
@@ -70,7 +74,7 @@ theorem repeatActivationCost_add
 
 /-- Zero is below every repeated budget when it is below one use. -/
 theorem zero_le_repeatActivationCost
-    (M : CostModel.{uCost}) {budget : M.Cost}
+    {budget : M.Cost}
     (zero_le : M.instPartialOrder.le M.instAddMonoid.zero budget) :
     ∀ count, M.instPartialOrder.le M.instAddMonoid.zero
       (repeatActivationCost M count budget) := by
@@ -95,7 +99,7 @@ theorem zero_le_repeatActivationCost
 
 /-- Padding with additional nonnegative atomic charges only enlarges a budget. -/
 theorem repeatActivationCost_mono_count
-    (M : CostModel.{uCost}) {budget : M.Cost}
+    {budget : M.Cost}
     (zero_le : M.instPartialOrder.le M.instAddMonoid.zero budget)
     {used available : Nat} (used_le : used ≤ available) :
     M.instPartialOrder.le
@@ -130,6 +134,8 @@ theorem repeatActivationCost_mono_count
         subst used
         exact M.instPartialOrder.le_refl _
 
+end RepeatedActivationCosts
+
 /--
 Auditable atomic bounds from which the one-step kernel budget is derived.
 
@@ -161,6 +167,7 @@ namespace StepCostCertificate
 
 variable {algebra : KernelAlgebra M Address}
 variable {network : (sec : Crypto.SecPar) → NetworkAdapter family sec}
+variable {Value : Type uBoundValue}
 
 /-- The largest number of component/kernel atoms in one `Kernel.stepOne` path. -/
 def maximumAtomicCharges : Nat := 10
@@ -182,7 +189,7 @@ theorem zero_le_budget
 omit [DecidableEq Address] in
 private theorem pure_sound
     (certificate : StepCostCertificate algebra network)
-    (sec : Crypto.SecPar) (count : Nat) {Value : Type uBoundValue} (value : Value) :
+    (sec : Crypto.SecPar) (count : Nat) (value : Value) :
     RandCosted.CostBound (RandCosted.pure M value)
       (repeatActivationCost M count (certificate.atomBudget sec)) := by
   apply RandCosted.CostBound.weaken (RandCosted.CostBound.pure value)
@@ -208,7 +215,7 @@ private theorem bind_sound
 omit [DecidableEq Address] in
 private theorem pad_sound
     (certificate : StepCostCertificate algebra network)
-    (sec : Crypto.SecPar) {Value : Type uBoundValue} {dist : RandCosted M Value}
+    (sec : Crypto.SecPar) {dist : RandCosted M Value}
     {used available : Nat}
     (bound : RandCosted.CostBound dist
       (repeatActivationCost M used (certificate.atomBudget sec)))
@@ -316,7 +323,7 @@ omit [DecidableEq Address] in
 private theorem withCharge_sound
     (certificate : StepCostCertificate algebra network)
     (sec : Crypto.SecPar) (primitive : KernelPrimitive) (addresses : List Address)
-    {Value : Type uBoundValue} {next : RandCosted M Value} (nextCount : Nat)
+    {next : RandCosted M Value} (nextCount : Nat)
     (nextBound : RandCosted.CostBound next
       (repeatActivationCost M nextCount (certificate.atomBudget sec))) :
     RandCosted.CostBound

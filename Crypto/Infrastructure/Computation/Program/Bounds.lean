@@ -38,6 +38,8 @@ namespace Bound
 variable
     {bounds : OperationBounds A}
     {First Result : Type uResult}
+    {condition : Bool}
+    {thenCode elseCode : Code A Result}
 
 /-- Pure code has zero cost. -/
 def pure
@@ -70,8 +72,7 @@ def bind
 
 /-- Both branches may share a caller-selected common budget. -/
 def branch
-    {condition : Bool}
-    {thenCode elseCode : Code A Result} {budget : M.Cost}
+    {budget : M.Cost}
     (thenBound : Bound bounds thenCode budget)
     (elseBound : Bound bounds elseCode budget) :
     Bound bounds (.branch condition thenCode elseCode) budget where
@@ -91,8 +92,6 @@ def weaken
 
 /-- Build a branch certificate from two bounds and an explicit common bound. -/
 def branchOfBounds
-    {condition : Bool}
-    {thenCode elseCode : Code A Result}
     {thenBudget elseBudget commonBudget : M.Cost}
     (thenBound : Bound bounds thenCode thenBudget)
     (elseBound : Bound bounds elseCode elseBudget)

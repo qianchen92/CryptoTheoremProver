@@ -41,8 +41,12 @@ def get (store : LocalStore family sec) (address : Address) :
     Option (family.State sec address) :=
   store address
 
+section Updates
+
+variable [DecidableEq Address]
+
 /-- Replace the state at exactly one address. -/
-def set [DecidableEq Address]
+def set
     (store : LocalStore family sec) (address : Address)
     (state : family.State sec address) : LocalStore family sec :=
   fun other =>
@@ -52,36 +56,44 @@ def set [DecidableEq Address]
       store other
 
 /-- Remove any honest state stored at exactly one address. -/
-def remove [DecidableEq Address]
+def remove
     (store : LocalStore family sec) (address : Address) : LocalStore family sec :=
   fun other => if other = address then none else store other
+
+end Updates
 
 @[simp] theorem get_empty (address : Address) :
     get (empty : LocalStore family sec) address = none :=
   rfl
 
-@[simp] theorem get_set_same [DecidableEq Address]
+section UpdateLemmas
+
+variable [DecidableEq Address]
+
+@[simp] theorem get_set_same
     (store : LocalStore family sec) (address : Address)
     (state : family.State sec address) :
     get (set store address state) address = some state := by
   simp [get, set]
 
-@[simp] theorem get_set_of_ne [DecidableEq Address]
+@[simp] theorem get_set_of_ne
     (store : LocalStore family sec) {address other : Address}
     (state : family.State sec address) (hne : other ≠ address) :
     get (set store address state) other = get store other := by
   simp [get, set, hne]
 
-@[simp] theorem get_remove_same [DecidableEq Address]
+@[simp] theorem get_remove_same
     (store : LocalStore family sec) (address : Address) :
     get (remove store address) address = none := by
   simp [get, remove]
 
-@[simp] theorem get_remove_of_ne [DecidableEq Address]
+@[simp] theorem get_remove_of_ne
     (store : LocalStore family sec) {address other : Address}
     (hne : other ≠ address) :
     get (remove store address) other = get store other := by
   simp [get, remove, hne]
+
+end UpdateLemmas
 
 end LocalStore
 
@@ -152,6 +164,8 @@ inductive TraceEvent
   | corrupted (target : Address) (leakage : family.Leakage sec target)
   | output (result : MachineOutput family sec)
 
+variable [DecidableEq Address]
+
 /--
 The policy and state-removal invariant maintained by a UC configuration.
 
@@ -159,7 +173,7 @@ No honest local state remains at a corrupted address.  Consequently later
 leakage can only be produced by the explicit corruption transition that first
 removes that state.
 -/
-def CorruptionInvariant [DecidableEq Address]
+def CorruptionInvariant
     (family : ITMFamily.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput} M Address schema)
     (policy : CorruptionPolicy Address) (sec : Crypto.SecPar)
@@ -174,7 +188,7 @@ The dependent function `state` is the sole global store.  The optional output
 marks a halted configuration; the kernel, rather than this data structure,
 decides how fuel exhaustion is mapped to the external Boolean result.
 -/
-structure Configuration [DecidableEq Address]
+structure Configuration
     (family : ITMFamily.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput} M Address schema)
     (policy : CorruptionPolicy Address) (sec : Crypto.SecPar) where
@@ -188,7 +202,6 @@ structure Configuration [DecidableEq Address]
 
 namespace Configuration
 
-variable [DecidableEq Address]
 variable
     {family : ITMFamily.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput} M Address schema}

@@ -11,6 +11,7 @@ noncomputable section
 variable
     {M : CostModel.{uCost}}
     {α : Type uValue} {β : Type uMapped}
+    {dist : RandCosted M α}
 
 /-- Every path in `dist` has cost at most `budget` in the model's exact order. -/
 def CostBound (dist : RandCosted M α) (budget : M.Cost) : Prop :=
@@ -31,7 +32,7 @@ theorem pure (value : α) :
 
 /-- Mapping values preserves an exact path bound. -/
 theorem map
-    {dist : RandCosted M α} {budget : M.Cost}
+    {budget : M.Cost}
     (bound : CostBound dist budget) (f : α → β) :
     CostBound (RandCosted.map f dist) budget := by
   intro result hresult
@@ -66,7 +67,7 @@ theorem bind
 
 /-- A path bound remains sound after replacing its budget by a larger one. -/
 theorem weaken
-    {dist : RandCosted M α} {budget largerBudget : M.Cost}
+    {budget largerBudget : M.Cost}
     (bound : CostBound dist budget)
     (budget_le : M.instPartialOrder.le budget largerBudget) :
     CostBound dist largerBudget := by

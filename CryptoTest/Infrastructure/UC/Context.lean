@@ -402,8 +402,9 @@ noncomputable def unitComponentCertificate
     cases (family.leak sec address state).cost
     exact unitCostModel.instPartialOrder.le_refl ()
 
+variable {family : ITMFamily unitCostModel ToyAddress toySchema}
+
 noncomputable def unitStepCertificate
-    {family : ITMFamily unitCostModel ToyAddress toySchema}
     (network : (sec : Crypto.SecPar) → NetworkAdapter family sec) :
     StepCostCertificate
       (KernelAlgebra.zero unitCostModel ToyAddress) network where
@@ -454,7 +455,6 @@ class ToyExecutionAdmissionModel : Prop where
 variable [ToyExecutionAdmissionModel]
 
 noncomputable def deadlockPPTCertificate
-    {family : ITMFamily unitCostModel ToyAddress toySchema}
     {policy : CorruptionPolicy ToyAddress}
     (network : (sec : Crypto.SecPar) → NetworkAdapter family sec)
     (initial : (sec : Crypto.SecPar) → Configuration family policy sec)

@@ -43,15 +43,17 @@ abbrev KernelAlgebra (M : CostModel.{uCost}) (Address : Type uAddress) :=
 
 namespace KernelAlgebra
 
+variable (M : CostModel.{uCost}) (Address : Type uAddress)
+
 /-- A named model in which abstract kernel bookkeeping is free. -/
-noncomputable def zero (M : CostModel.{uCost}) (Address : Type uAddress) :
+noncomputable def zero :
     KernelAlgebra M Address where
   exec operation :=
     match operation with
     | .perform _primitive _addresses => RandCosted.pure M ()
 
 /-- Erasing the zero-cost kernel handler gives a point mass at `Unit`. -/
-noncomputable def zeroLaws (M : CostModel.{uCost}) (Address : Type uAddress) :
+noncomputable def zeroLaws :
     AlgebraLaws (zero M Address) where
   semantics operation :=
     match operation with
@@ -61,7 +63,7 @@ noncomputable def zeroLaws (M : CostModel.{uCost}) (Address : Type uAddress) :
     exact RandCosted.valueDist_pure M ()
 
 /-- Every operation of the free kernel handler has exact zero budget. -/
-noncomputable def zeroBounds (M : CostModel.{uCost}) (Address : Type uAddress) :
+noncomputable def zeroBounds :
     OperationBounds (zero M Address) where
   budget _operation := M.instAddMonoid.zero
   cost_le operation := by

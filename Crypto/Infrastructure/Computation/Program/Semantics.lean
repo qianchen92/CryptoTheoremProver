@@ -29,31 +29,32 @@ noncomputable def runCosted
   | .branch condition thenCode elseCode =>
       if condition then runCosted thenCode else runCosted elseCode
 
+variable {First Result : Type uResult}
+
 /-- Ordinary semantics is obtained only by erasing exact path costs. -/
 noncomputable def valueDist
-    {Result : Type uResult} (code : Code A Result) : PMF Result :=
+    (code : Code A Result) : PMF Result :=
   RandCosted.valueDist (runCosted code)
 
 @[simp] theorem valueDist_pure
-    {Result : Type uResult} (value : Result) :
+    (value : Result) :
     valueDist (A := A) (.pure value) = PMF.pure value := by
   simp [valueDist, runCosted]
 
 @[simp] theorem valueDist_bind
-    {First Result : Type uResult}
     (first : Code A First) (next : First → Code A Result) :
     valueDist (.bind first next) =
       PMF.bind (valueDist first) fun value => valueDist (next value) := by
   simp [valueDist, runCosted]
 
 @[simp] theorem valueDist_call
-    {Result : Type uResult} (operation : S.Op Result) :
+    (operation : S.Op Result) :
     valueDist (A := A) (.call operation) =
       RandCosted.valueDist (A.exec operation) :=
   rfl
 
 @[simp] theorem valueDist_branch
-    {Result : Type uResult} (condition : Bool)
+    (condition : Bool)
     (thenCode elseCode : Code A Result) :
     valueDist (.branch condition thenCode elseCode) =
       if condition then valueDist thenCode else valueDist elseCode := by

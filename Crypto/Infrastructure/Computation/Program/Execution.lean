@@ -44,9 +44,11 @@ inductive Execution :
       (execution : Execution elseCode value cost) :
       Execution (.branch false thenCode elseCode) value cost
 
+variable {Result : Type uResult}
+
 /-- Every exact interpreter result determines a structural execution. -/
 theorem execution_of_mem_support_runCosted
-    {Result : Type uResult} (code : Code A Result)
+    (code : Code A Result)
     (result : Costed M Result)
     (hresult : result ∈ (runCosted code).support) :
     Execution code result.val result.cost := by
@@ -78,10 +80,12 @@ theorem execution_of_mem_support_runCosted
           simp only [runCosted, if_true] at hresult
           exact Execution.branchTrue (ihThen result hresult)
 
+variable
+    {code : Code A Result}
+    {value : Result} {cost : M.Cost}
+
 /-- Every structural execution is realized by the exact interpreter. -/
 theorem mem_support_runCosted_of_execution
-    {Result : Type uResult} {code : Code A Result}
-    {value : Result} {cost : M.Cost}
     (execution : Execution code value cost) :
     (⟨value, cost⟩ : Costed M Result) ∈ (runCosted code).support := by
   induction execution with
@@ -105,9 +109,7 @@ theorem mem_support_runCosted_of_execution
       simpa [runCosted] using ih
 
 /-- Structural execution and exact interpreter support describe the same paths. -/
-theorem execution_iff_mem_support_runCosted
-    {Result : Type uResult} {code : Code A Result}
-    {value : Result} {cost : M.Cost} :
+theorem execution_iff_mem_support_runCosted :
     Execution code value cost ↔
       (⟨value, cost⟩ : Costed M Result) ∈ (runCosted code).support := by
   constructor
