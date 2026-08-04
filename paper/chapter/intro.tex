@@ -1,0 +1,92 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Mechanized cryptography needs several descriptions of one algorithm.  A proof
+of correctness observes a probability distribution; an implementation-level
+argument records which operations were executed; a complexity proof supplies a
+worst-case bound; and a security definition admits only adversaries carrying an
+appropriate polynomial-time certificate.  If these descriptions are defined
+independently, they can drift.  In particular, a costed interpreter can disagree
+with the probability game, a ``runtime'' field can become metadata unrelated to
+the run it purports to bound, and an interactive security definition can mention
+protocols or corruption policies that never enter the actual execution.
+
+This paper describes the current architecture of \LeanCrypto, an experimental
+cryptographic verification library implemented in Lean~4
+\cite{deMouraUllrich2021Lean4} and built on mathlib
+\cite{mathlib2020}.  The architecture is intended to support game-based and
+universally composable security in a shared executable substrate.  Its central
+invariant is deliberately stronger than a naming convention.
+
+\begin{designprinciple}
+Every public probability semantics is obtained by erasing cost from one
+authoritative exact execution.  Every exact, measured, and polynomial
+complexity result is a proposition or certificate indexed by that same
+execution.
+\end{designprinciple}
+
+Four separations make the invariant practical.  First, exact execution and
+cost-erased probability are different views of one joint value--cost
+distribution.  Second, the cost produced on a path and a proof that it is below
+a budget are different objects.  Third, an abstract resource---which may be
+multidimensional or order-sensitive---is distinct from the natural-number
+observation used by the existing asymptotic layer.  Fourth, a security game is
+distinct from the certificate that admits a machine as a PPT adversary.  These
+separations run from primitive operations through typed programs and oracles to
+the interactive-machine kernel.
+
+ElGamal encryption is a representative example.  Its encryption algorithm is
+a typed program whose exact handler samples one scalar, performs two scalar
+actions, and performs one group operation.  Correctness consumes the erased
+distribution of that program.  Efficiency attaches an input-dependent bound
+and a measured runtime certificate to the same program; it does not restate the
+algorithm in a second AST.  The one-time pad, discrete logarithm, and
+Decisional Diffie--Hellman examples follow the same boundary.
+
+\paragraph{Contributions.}
+The present implementation provides:
+
+\begin{itemize}
+  \item a strict import hierarchy separating security parameters,
+    probability, exact cost semantics, asymptotics, machine certificates,
+    game-based notions, and UC execution;
+  \item exact randomized resource semantics over an ordered, potentially
+    noncommutative additive monoid, with a single support-wise path-bound
+    predicate and a monotone additive observation into \(\Nat\);
+  \item typed result-indexed primitive signatures whose exact handlers,
+    cost-erased mathematical laws, and upper bounds are separate records;
+  \item a typed program language with one interpreter, an exact structural
+    execution relation, a support-equivalence theorem, and compositional
+    input-dependent bounds;
+  \item a unified dependent machine hierarchy and a closed exact-to-measured-
+    to-polynomial certificate chain, including a single oracle interpreter and
+    certified caller--oracle composition; and
+  \item a typed FIFO UC execution layer with capabilities, adaptive
+    corruption, explicit kernel charging, certified finite fuel, real/ideal
+    wiring, and a context-composition theorem derived from operational
+    simulation.
+\end{itemize}
+
+The goal of the paper is architectural: to state what the current Lean
+interfaces guarantee, how the certificates connect, and which obligations
+remain with an instantiation.  It does not claim a new cryptographic reduction
+or a physical CPU-time model.  The distinction is made explicit in
+\Cref{sec:boundaries}.
+
+\paragraph{Positioning.}
+The library shares the broader aim of foundational mechanized cryptography
+exemplified by SSProve \cite{CSF:AHRVWH21}.  Its interactive layer follows the
+real/ideal quantifier discipline of universal composability
+\cite{FOCS:Canetti01}, while its engineering focus differs from systems such as
+EasyUC \cite{CSF:CanStoVar19}: the contribution described here is a single
+Lean-native exact resource and certificate hierarchy spanning typed programs,
+adaptive oracles, and an executable UC kernel.  A systematic feature or proof
+engineering comparison is left for later work.
+
+\paragraph{Organization.}
+\Cref{sec:hierarchy} presents the dependency discipline.
+\Cref{sec:cost-algebra-program} develops exact resources, typed algebras, and programs.
+\Cref{sec:machines-oracles} gives the machine and oracle certificate chains.
+\Cref{sec:uc} describes the interactive execution stack.
+\Cref{sec:case-studies,sec:evaluation} summarize concrete instantiations and
+mechanized validation, followed by soundness boundaries and future work.

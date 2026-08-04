@@ -3,8 +3,8 @@
 `Crypto` is an experimental Lean library for building reusable, machine-checked
 cryptographic security proofs. The project aims to provide a small but coherent
 foundation for defining cryptographic schemes, security games, oracle access,
-semantic PPT-machine interfaces, asymptotic bounds, assumptions, reductions,
-and proof patterns.
+exact cost semantics, certificate-backed PPT-machine interfaces, asymptotic
+bounds, assumptions, and typed UC executions.
 
 The library is organized around game-based security proofs, with a growing UC
 layer for interactive protocols. Shared computation semantics such as
@@ -50,39 +50,61 @@ Crypto/
   Basic.lean
   Infrastructure/
     Basic.lean
+    SecurityParameter.lean
+    Probability/
+      Uniform.lean
+      Basic.lean
     Asymptotic/
-      SecurityParameter.lean
       Bounds.lean
+      Basic.lean
     Computation/
-      Cost/
-      Algebra/
-      Oracle/
-      Distribution.lean
+      Cost/          # Model -> Writer -> Randomized -> PathBound
+                     # Model -> Measure; PathBound + Measure -> Projection
+      Algebra/       # Signature -> Handler -> Laws / Bounds -> Operation
+      Program/       # Syntax -> Semantics -> Execution / Bounds
+      Oracle/        # Spec -> Trace -> Program -> Handler -> Interpreter
+                     #      -> Bounds -> Composition
       Randomized.lean
-      Program.lean
       Game.lean
+      Basic.lean
     Complexity/
-      Machine.lean
       CostBound.lean
+      Machine.lean
       ProgramMachine.lean
+      OracleImplementation.lean
+      OracleMachine.lean
+      Basic.lean
     GameBased/
       Advantage.lean
       Indistinguishability.lean
+      Distinguishing.lean
+      OracleDistinguishing.lean
       Search.lean
       Hybrid.lean
-      Reduction.lean
+      Basic.lean
     UC/
-      Execution.lean
+      Session.lean
+      Port.lean
+      Message.lean
+      ITM.lean
+      Corruption.lean
+      Configuration.lean
+      Kernel.lean
+      Complexity.lean
       Protocol.lean
+      Functionality.lean
+      Composition.lean
+      Execution.lean
+      Security.lean
+      Context.lean
       Layered.lean
-    ProofPattern/
+      Basic.lean
   Assumption/
     DL/
   Primitive/
     Encryption/
       AsymmetricEncryption/
       SymmetricEncryption/
-  Protocol/
 CryptoTest/
   Assumption/
   Infrastructure/
@@ -95,94 +117,137 @@ Reusable infrastructure shared by assumptions, primitives, and protocols.
 This layer contains asymptotic vocabulary, randomized computations, games,
 oracles, cost models, machine models, and generic game-based proof concepts.
 
+### `Crypto.Infrastructure.SecurityParameter`
+
+`Crypto.SecPar` is defined at the root of Infrastructure. Computation, oracle,
+UC-session, and asymptotic modules may depend on it directly; none must import
+the asymptotic layer merely to name a security parameter.
+
+### `Crypto.Infrastructure.Probability`
+
+Probability constructions that do not depend on costs, machines, or
+asymptotics live in an independent root layer. `Uniform.uniformPMF` is the
+current reusable construction. Algebra laws and cryptographic constructions
+may use this layer without pulling in a cost or complexity API.
+
 ### `Crypto.Infrastructure.Asymptotic`
 
-Asymptotic vocabulary with minimal project dependencies.
+Asymptotic vocabulary depending only on the root security parameter.
 
-- `SecPar` is the shared security parameter.
 - `IsPolyBounded` and `IsNegligible` define the asymptotic vocabulary used by
-  complexity and security definitions.
+  complexity and security definitions. Negligibility constrains `|f n|`, so a
+  negative function is not accepted merely because it lies below a positive
+  threshold.
 
-Files in this layer should not depend on cryptographic primitives,
-game-based security definitions, or machine models.
+Files in this layer do not depend on probability, computation, cryptographic
+primitives, game-based security definitions, or machine models.
 
 ### `Crypto.Infrastructure.Computation`
 
 Reusable semantic infrastructure for cryptographic formalization.
 
-- `Computation.Cost` defines ordered additive `CostModel`s and the generic
-  `CostedT M` writer and `RandCostedT M` randomized-path computations. Their
-  bind operations add sequential costs exactly once and retain the joint
-  distribution of values and exact path costs. `CostModel.nat` is an ordinary
-  concrete model used when natural-number costs are desired; it is not a
-  compatibility alias or a second API.
+- `Computation.Cost` follows the dependency chain
+  `Model -> Writer -> Randomized -> PathBound`, with `Measure` depending only
+  on `Model` and `Projection` joining measurement with path bounds. A
+  `CostModel` is an ordered, potentially noncommutative additive monoid;
+  `WorstCaseCostModel` adds a supremum using that same order. `Costed M` and
+  `RandCosted M` preserve exact sequential order, and
+  `RandCosted.CostBound` is the sole path-bound predicate. `NatMeasure` is a
+  monotone additive projection, including addition and `nsmul` laws, and its
+  projections preserve value distributions. `CostModel.nat` and
+  `NatMeasure.nat` are ordinary concrete choices, not compatibility aliases or
+  a second API.
 - `Computation.Algebra` defines result-indexed `Signature`s and
-  `CostedAlgebra M S`. `CostedAlgebra.exec` is the sole exact primitive
-  interpreter. Arithmetic and sampling are typed operations in the selected
-  signature; `AlgebraLaws` specify their cost-erased mathematics and
-  distributions, while `OperationBounds` independently certifies upper
-  bounds. There are no operation-cost typeclasses or parallel execution
-  records supplying another source of primitive cost.
+  `CostedAlgebra M S` in the order
+  `Signature -> Handler -> Laws / Bounds -> Operation`. Pure signatures do not
+  depend on PMFs or costs. `CostedAlgebra.exec` is the sole exact primitive
+  interpreter; `AlgebraLaws` specify cost-erased mathematics and distributions,
+  while `OperationBounds` independently certifies upper bounds. Typed signature
+  sums and result indices support heterogeneous and dependent operations.
+  Sampling likewise has one exact handler, a separate uniformity law, and a
+  separate bound. No operation-cost typeclass supplies a second exact cost.
 - `Program A Input Output` is a typed heterogeneous algebraic program language.
-  `runCosted` is its only execution semantics, and ordinary probability
-  semantics is defined by erasing the exact path cost. `BoundedProgram` stores
-  that same program together with an input-dependent certificate: sequencing
-  uses the selected cost monoid, while branches use either an explicit common
-  upper bound or a model-provided supremum.
-- `Computation.Oracle` defines oracle interfaces, stateful environments, and
-  adaptive oracle-program syntax. `CostedOracleEnv` is the implementation
-  interface for reductions that must account for work performed inside oracle
-  calls; erasing it recovers an ordinary `OracleEnv` with the same value
-  semantics.
-- `Randomized` packages security-parameter-indexed `RandCostedT M`
+  Its modules are `Syntax`, `Semantics`, `Execution`, and `Bounds`.
+  `runCosted` is the only execution semantics and `valueDist` only erases that
+  result. Structural `Execution` is proved equivalent to membership in
+  `runCosted.support`. `BoundedProgram` stores the same `Program` plus an
+  input-dependent certificate; sequencing uses ordered addition and a branch
+  uses either an explicit common upper bound or `WorstCaseCostModel.sup`.
+- `Computation.Oracle` follows
+  `Spec -> Trace -> Program -> Handler -> Interpreter -> Bounds -> Composition`.
+  `Program` contains only syntax: a query constructor carries no cost. Exact
+  `QueryIssue` constructors and `CostedOracleEnv` live in `Handler`, while path
+  certificates first appear in `Bounds`. The result-indexed issue algebra is
+  the sole source of caller-side issue cost, while `CostedOracleEnv` is the sole
+  exact implemented-oracle handler. `Program.runExact` is the only structural
+  interpreter. Exact cost, local cost, implemented-oracle cost, and query trace
+  are separate projections; `runCosted`, ordinary `runWithEnv`, and trace views
+  are maps or erasures of that run. Ordinary environments enter through a
+  named zero-cost lift. `PossibleExecution` deliberately overapproximates
+  responses, and only interpreter support implies a possible execution.
+- `Randomized` packages security-parameter-indexed `RandCosted M`
   computations. Probability semantics is always obtained by erasing the exact
   cost from that same computation.
 - `Game` packages security experiments as security-parameter-indexed
   distributions.
 
-This layer should remain primitive-agnostic. It is the shared substrate for
-security games, reductions, and construction-specific definitions.
+This layer remains primitive-agnostic. It is the shared substrate for security
+games and construction-specific definitions.
 
 ### `Crypto.Infrastructure.Complexity`
 
 Semantic complexity notions used by constructions and security games.
 
-- `Machine` defines deterministic, probabilistic, timed, PPT, oracle, and
-  oracle PPT machine interfaces.
-- `CostBound` connects core costed computations to polynomial bounds.
-- `ProgramMachine` constructs timed and PPT machines from statically bounded
-  generic programs. An explicit monotone additive `NatMeasure` projects a
-  generic resource cost to the existing natural-number complexity observation
-  without changing the value distribution.
-- Timed machines prove that their runtime bounds cover every explicitly costed
-  execution path; PPT machines additionally prove those bounds polynomial.
-- `OracleProgram M Spec` records explicit caller-side work and the exact query
-  trace as separate path resources. Every query supplies its cost in `M`; no
-  unit-query-cost constructor or cost-to-query-count inference is built into
-  the syntax. `TimedOracleMachine C measure` requires proved local-cost,
-  projected-runtime, per-name-query, and total-query bounds.
-  `PPTOracleMachine C measure` additionally requires polynomial proofs for the
-  projected runtime and total-query bound. The semantic `OracleEnv` remains
-  cost-erased; `CostedOracleEnv C` is its exact implementation counterpart and
-  erases to the same value semantics. Exact composition preserves sequential
-  execution order and, when the required exchange law is available, derives
-  `localBudget + totalQueryBound • envBudget`. Applying a `NatMeasure` gives
-  the corresponding natural-number complexity observation. Query counts are
-  never inferred from runtime.
+- `CostBound` defines the certificate chain over one dependent,
+  security-parameter-indexed run:
 
-The security notions still quantify arbitrary PPT oracle machines, not only
-machines constructed from `Program`. `OracleProgram.withUnitQueryCost`
-specializes any natural-cost oracle program by assigning one unit to every
-query. The library proves both that its total query count is bounded by its
-exact cost and that `runWithEnv` has the same value distribution before and
-after specialization. Thus an exact runtime certificate supplies the mandatory
-total-query certificate without introducing another syntax or interpreter.
+  ```text
+  RandCosted.CostBound
+    -> ExactCostCertificate
+    -> RuntimeCertificate (NatMeasure and a uniform Nat runtime)
+    -> PolyRuntimeCertificate
+    +  PPTAdmissible (same run and claimed runtime)
+    -> PPTMachine
+  ```
+
+- `Machine` has one fully dependent core. `ProbabilisticMachine` stores the
+  sole exact run; `TimedMachine` attaches annotation-level path and runtime
+  certificates, while `PPTMachine` additionally requires `PPTAdmissible` for
+  that exact run and claimed runtime. Ordinary inputs or outputs are constant
+  families. Value-only `map` and pure-function constructors remain available
+  below the PPT boundary, but cannot preserve or manufacture operational
+  admission; there is no parallel ordinary/dependent or deterministic/decider
+  hierarchy.
+- `ProgramMachine` retains the program's native cost model. `NatMeasure` is
+  used only to prove a uniform runtime and never rewrites the exact result into
+  a natural-cost computation. Because the current program syntax is
+  higher-order, `PPTMachine.ofBoundedProgram` also requires independent
+  admission for its exact run.
+- `OracleImplementation -> TimedOracleImplementation ->
+  PPTOracleImplementation` certifies the authoritative `CostedOracleEnv`, its
+  input-dependent query budget, measured uniform query runtime, repeat-cost
+  monotonicity, and polynomiality.
+- `OracleMachine -> TimedOracleMachine -> PPTOracleMachine` stores one oracle
+  program and independently certifies input-dependent local work, per-name
+  query counts, total query count, uniform local runtime, and uniform total
+  query runtime. Composition constructs one ordinary machine with exact budget
+  `localBudget + repeatCost totalQueryBudget envBudget` and runtime
+  `localRuntime + totalQueryRuntime * envRuntime`. `CostExchange` is requested
+  only by the exact theorem that regroups interleaved work;
+  `NatMeasure.map_nsmul` proves the measured theorem, and the PPT constructor
+  requires both polynomial closure and independent admission of the closed
+  run. `PPTOracleMachine` itself likewise carries caller admission. Query
+  counts are never inferred from cost or runtime.
 
 This layer may depend on `Crypto.Infrastructure.Asymptotic` and
 `Crypto.Infrastructure.Computation`, but should not depend on specific
-primitives or assumptions. The current model is an explicit, trusted path-cost
-semantics: runtime and query certificates are now connected to the annotated
-computation and oracle-program execution, rather than being unrelated metadata.
+primitives or assumptions. The current annotation model is an explicit,
+trusted path-cost semantics: runtime and query certificates are connected to
+the annotated computation and oracle-program execution, rather than being
+unrelated metadata. Entry into cryptographic PPT quantification is a separate
+external boundary: the opaque admission predicates are indexed by the same
+execution and claimed runtime, and the generic library provides no admission
+fact or constructor for arbitrary host functions.
 For `Program` computations, costs are generated by the selected algebra handler
 and accumulated by the interpreter; callers do not attach a total
 cost after defining the algorithm. Exact handlers, cost-erased algebra laws,
@@ -197,8 +262,9 @@ syntax: values passed to `pure`, continuation functions, and branch conditions
 remain Lean terms. It therefore measures all explicit program primitives but is
 not yet a first-order Turing/RAM semantics that prevents hidden host
 computation. A concrete interpretation must justify its primitive costs, and a
-fully non-bypassable model would additionally replace the
-higher-order boundaries with first-order typed syntax.
+fully internal operational account would replace the higher-order boundaries
+with first-order typed syntax. Until then the PPT admission witness is an
+explicit external obligation rather than a consequence of those annotations.
 
 ### `Crypto.Infrastructure.GameBased`
 
@@ -206,38 +272,104 @@ Generic security notions that are not tied to one primitive.
 
 - `Advantage` defines acceptance probability and distinguishing advantage for
   boolean games.
-- `Indistinguishability` states negligible distinguishing advantage and
-  provides reusable distinguishing and oracle-distinguishing problem templates.
-- `Search` defines reusable search-problem security games and hardness.
+- `Indistinguishability` contains only the cost-erased negligible-advantage
+  boundary.
+- `Distinguishing` and `OracleDistinguishing` separately define ordinary and
+  oracle challenge problems. Their `Hard` predicates explicitly select an
+  adversary `CostModel` and `NatMeasure`, then quantify all corresponding PPT
+  machines rather than only program-derived adversaries.
+- `Search` uses the same explicit adversary model and the unified dependent
+  machine core, so witness types may depend on the sampled instance.
 - `Hybrid` records finite hybrid sequences.
-- `Reduction` records transformations between machine families or other
-  proof-relevant types.
 
-Primitive-specific games should live under the corresponding primitive; shared
-game combinators and proof patterns belong here.
+Primitive-specific games live under the corresponding primitive. This layer
+contains only shared, semantically meaningful game boundaries.
 
 ### `Crypto.Infrastructure.UC`
 
-Reusable universal-composability vocabulary for interactive protocols. This
-layer currently sits above the computation, complexity, and game-based
-infrastructure: UC environments, adversaries, and simulators are first expressed
-as semantic oracle machines, with PPT aliases used by computational UC
-emulation. The real and ideal executions are packaged as boolean `Game`s whose
-indistinguishability is stated with the generic game-based vocabulary.
+The UC layer is an exact, typed ITM execution stack rather than a wrapper around
+oracle games:
 
-- `Execution` defines semantic interactive systems, UC experiments, real and
-  ideal executions, computational UC emulation, controlled-environment UC
-  emulation, perfect UC emulation, and the coercion lemmas from perfect to
-  computational emulation.
-- `Protocol` defines generic UC protocols as indexed families of interactive
-  machines, together with corruption modes and corruption policies.
-- `Layered` provides the layered/YOSO MPC template: layered party identifiers,
-  trusted and boundary roles, per-layer corruption eligibility, the standard
-  local party-step shape, and a generic MPC ideal functionality skeleton.
+```text
+Session -> Port -> Message -> ITM -> Corruption -> Configuration
+        -> Kernel -> Complexity
+        -> Protocol / Functionality -> Composition -> Execution -> Security -> Context
+                                            `-> Layered
+```
 
-This layer is still a framework, not a collection of completed protocol
-proofs. Concrete UC statements should instantiate these templates with explicit
-message syntax, schedulers, ideal functionalities, and simulators.
+- `Session` gives `SID` a root and child path, and addresses pair a session with
+  a machine name. `Port` and `Message` use result-indexed payloads, typed
+  endpoints, proof-carrying `CanConnect` capabilities, and routing policies
+  whose projections explicitly state observation, delay/delivery authority,
+  forgery, and broadcast permission. `CanSendAs controller claimedSource`
+  separately limits address impersonation after corruption. Broadcast is an
+  ordinary manager component that serializes deliveries, not hidden kernel
+  fanout.
+- `ITMFamily` supplies address-indexed state, leakage, erasure requests, output,
+  and exact `init`, `activate`, `applyErasure`, and `leak` handlers. One
+  activation produces one `LocalAction`; multi-message work is serialized by
+  queued resume activations.
+- `Corruption` keeps policy separate from state semantics. `Configuration` is a
+  dependently typed cell store with a global FIFO of activation and corruption
+  events, audit trace, output, and corrupted-address set. A dynamic-corruption
+  action only appends a request; a later kernel step checks the policy, passes
+  the current state (including all previously committed erasures) to the exact
+  leakage handler, removes honest state, marks the address corrupted, and
+  queues a typed leakage activation for adversarial control.
+- `Kernel` charges dequeue, initialization, state access, routing, enqueue,
+  erasure, corruption, and finish through a typed `KernelAlgebra`. Its sole
+  fuel-bounded `runCosted` activates at most one ITM per step and returns
+  output, timeout, or deadlock. Timeout and deadlock map to `false`; neither a
+  cost certificate nor a fuel certificate is inspected by the runner.
+- `Complexity` attaches component-handler, one-step, repeated-activation,
+  measurement, and polynomial certificates to that exact runner. Independent
+  `FuelCertificate` proofs are indexed by the closed world's actual initial
+  configuration and establish no-timeout and erased-distribution stability.
+  Certified real and ideal worlds use the pointwise maximum of their
+  polynomial activation limits as a common fuel; formal independence theorems
+  show that this choice cannot make the real game depend on the simulator or
+  the ideal game depend on the adversary.
+- `Protocol` and `IdealFunctionality` are distinct wrappers. `Environment`,
+  `Adversary`, `Simulator`, and `Network` are also distinct addressed ITMs.
+  `Composition` dispatches their address spaces into one dependent family;
+  `composeReal` installs environment, protocol, adversary, and network, while
+  `composeIdeal` installs the same environment and network with functionality
+  and simulator. One experiment supplies one corruption policy, and both
+  execution-data families are indexed by that exact policy rather than storing
+  independently selectable copies.
+- `Execution` erases and maps `RealWorld.runCosted` and
+  `IdealWorld.runCosted` directly. An environment's output family is
+  intrinsically Boolean (represented universe-polymorphically as
+  `ULift Bool`); the closed-world observation reads only an
+  environment-owned terminal value. System, adversarial, and network terminal
+  values cannot be reinterpreted by an uncharged post-processing function.
+  `Security` provides PPT-certified role wrappers and restores the standard
+  quantifier order
+  `forall PPT adversary, exists PPT simulator, forall PPT environment` before
+  applying game indistinguishability. Perfect equality implies computational
+  emulation.
+- `Context` provides a typed system hole, role-preserving injective address and
+  port transport, PPT-preserving environment/adversary/simulator transforms,
+  identity and associative plugging, and `uc_compose`. A single
+  `SystemHole.fill` owns the plugged system, `ContextBuilder` constructs the
+  surrounding world without accepting an unrelated outer system, and one
+  `plugPolicy` transformation is shared by the real and ideal executions. Its
+  premise is an erased one-step kernel commuting square over the dependent
+  configuration; arbitrary finite runs, both sides' pointwise-maximum fuel,
+  and the final real/ideal game equalities are derived theorems. The plugged
+  simulator has no environment argument, while the same transformed
+  environment is used on both inner worlds. `Layered` installs party steps and
+  MPC functionalities as actual ITMs,
+  includes explicit broadcast/corruption managers and boundary components in a
+  total role dispatcher, and enforces corruption eligibility separately for
+  each session and layer. `ExecutableLayered` connects that dispatcher, the MPC
+  functionality, network, initial configurations, and both PPT certificates to
+  the same layered policy before packaging the generic executable experiment.
+
+This remains infrastructure rather than a catalog of completed UC protocols.
+Concrete statements must instantiate the port schema, components, policy,
+initial configuration, exact kernel algebra, complexity certificates, and
+operational context simulations.
 
 ### `Crypto.Assumption`
 
@@ -246,9 +378,9 @@ Computational assumptions, organized by family.
 Discrete logarithm and DDH live directly in `Assumption.DL.DLog` and
 `Assumption.DL.DDH`. They share a cyclic-action parameter layer, while the
 decisional layer adds exactly the stronger commutative multiplication/action
-capabilities. For a chosen `CostModel M`, each public parameter carries one
+capabilities. For a chosen cost model `M`, each public parameter carries one
 typed algebra implementing every operation used by its programs. Each family
-has one `RandCostedT M` setup, and search or distinguishing distributions are
+has one `RandCosted M` setup, and search or distinguishing distributions are
 obtained only by erasing costs from those computations.
 
 DLog and DDH separate exact execution from efficiency evidence explicitly.
@@ -281,7 +413,7 @@ The current encryption hierarchy contains:
 The main symmetric-encryption interface is
 `Crypto.Primitive.Encryption.SymmetricEncryption.Scheme M SecPar Param Key Message Ciphertext`.
 It is generic in its `CostModel`; `setup`, `keygen`, `encrypt`, and `decrypt`
-all return `RandCostedT M`. `Key`, `Message`, and `Ciphertext` are indexed by
+all return `RandCosted M`. `Key`, `Message`, and `Ciphertext` are indexed by
 the sampled public parameters. Correctness and security notions observe
 ordinary values through `setupDist`, `keygenDist`, `encryptDist`, and
 `decryptDist`; they do not convert to a second scheme structure.
@@ -291,7 +423,7 @@ exact zero advantage.
 
 The main asymmetric-encryption interface is
 `Crypto.Primitive.Encryption.AsymmetricEncryption.Scheme M SecPar Param PublicKey SecretKey Message Ciphertext`.
-It follows the same `RandCostedT M` design for public parameters, key
+It follows the same `RandCosted M` design for public parameters, key
 generation, public-key encryption, and secret-key decryption. Its IND-CPA
 definition remains an `Infrastructure.GameBased.OracleDistinguishing` problem
 over the cost-erased value distributions and keeps the same arbitrary PPT
@@ -324,61 +456,56 @@ corresponding primitive. The reusable UC execution and protocol machinery
 belongs in `Crypto.Infrastructure.UC`; primitive-level files should import and
 instantiate that machinery only when they introduce concrete UC definitions.
 
-### `Crypto.Protocol`
-
-Protocol-level definitions that compose primitives or model interactive
-protocols. This namespace is currently reserved for future protocol
-formalizations. Protocol code may depend on primitives, assumptions,
-game-based security, complexity, and computation infrastructure as needed.
-
-### `Crypto.Infrastructure.ProofPattern`
-
-Reusable proof infrastructure and proof organization. This namespace is
-currently reserved for shared proof patterns, automation, and library-level
-proof utilities that do not naturally belong to one primitive or assumption.
-
 ## Import Policy
 
 `Basic.lean` files are aggregation modules. Import them when a caller wants a
 whole layer; otherwise prefer importing the narrow file that provides the needed
 definition.
 
-The intended dependency direction is:
+The enforced dependency direction is:
 
 ```text
-Infrastructure.Asymptotic
-  -> Infrastructure.Computation
-  -> Infrastructure.Complexity / Infrastructure.GameBased
-  -> Infrastructure.UC
-  -> Assumption / Primitive
-  -> Protocol / Infrastructure.ProofPattern
+SecurityParameter -> Asymptotic
+SecurityParameter -> security-parameter-indexed Computation / UC modules
+
+Cost.Model -> Cost.Writer -> Cost.Randomized -> Cost.PathBound
+Cost.Model -> Cost.Measure
+Cost.PathBound + Cost.Measure -> Cost.Projection
+
+Cost -> Algebra -> Program
+SecurityParameter + Cost + Algebra -> Oracle
+Asymptotic + Computation -> Complexity -> GameBased -> UC
+
+Probability ---------------------------------------> Assumption / Primitive
+Program / Oracle / GameBased / UC -----------------> Assumption / Primitive
 ```
 
-This is a guideline rather than a total order. For example,
-`Infrastructure.GameBased` and `Infrastructure.Complexity` both depend on
-`Infrastructure.Computation`, `Infrastructure.UC` uses both machine and
-game-based vocabulary, and primitive-specific security games may depend on both
-game-based and complexity infrastructure. Avoid dependencies from lower layers
-back into higher layers.
+`SecurityParameter` and `Probability` are independent roots; in particular,
+neither imports asymptotics or computation. `scripts/check_infrastructure_imports.py`
+checks Infrastructure imports for cycles and upward edges, and CI runs it
+before Lean builds. Subsystems additionally enforce their file-local orders,
+including Algebra, Program, Oracle, Complexity, GameBased, and the UC kernel
+stack.
 
 ## Adding New Material
 
 - Put infrastructure code under `Infrastructure`.
-- Put security-parameter and asymptotic vocabulary in `Infrastructure.Asymptotic`.
+- Put only `SecPar` in `Infrastructure.SecurityParameter`; put polynomial and
+  negligible predicates in `Infrastructure.Asymptotic`.
+- Put cost-independent PMF constructions in `Infrastructure.Probability`.
 - Put reusable game, oracle, computation, cost, or algebra semantics in
-  `Infrastructure.Computation`.
-- Put machine models, including PPT, oracle, and oracle PPT machines, in
+  the corresponding ordered sublayer of `Infrastructure.Computation`.
+- Put exact/runtime/polynomial certificates, unified dependent machines,
+  program adapters, and oracle implementation/machine certificates in
   `Infrastructure.Complexity`.
-- Put generic advantage, indistinguishability, hybrid, and reduction notions in
-  `Infrastructure.GameBased`.
-- Put reusable UC experiment, execution, protocol, corruption, and layered MPC
-  templates in `Infrastructure.UC`.
+- Put generic advantage, indistinguishability, hybrid, distinguishing, oracle
+  distinguishing, and search notions in `Infrastructure.GameBased`.
+- Put reusable typed ITM, corruption, FIFO-kernel, closed-world, UC-security,
+  context-composition, and layered-MPC definitions in `Infrastructure.UC`.
 - Put assumption families in `Assumption/<family>/`.
 - Put primitive-specific syntax, correctness, and security games in
   `Primitive/<kind>/<primitive>/`, with `Syntax.lean` and `UC.lean` as direct
   files and `Properties/` and `Instantiations/` as subdirectories.
-- Put composed or interactive protocols in `Protocol`.
-- Put shared proof utilities in `Infrastructure.ProofPattern`.
 
 When adding polymorphic Lean declarations, use descriptive universe names such
 as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,
@@ -409,17 +536,22 @@ that instantiate a game-based notion.
 
 ## Status
 
-The library is early-stage. The current hierarchy is sound as a working
-architecture, but several namespaces are intentionally sparse. Ordinary,
-dependent-output, and oracle machines share explicit path-cost semantics;
-oracle runtime, per-name query bounds, and total-query bounds are tied to
-structural executions and to the profiled interpreter. OTP, ElGamal, DLog, and
-DDH use the generic typed-algebra-to-`RandCostedT` path, with efficiency bounds
-treated as certificates over those exact executions; all four use the same
-typed `Program` layer and none has an alternate natural-number API. The next
-useful refinements are to choose a
-first-order operational machine model when host-independent PPT soundness is
-required, complete reusable reduction and hybrid infrastructure, prove ElGamal
-IND-CPA security from DDH, and move common proof patterns into
-`Crypto.Infrastructure.GameBased` or `Crypto.Infrastructure.ProofPattern` once
-they repeat across multiple constructions.
+The library is early-stage, but Infrastructure now follows one strict semantic
+and certificate hierarchy. There is one dependent machine core, one exact
+Program interpreter, and one structural Oracle interpreter. Oracle local cost,
+per-name queries, total queries, implementation cost, measured runtime, and
+polynomial closure form one certificate chain. The UC layer has a typed FIFO
+kernel, exact kernel algebra, dynamic corruption, real/ideal world wiring,
+PPT-certified roles, common-fuel execution, standard UC quantifiers, and an
+operationally certified context-composition theorem. Its public Boolean game
+is fixed by the typed environment output, real and ideal executions share one
+corruption policy, and layered systems are connected through a total executable
+dispatcher rather than metadata-only components.
+
+OTP, ElGamal, DLog, and DDH use the generic typed-algebra-to-`RandCosted`
+path, with efficiency bounds treated as certificates over those exact
+executions. All four use the same typed `Program` layer and none has an
+alternate fixed-natural-cost API. The next useful refinements are a first-order
+operational machine model when host-independent PPT soundness is required,
+concrete protocol instantiations of the UC kernel and context interface, and an
+ElGamal IND-CPA proof from DDH.

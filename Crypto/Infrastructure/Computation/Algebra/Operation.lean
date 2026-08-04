@@ -1,4 +1,7 @@
 import Crypto.Infrastructure.Computation.Algebra.Signature
+import Crypto.Infrastructure.Computation.Algebra.Handler
+import Crypto.Infrastructure.Computation.Algebra.Laws
+import Crypto.Infrastructure.Computation.Algebra.Bounds
 
 namespace Crypto.Infrastructure.Computation.Algebra
 
@@ -27,8 +30,8 @@ noncomputable def algebra
   exec operation :=
     match operation with
     | .add left right =>
-        RandCostedT.liftCosted
-          (⟨left + right, addCost left right⟩ : CostedT M Carrier)
+        RandCosted.liftCosted
+          (⟨left + right, addCost left right⟩ : Costed M Carrier)
 
 /-- The cost-erased addition handler agrees with mathematical addition. -/
 noncomputable def laws
@@ -49,7 +52,7 @@ noncomputable def bounds
     {Carrier : Type uCarrier} [Add Carrier]
     (addCost addBudget : Carrier → Carrier → M.Cost)
     (addCost_le : ∀ left right,
-      @LE.le M.Cost M.instPartialOrder.toLE
+      M.instPartialOrder.le
         (addCost left right) (addBudget left right)) :
     OperationBounds (algebra M addCost) where
   budget operation :=
@@ -58,7 +61,7 @@ noncomputable def bounds
   cost_le operation result hresult := by
     cases operation with
     | add left right =>
-        simp only [algebra, RandCostedT.liftCosted] at hresult
+        simp only [algebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact addCost_le left right
@@ -86,8 +89,8 @@ noncomputable def algebra
   exec operation :=
     match operation with
     | .neg value =>
-        RandCostedT.liftCosted
-          (⟨-value, negCost value⟩ : CostedT M Carrier)
+        RandCosted.liftCosted
+          (⟨-value, negCost value⟩ : Costed M Carrier)
 
 /-- The cost-erased negation handler agrees with mathematical negation. -/
 noncomputable def laws
@@ -108,8 +111,7 @@ noncomputable def bounds
     {Carrier : Type uCarrier} [Neg Carrier]
     (negCost negBudget : Carrier → M.Cost)
     (negCost_le : ∀ value,
-      @LE.le M.Cost M.instPartialOrder.toLE
-        (negCost value) (negBudget value)) :
+      M.instPartialOrder.le (negCost value) (negBudget value)) :
     OperationBounds (algebra M negCost) where
   budget operation :=
     match operation with
@@ -117,7 +119,7 @@ noncomputable def bounds
   cost_le operation result hresult := by
     cases operation with
     | neg value =>
-        simp only [algebra, RandCostedT.liftCosted] at hresult
+        simp only [algebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact negCost_le value
@@ -145,8 +147,8 @@ noncomputable def algebra
   exec operation :=
     match operation with
     | .sub left right =>
-        RandCostedT.liftCosted
-          (⟨left - right, subCost left right⟩ : CostedT M Carrier)
+        RandCosted.liftCosted
+          (⟨left - right, subCost left right⟩ : Costed M Carrier)
 
 /-- The cost-erased subtraction handler agrees with mathematical subtraction. -/
 noncomputable def laws
@@ -167,7 +169,7 @@ noncomputable def bounds
     {Carrier : Type uCarrier} [Sub Carrier]
     (subCost subBudget : Carrier → Carrier → M.Cost)
     (subCost_le : ∀ left right,
-      @LE.le M.Cost M.instPartialOrder.toLE
+      M.instPartialOrder.le
         (subCost left right) (subBudget left right)) :
     OperationBounds (algebra M subCost) where
   budget operation :=
@@ -176,7 +178,7 @@ noncomputable def bounds
   cost_le operation result hresult := by
     cases operation with
     | sub left right =>
-        simp only [algebra, RandCostedT.liftCosted] at hresult
+        simp only [algebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact subCost_le left right
@@ -207,8 +209,8 @@ noncomputable def algebra
   exec operation :=
     match operation with
     | .smul scalar value =>
-        RandCostedT.liftCosted
-          (⟨scalar • value, smulCost scalar value⟩ : CostedT M Carrier)
+        RandCosted.liftCosted
+          (⟨scalar • value, smulCost scalar value⟩ : Costed M Carrier)
 
 /-- The cost-erased handler agrees with mathematical scalar multiplication. -/
 noncomputable def laws
@@ -231,7 +233,7 @@ noncomputable def bounds
     [SMul Scalar Carrier]
     (smulCost smulBudget : Scalar → Carrier → M.Cost)
     (smulCost_le : ∀ scalar value,
-      @LE.le M.Cost M.instPartialOrder.toLE
+      M.instPartialOrder.le
         (smulCost scalar value) (smulBudget scalar value)) :
     OperationBounds (algebra M smulCost) where
   budget operation :=
@@ -240,7 +242,7 @@ noncomputable def bounds
   cost_le operation result hresult := by
     cases operation with
     | smul scalar value =>
-        simp only [algebra, RandCostedT.liftCosted] at hresult
+        simp only [algebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact smulCost_le scalar value
@@ -268,8 +270,8 @@ noncomputable def algebra
   exec operation :=
     match operation with
     | .mul left right =>
-        RandCostedT.liftCosted
-          (⟨left * right, mulCost left right⟩ : CostedT M Value)
+        RandCosted.liftCosted
+          (⟨left * right, mulCost left right⟩ : Costed M Value)
 
 /-- The cost-erased multiplication handler agrees with mathematical multiplication. -/
 noncomputable def laws
@@ -290,7 +292,7 @@ noncomputable def bounds
     {Value : Type uValue} [Mul Value]
     (mulCost mulBudget : Value → Value → M.Cost)
     (mulCost_le : ∀ left right,
-      @LE.le M.Cost M.instPartialOrder.toLE
+      M.instPartialOrder.le
         (mulCost left right) (mulBudget left right)) :
     OperationBounds (algebra M mulCost) where
   budget operation :=
@@ -299,7 +301,7 @@ noncomputable def bounds
   cost_le operation result hresult := by
     cases operation with
     | mul left right =>
-        simp only [algebra, RandCostedT.liftCosted] at hresult
+        simp only [algebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact mulCost_le left right
@@ -322,7 +324,7 @@ def signature (Sample : Type uSample) :
 noncomputable def algebra
     (M : CostModel.{uCost})
     {Sample : Type uSample}
-    (sample : RandCostedT M Sample) :
+    (sample : RandCosted M Sample) :
     CostedAlgebra M (signature Sample) where
   exec operation :=
     match operation with
@@ -332,9 +334,9 @@ noncomputable def algebra
 noncomputable def laws
     (M : CostModel.{uCost})
     {Sample : Type uSample}
-    (sample : RandCostedT M Sample)
+    (sample : RandCosted M Sample)
     (semantics : PMF Sample)
-    (sample_spec : RandCostedT.valueDist sample = semantics) :
+    (sample_spec : RandCosted.valueDist sample = semantics) :
     AlgebraLaws (algebra M sample) where
   semantics operation :=
     match operation with
@@ -347,10 +349,10 @@ noncomputable def laws
 noncomputable def bounds
     (M : CostModel.{uCost})
     {Sample : Type uSample}
-    (sample : RandCostedT M Sample)
+    (sample : RandCosted M Sample)
     (sampleBudget : M.Cost)
     (cost_le : ∀ result, result ∈ sample.support →
-      @LE.le M.Cost M.instPartialOrder.toLE result.cost sampleBudget) :
+      M.instPartialOrder.le result.cost sampleBudget) :
     OperationBounds (algebra M sample) where
   budget _operation := sampleBudget
   cost_le operation result hresult := by

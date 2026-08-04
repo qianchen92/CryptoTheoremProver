@@ -1,5 +1,6 @@
 import Crypto.Assumption.DL.DDH
 import Crypto.Infrastructure.Complexity.ProgramMachine
+import Crypto.Infrastructure.Probability.Uniform
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Construction
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Syntax
 
@@ -183,15 +184,15 @@ private theorem encryptExecution_exact
     (value : ULift.{uScalar} (pp.Carrier × pp.Carrier)) (cost : M.Cost)
     (execution : Program.Code.Execution
       ((encryptProgram pp).body (publicKey, message)) value cost) :
-    ∃ sampleResult : CostedT M (ULift.{uGroup} pp.Scalar),
+    ∃ sampleResult : Costed M (ULift.{uGroup} pp.Scalar),
       sampleResult ∈ (pp.algebra.exec .sampleScalar).support ∧
-    ∃ firstResult : CostedT M (ULift.{uScalar} pp.Carrier),
+    ∃ firstResult : Costed M (ULift.{uScalar} pp.Carrier),
       firstResult ∈
         (pp.algebra.exec (.smul sampleResult.val.down pp.generator)).support ∧
-    ∃ sharedResult : CostedT M (ULift.{uScalar} pp.Carrier),
+    ∃ sharedResult : Costed M (ULift.{uScalar} pp.Carrier),
       sharedResult ∈
         (pp.algebra.exec (.smul sampleResult.val.down publicKey)).support ∧
-    ∃ additionResult : CostedT M (ULift.{uScalar} pp.Carrier),
+    ∃ additionResult : Costed M (ULift.{uScalar} pp.Carrier),
       additionResult ∈
         (pp.algebra.exec (.add message sharedResult.val.down)).support ∧
       value = ULift.up (firstResult.val.down, additionResult.val.down) ∧
@@ -231,18 +232,18 @@ DDH handler; it does not consult an upper-bound certificate.
 theorem encryptProgram_exactCost
     (pp : PublicParam.{uCost, uScalar, uGroup} M)
     (publicKey message : pp.Carrier)
-    (result : CostedT M (ULift.{uScalar} (pp.Carrier × pp.Carrier)))
+    (result : Costed M (ULift.{uScalar} (pp.Carrier × pp.Carrier)))
     (hresult : result ∈
       (Program.runCosted (encryptProgram pp) (publicKey, message)).support) :
-    ∃ sampleResult : CostedT M (ULift.{uGroup} pp.Scalar),
+    ∃ sampleResult : Costed M (ULift.{uGroup} pp.Scalar),
       sampleResult ∈ (pp.algebra.exec .sampleScalar).support ∧
-    ∃ firstResult : CostedT M (ULift.{uScalar} pp.Carrier),
+    ∃ firstResult : Costed M (ULift.{uScalar} pp.Carrier),
       firstResult ∈
         (pp.algebra.exec (.smul sampleResult.val.down pp.generator)).support ∧
-    ∃ sharedResult : CostedT M (ULift.{uScalar} pp.Carrier),
+    ∃ sharedResult : Costed M (ULift.{uScalar} pp.Carrier),
       sharedResult ∈
         (pp.algebra.exec (.smul sampleResult.val.down publicKey)).support ∧
-    ∃ additionResult : CostedT M (ULift.{uScalar} pp.Carrier),
+    ∃ additionResult : Costed M (ULift.{uScalar} pp.Carrier),
       additionResult ∈
         (pp.algebra.exec (.add message sharedResult.val.down)).support ∧
       result.val = ULift.up (firstResult.val.down, additionResult.val.down) ∧
@@ -264,10 +265,10 @@ noncomputable def scheme (F : Family.{uCost, uScalar, uGroup} M) :
     Program.runCosted (Crypto.Assumption.DL.DDH.setupProgram F) sec
   keygen := fun pp => Program.runCosted (keygenProgram pp) ()
   encrypt := fun pp publicKey message =>
-    RandCostedT.map ULift.down
+    RandCosted.map ULift.down
       (Program.runCosted (encryptProgram pp) (publicKey, message))
   decrypt := fun pp secretKey ciphertext =>
-    RandCostedT.map ULift.down
+    RandCosted.map ULift.down
       (Program.runCosted (decryptProgram pp) (secretKey, ciphertext))
 
 @[simp] theorem scheme_setup_eq_family_setup
@@ -280,7 +281,7 @@ noncomputable def scheme (F : Family.{uCost, uScalar, uGroup} M) :
     (pp : PublicParam.{uCost, uScalar, uGroup} M) :
     Program.valueDist (keygenProgram pp) () =
       PMF.bind
-        (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
+        (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
         (fun secretKey => PMF.pure (secretKey • pp.generator, secretKey)) := by
   change Program.Code.valueDist ((keygenProgram pp).body ()) = _
   simp [keygenProgram,
@@ -295,7 +296,7 @@ noncomputable def scheme (F : Family.{uCost, uScalar, uGroup} M) :
     PMF.map ULift.down
         (Program.valueDist (encryptProgram pp) (publicKey, message)) =
       PMF.bind
-        (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
+        (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
         (fun nonce =>
           PMF.pure (nonce • pp.generator, message + nonce • publicKey)) := by
   change PMF.map ULift.down
@@ -332,7 +333,7 @@ noncomputable def scheme (F : Family.{uCost, uScalar, uGroup} M) :
     (pp : PublicParam.{uCost, uScalar, uGroup} M) :
     (scheme F).keygenDist pp =
       PMF.bind
-        (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
+        (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
         (fun secretKey => PMF.pure (secretKey • pp.generator, secretKey)) :=
   keygenProgram_valueDist pp
 
@@ -342,11 +343,11 @@ noncomputable def scheme (F : Family.{uCost, uScalar, uGroup} M) :
     (publicKey message : pp.Carrier) :
     (scheme F).encryptDist pp publicKey message =
       PMF.bind
-        (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
+        (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
         (fun nonce =>
           PMF.pure (nonce • pp.generator, message + nonce • publicKey)) := by
   unfold Scheme.encryptDist scheme
-  rw [RandCostedT.valueDist_map]
+  rw [RandCosted.valueDist_map]
   exact encryptProgram_valueDist pp publicKey message
 
 @[simp] theorem scheme_decryptDist
@@ -356,7 +357,7 @@ noncomputable def scheme (F : Family.{uCost, uScalar, uGroup} M) :
     (scheme F).decryptDist pp secretKey ciphertext =
       PMF.pure (ciphertext.2 - secretKey • ciphertext.1) := by
   unfold Scheme.decryptDist scheme
-  rw [RandCostedT.valueDist_map]
+  rw [RandCosted.valueDist_map]
   exact decryptProgram_valueDist pp secretKey ciphertext
 
 theorem keygenProgram_costBound
@@ -385,17 +386,19 @@ noncomputable def encryptTimedMachine
     (measure : NatMeasure M)
     (pp : PublicParam.{uCost, uScalar, uGroup} M)
     (certificate : ParameterCertificate pp) :
-    TimedMachine (pp.Carrier × pp.Carrier) (pp.Carrier × pp.Carrier) :=
-  TimedMachine.ofMappedBoundedProgram measure
-    (fun _sec => pp.algebra)
-    (fun _sec => certificate.bounds)
-    (fun _sec _input => encryptBudget pp certificate)
-    (fun _sec => measure (encryptBudget pp certificate))
-    ULift.down
-    (fun _sec => encryptBoundedProgram pp certificate)
-    (by
-      intro sec input
-      exact Nat.le_refl _)
+    TimedMachine M measure
+      (fun _sec => pp.Carrier × pp.Carrier)
+      (fun _sec _input => pp.Carrier × pp.Carrier) :=
+  (TimedMachine.ofBoundedProgram measure
+      (fun _sec => pp.algebra)
+      (fun _sec => certificate.bounds)
+      (fun _sec _input => encryptBudget pp certificate)
+      (fun _sec => measure (encryptBudget pp certificate))
+      (fun _sec => encryptBoundedProgram pp certificate)
+      (by
+        intro sec input
+        exact Nat.le_refl _)).map
+    (fun _sec _input result => result.down)
 
 @[simp] theorem encryptTimedMachine_runDist
     (measure : NatMeasure M)
@@ -405,15 +408,6 @@ noncomputable def encryptTimedMachine
     (sec : Crypto.SecPar) (input : pp.Carrier × pp.Carrier) :
     (encryptTimedMachine measure pp certificate).runDist sec input =
       (scheme F).encryptDist pp input.1 input.2 := by
-  change
-    RandCostedT.valueDist
-      (RandCostedT.map ULift.down
-        (RandCostedT.mapCost measure
-          (Program.runCosted (encryptProgram pp) input))) =
-      RandCostedT.valueDist
-        (RandCostedT.map ULift.down
-          (Program.runCosted (encryptProgram pp) input))
-  rw [RandCostedT.valueDist_map, RandCostedT.valueDist_mapCost,
-    RandCostedT.valueDist_map]
+  rfl
 
 end Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal

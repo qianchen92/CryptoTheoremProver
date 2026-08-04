@@ -1,51 +1,133 @@
-import Crypto.Infrastructure.UC.Execution
-import Mathlib.Data.Finset.Basic
+import Crypto.Infrastructure.UC.Configuration
 
 namespace Crypto.Infrastructure.UC
 
-universe uEntity uInput uOutput uState
+open Crypto.Infrastructure.Computation.Cost
 
-/-- The corruption mode attached to a UC component. -/
-inductive CorruptionMode where
-  | incorruptible
-  | static
-  | dynamic
-  | dynamicWithErasures
-  deriving DecidableEq, Repr
-
-/-- A corruption policy is a mode plus a predicate for eligible corruptions. -/
-structure CorruptionPolicy (Entity : Type uEntity) where
-  mode : CorruptionMode
-  eligible : Finset Entity → Prop
-
-namespace CorruptionPolicy
-
-/-- An incorruptible component allows only the empty corruption set. -/
-def incorruptible (Entity : Type uEntity) : CorruptionPolicy Entity where
-  mode := CorruptionMode.incorruptible
-  eligible := fun corrupted => corrupted = ∅
-
-end CorruptionPolicy
+universe uCost uAddress uPayload uPort uCapability
+universe uState uLeakage uErasure uOutput
 
 /--
-A generic UC protocol as a family of machines indexed by participating entities.
+The four disjoint address spaces of a closed UC execution.
 
-The `Input` and `Output` types may depend on both the security parameter and the
-entity, leaving concrete network and scheduling syntax to later refinements.
+The `system` summand is occupied by a protocol in a real execution and by an
+ideal functionality in an ideal execution.  Tagging addresses here makes
+ownership decidable from the address itself and prevents one component from
+silently sharing another component's local-state cell.
 -/
-structure Protocol where
-  Entity : Type uEntity
-  Input : Crypto.SecPar → Entity → Type uInput
-  Output : Crypto.SecPar → Entity → Type uOutput
-  corruptionPolicy : CorruptionPolicy Entity
-  machine :
-    (entity : Entity) →
-    InteractiveSystem
-      (fun sec => Input sec entity)
-      (fun sec => Output sec entity)
+inductive ClosedWorldAddress
+    (EnvironmentAddress ProtocolAddress AdversaryAddress NetworkAddress :
+      Type uAddress) where
+  | environment (address : EnvironmentAddress)
+  | system (address : ProtocolAddress)
+  | adversary (address : AdversaryAddress)
+  | network (address : NetworkAddress)
+  deriving DecidableEq, Repr
 
-/-- Ideal functionalities currently have the same generic structure as protocols. -/
-abbrev IdealFunctionality :=
-  Protocol
+/--
+An exactly interpreted ITM family over one owned portion of a global address
+space.
+
+The embedding is part of the type.  Hence activations and emitted actions use
+the global port schema while state, leakage, erasure, and output remain indexed
+by the component's local address.
+-/
+structure AddressedITM
+    (M : CostModel.{uCost})
+    {Address : Type uAddress}
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+    (LocalAddress : Type uAddress)
+    (embed : LocalAddress → Address) where
+  State : Crypto.SecPar → LocalAddress → Type uState
+  Leakage : Crypto.SecPar → LocalAddress → Type uLeakage
+  Erasure : Crypto.SecPar → LocalAddress → Type uErasure
+  Output : Crypto.SecPar → LocalAddress → Type uOutput
+  init : ∀ sec address, RandCosted M (State sec address)
+  activate : ∀ sec address,
+    State sec address → ActivationInput schema (embed address) →
+      RandCosted M
+        (ActivationResult (State sec address)
+          (LocalAction schema (embed address)
+            (Erasure sec address) (Output sec address)))
+  applyErasure : ∀ sec address,
+    Erasure sec address → State sec address → Costed M (State sec address)
+  leak : ∀ sec address,
+    State sec address → Costed M (Leakage sec address)
+
+/--
+The environment component of a closed execution.
+
+An environment-owned terminal output is intrinsically Boolean.  The equality
+is indexed by the security parameter and local address because `AddressedITM`
+allows dependent output families.  The closed-world projection defined in
+`Composition` transports only environment-owned outputs along this equality;
+outputs from every other role map to `false`.
+
+Consequently there is no unmeasured postprocessing function outside the ITM:
+computing the distinguishing bit is part of the environment's certified
+activation handler.
+-/
+structure Environment
+    (M : CostModel.{uCost})
+    {Address : Type uAddress}
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+    (LocalAddress : Type uAddress)
+    (embed : LocalAddress → Address) where
+  machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
+  output_isBool : ∀ sec address,
+    machine.Output sec address = ULift.{uOutput} Bool
+
+/-- The real protocol component of a closed execution. -/
+structure Protocol
+    (M : CostModel.{uCost})
+    {Address : Type uAddress}
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+    (LocalAddress : Type uAddress)
+    (embed : LocalAddress → Address) where
+  machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
+
+/-- The real-world network adversary component. -/
+structure Adversary
+    (M : CostModel.{uCost})
+    {Address : Type uAddress}
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+    (LocalAddress : Type uAddress)
+    (embed : LocalAddress → Address) where
+  machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
+
+/-- The ideal-world simulator component. -/
+structure Simulator
+    (M : CostModel.{uCost})
+    {Address : Type uAddress}
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+    (LocalAddress : Type uAddress)
+    (embed : LocalAddress → Address) where
+  machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
+
+/--
+The explicit network component and the routing actions it gives to the kernel.
+
+`observe`, `control`, and `leakage` all return ordinary typed activations.  The
+network therefore cannot inject an untyped payload into the FIFO.  Broadcast
+is implemented by this component's ordinary continuation/resume states, not by
+a hidden kernel fanout.
+-/
+structure Network
+    (M : CostModel.{uCost})
+    {Address : Type uAddress}
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability} Address)
+    (LocalAddress : Type uAddress)
+    (embed : LocalAddress → Address) where
+  machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed
+  observe : ∀ {source : Address},
+    Emission schema source → QueuedActivation schema
+  control : QueuedActivation schema → QueuedActivation schema
+  leakage : ∀ {Leakage : Address → Type uLeakage},
+    (target : Address) → Leakage target → QueuedActivation schema
 
 end Crypto.Infrastructure.UC

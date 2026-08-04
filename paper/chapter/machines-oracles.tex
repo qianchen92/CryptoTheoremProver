@@ -1,0 +1,203 @@
+\section{Machines, Certificates, and Oracle Composition}
+\label{sec:machines-oracles}
+
+\subsection{One dependent machine core}
+
+Machine input and output types may depend on the security parameter, and the
+output may additionally depend on the concrete input.  The common computation
+shape is
+\[
+  \begin{aligned}
+    &\mathsf{RandomizedComputation}\;M\;I\;O \\
+    &\quad= (s : \mathsf{SecPar}) \to (x : I(s)) \to
+      \mathsf{RandCosted}\;M\;(O(s,x)).
+  \end{aligned}
+\]
+The structure \decl{ProbabilisticMachine} stores exactly one such
+\decl{run}.  Ordinary I/O is represented by constant families, while search
+problems use the dependent output directly.  Thus there is no separate
+ordinary/dependent machine hierarchy and no duplicated algorithm when a
+certificate is attached.
+
+The exact annotation chain and the separate PPT-admission boundary are shown
+in \Cref{fig:machine-certificates}.
+\decl{ExactCostCertificate} supplies an input-dependent budget
+\(B(s,x)\) and proves \decl{RandCosted.CostBound} for the existing run.
+Given a \decl{NatMeasure} \(\mu\), \decl{RuntimeCertificate} additionally
+supplies an input-independent runtime \(T(s)\) and proves
+\(\mu(B(s,x))\leq T(s)\).  Finally, \decl{PolyRuntimeCertificate} proves
+\decl{IsPolyBounded} \(T\).  These statements certify the annotated cost model,
+not Lean host evaluation.  The structure \decl{PPTMachine} therefore also
+stores \decl{PPTAdmissible} for the same exact run and the same claimed runtime.
+No theorem derives this operational witness from the annotation chain.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{.96\linewidth}{!}{%
+  \begin{tikzpicture}[node distance=8mm]
+    \node[archbox] (run) {one exact dependent run\\
+      \(r(s,x):\mathsf{RandCosted}\;M\;O(s,x)\)};
+    \node[certbox, below=of run] (exact) {exact path certificate\\
+      \(c\leq B(s,x)\)};
+    \node[certbox, below=of exact] (runtime) {measured uniform certificate\\
+      \(\mu(B(s,x))\leq T(s)\)};
+    \node[certbox, below=of runtime] (poly) {polynomial certificate\\
+      \(T\in\mathsf{IsPolyBounded}\)};
+    \node[rootbox, right=18mm of run] (dist) {public value distribution\\
+      \(\vDist(r(s,x))\)};
+    \node[certbox, right=18mm of poly] (admission) {independent operational admission\\
+      \(\mathsf{PPTAdmissible}(r,T)\)};
+    \node[rootbox, below=of admission] (ppt) {\decl{PPTMachine}\\same \(r\) and \(T\)};
+
+    \draw[certarrow] (run) -- (exact);
+    \draw[certarrow] (exact) -- (runtime);
+    \draw[certarrow] (runtime) -- (poly);
+    \draw[erasearrow] (run) -- node[above,font=\scriptsize]{erase cost} (dist);
+    \draw[archarrow] (poly.east) -- (ppt.west);
+    \draw[archarrow] (admission) -- (ppt);
+  \end{tikzpicture}}
+  \caption{Certificate refinement never rewrites the exact run.  Polynomial
+    annotation and independent operational admission must both be present at
+    the PPT boundary; probability erasure is orthogonal.}
+  \label{fig:machine-certificates}
+\end{figure}
+
+\decl{RuntimeCertificate.measuredCost_le_runtime} composes path soundness,
+monotonicity of \(\mu\), and the uniform bound to show that every supported
+exact result measures below \(T(s)\).  Value-only dependent maps preserve all
+three annotation-level certificate layers, but they do not automatically
+preserve operational admission.  Likewise,
+\decl{TimedMachine.ofBoundedProgram} and
+\decl{PPTMachine.ofBoundedProgram} install the exact run of a bounded typed
+program; the PPT constructor requires a separate admission witness because the
+current program syntax retains higher-order host boundaries.  The corresponding
+\decl{valueDist_run_ofBoundedProgram} lemmas show that the adapter changes no
+value distribution.
+
+The game-based layer consumes this interface.  Hardness and
+indistinguishability predicates select an adversary cost model and measure and
+quantify all inhabitants of the selected \decl{PPTMachine} type.  This is more
+precise than saying ``all computable adversaries'': every inhabitant includes
+an operational-admission witness indexed by its exact semantics and runtime.
+The generic library deliberately supplies no witness for an arbitrary Lean
+function; a future first-order model or an explicitly audited external model
+must provide one.
+
+\subsection{Typed oracle syntax and one interpreter}
+
+An \decl{OracleSpec} is a result-indexed family of query and response types.
+Oracle program syntax contains \decl{pure}, \decl{bind}, \decl{liftCosted}, and
+\decl{query}; a query node contains its name and typed payload but no local
+cost.  Issuing a query is a result-indexed \decl{QueryIssue} operation.  Its
+exact caller-side cost comes only from a \decl{CostedAlgebra} handler, while an
+independent operation bound can certify it.
+
+Implemented-oracle work is handled by \decl{CostedOracleEnv}.  An ordinary
+\decl{OracleEnv} enters through the named \decl{OracleEnv.zeroCost} lift, and
+\decl{CostedOracleEnv.erase} is the ordinary environment obtained by erasing
+the implementation's exact costs.  Consequently there is no second ordinary
+implementation to keep synchronized.
+
+The sole structural recursion is \decl{Oracle.Program.runExact}.  Its result
+\decl{ExactRunResult} records six logically distinct fields:
+\[
+  (\mathit{value},\mathit{state},\mathit{trace},
+    c_{\mathrm{local}},c_{\mathrm{oracle}},c_{\mathrm{total}}).
+\]
+The total cost preserves chronological issue/environment order.  The local and
+oracle fields are audit projections; in a noncommutative model they are not
+definitionally regrouped into the total.  All other views are maps of this
+distribution: \decl{runCosted} retains value and total cost,
+\decl{runWithEnv} erases costs and final state, and \decl{runTrace} retains
+value and trace.  The principal erasure law against the same implemented
+environment is
+\[
+  \mbox{\decl{valueDist_runCosted_eq_runWithEnv_erase}}.
+\]
+
+For environment-independent structural reasoning,
+\decl{PossibleExecution} records a possible value, local cost, and trace.  The
+proved direction is
+\[
+  \begin{aligned}
+    r\in\operatorname{support}(\runE(p,s,E,\sigma))
+    \quad\Longrightarrow\quad{}& \\
+    \mathsf{PossibleExecution}(
+      p,r.\mathit{value},r.c_{\mathrm{local}},r.\mathit{trace}).&
+  \end{aligned}
+\]
+There is intentionally no converse: the structural relation overapproximates
+responses and need not describe a path supported by a particular environment.
+
+\subsection{A closed exact-to-polynomial composition theorem}
+
+Caller and implementation certificates are separated along the boundary where
+they can be reused.  A \decl{TimedOracleMachine} certifies an input-dependent
+local budget, per-name query budgets, an independent total-query budget, a
+uniform local runtime, and a uniform total-query runtime.  An
+\decl{OracleImplementation} stores the exact environment;
+\decl{TimedOracleImplementation} adds an input-dependent per-query budget, a
+uniform measured query runtime, and monotonicity of repeated addition; and
+\decl{PPTOracleImplementation} proves polynomiality.
+
+For a caller budget \(B_{\mathrm{local}}\), total-query budget \(Q\), and
+implementation budget \(B_E\), the exact composed budget is
+\begin{equation}
+  B_{\mathrm{exact}}(s,x)
+   = B_{\mathrm{local}}(s,x)
+     + \mathsf{repeatCost}_M(Q(s,x),B_E(s,x)).
+  \label{eq:oracle-exact}
+\end{equation}
+Here \decl{repeatCost} is repeated sequential addition in the model's
+\decl{AddMonoid}; it is \(Q\cdot B_E\) only for the natural-number instance.
+The corresponding uniform runtime is
+\begin{equation}
+  T(s)=T_{\mathrm{local}}(s)
+    +T_{\mathrm{queries}}(s)\,T_E(s).
+  \label{eq:oracle-runtime}
+\end{equation}
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[node distance=4mm]
+    \node[archbox] (l1) {local \(\ell_1\)};
+    \node[archbox, right=of l1] (o1) {oracle \(e_1\)};
+    \node[archbox, right=of o1] (l2) {local \(\ell_2\)};
+    \node[archbox, right=of l2] (o2) {oracle \(e_2\)};
+    \node[warnbox, below=9mm of o1, xshift=9mm] (exchange)
+      {explicit \decl{CostExchange}};
+    \node[certbox, below left=9mm and 4mm of exchange] (local)
+      {\(\ell_1+\ell_2\leq B_{\mathrm{local}}\)};
+    \node[certbox, below right=9mm and 4mm of exchange] (oracle)
+      {\(e_1+e_2\leq \mathsf{repeatCost}(Q,B_E)\)};
+    \node[certbox, below=24mm of exchange] (bound)
+      {separated composed bound\\\Cref{eq:oracle-exact}};
+
+    \draw[archarrow] (l1) -- (o1);
+    \draw[archarrow] (o1) -- (l2);
+    \draw[archarrow] (l2) -- (o2);
+    \draw[archarrow] (o1.south) -- (exchange.north);
+    \draw[certarrow] (exchange) -- (local);
+    \draw[certarrow] (exchange) -- (oracle);
+    \draw[certarrow] (local) -- (bound);
+    \draw[certarrow] (oracle) -- (bound);
+  \end{tikzpicture}}
+  \caption{The interpreter keeps chronological, possibly noncommutative cost.
+    Only the coarse theorem regroups caller and oracle work, and therefore asks
+    explicitly for \decl{CostExchange}.}
+  \label{fig:oracle-composition}
+\end{figure}
+
+The proof first bounds exact chronological cost by separated local and oracle
+projections using \decl{CostExchange}.  It then bounds oracle work by query
+count and repeated implementation budget, and uses the caller's structural
+total-query certificate.  \decl{NatMeasure.map_nsmul} turns repeated exact cost
+into multiplication in \(\Nat\), yielding \Cref{eq:oracle-runtime}.
+\decl{TimedOracleMachine.compose} constructs the timed machine with this exact
+budget and runtime; \decl{PPTOracleMachine.compose} consumes both the
+polynomial closure proof and an independent admission witness for that closed
+run and runtime.  Finally,
+\decl{PPTOracleMachine.compose_runDist} shows that the composed PPT machine has
+exactly the cost-erased semantics of the authoritative environment.  Query
+counts are never inferred from runtime or from a unit query charge.

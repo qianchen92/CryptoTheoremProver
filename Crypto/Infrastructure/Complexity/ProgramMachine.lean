@@ -1,6 +1,5 @@
 import Crypto.Infrastructure.Complexity.Machine
-import Crypto.Infrastructure.Computation.Cost.Projection
-import Crypto.Infrastructure.Computation.Program
+import Crypto.Infrastructure.Computation.Program.Basic
 
 namespace Crypto.Infrastructure.Complexity
 
@@ -9,17 +8,16 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-universe uCost uIn uOut uResult uOp
+universe uCost uIn uResult uOp
 
 namespace TimedMachine
 
 /--
-Build a `Nat`-timed machine from programs over an arbitrary exact
-resource model.
+Build a timed machine from exact-cost programs over an arbitrary resource model.
 
-`measure` is the explicit complexity boundary.  Its monotonicity transfers the
-program certificate to the declared runtime, while `mapCost` preserves the
-ordinary value distribution.
+The resulting machine keeps the program's original `M.Cost` annotations.  The
+chosen `NatMeasure` appears only in the runtime certificate and never rewrites
+the machine's execution distribution.
 -/
 noncomputable def ofBoundedProgram
     {M : CostModel.{uCost}}
@@ -36,24 +34,19 @@ noncomputable def ofBoundedProgram
           (bounds sec) (budget sec))
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec) :
-    TimedMachine Input Output where
-  run := fun sec input =>
-    RandCostedT.mapCost measure
-      (Program.runCosted (program sec).program input)
-  runtime := runtime
-  runtime_sound := by
-    intro sec input result hresult
-    simp only [RandCostedT.mapCost] at hresult
-    rw [PMF.mem_support_map_iff] at hresult
-    rcases hresult with ⟨exactResult, hexactResult, hresult⟩
-    subst result
-    exact le_trans
-      (measure.monotone_toNat
-        ((program sec).cost_le_budget_of_mem_support
-          input exactResult hexactResult))
-      (budget_le_runtime sec input)
+    TimedMachine M measure
+      (fun _sec => Input) (fun _sec _input => Output) where
+  toProbabilisticMachine :=
+    { run := fun sec input =>
+        Program.runCosted (program sec).program input }
+  certificate :=
+    { toExactCostCertificate :=
+        { budget := budget
+          sound := fun sec input => (program sec).costBound input }
+      runtime := runtime
+      budget_le_runtime := budget_le_runtime }
 
-/-- Projecting an exact program cost to `Nat` preserves its value distribution. -/
+/-- Program-to-machine conversion preserves exact value erasure definitionally. -/
 @[simp] theorem valueDist_run_ofBoundedProgram
     {M : CostModel.{uCost}}
     {S : Signature.{uResult, uOp}}
@@ -70,98 +63,23 @@ noncomputable def ofBoundedProgram
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec)
     (sec : Crypto.SecPar) (input : Input) :
-    RandCostedT.valueDist
+    RandCosted.valueDist
         ((ofBoundedProgram measure A bounds budget runtime program
           budget_le_runtime).run sec input) =
-      Program.valueDist (program sec).program input := by
-  change
-    RandCostedT.valueDist
-        (RandCostedT.mapCost measure
-          (Program.runCosted (program sec).program input)) =
-      RandCostedT.valueDist
-        (Program.runCosted (program sec).program input)
-  exact RandCostedT.valueDist_mapCost measure _
-
-/--
-Apply a value-only output map after projecting an exact program cost to `Nat`.
--/
-noncomputable def ofMappedBoundedProgram
-    {M : CostModel.{uCost}}
-    {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {ProgramOutput : Type uResult} {Output : Type uOut}
-    (measure : NatMeasure M)
-    (A : Crypto.SecPar → CostedAlgebra M S)
-    (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
-    (budget : Crypto.SecPar → Input → M.Cost)
-    (runtime : Crypto.SecPar → Nat)
-    (mapOutput : ProgramOutput → Output)
-    (program :
-      (sec : Crypto.SecPar) →
-        Program.BoundedProgram (Input := Input) (Output := ProgramOutput)
-          (bounds sec) (budget sec))
-    (budget_le_runtime :
-      ∀ sec input, measure (budget sec input) ≤ runtime sec) :
-    TimedMachine Input Output where
-  run := fun sec input =>
-    RandCostedT.map mapOutput
-      (RandCostedT.mapCost measure
-        (Program.runCosted (program sec).program input))
-  runtime := runtime
-  runtime_sound := by
-    intro sec input result hresult
-    simp only [RandCostedT.map, RandCostedT.mapCost] at hresult
-    rw [PMF.mem_support_map_iff] at hresult
-    rcases hresult with ⟨projectedResult, hprojectedResult, hresult⟩
-    rw [PMF.mem_support_map_iff] at hprojectedResult
-    rcases hprojectedResult with ⟨exactResult, hexactResult, hprojectedResult⟩
-    subst projectedResult
-    subst result
-    exact le_trans
-      (measure.monotone_toNat
-        ((program sec).cost_le_budget_of_mem_support
-          input exactResult hexactResult))
-      (budget_le_runtime sec input)
-
-/-- Output mapping and cost projection preserve the expected mapped semantics. -/
-@[simp] theorem valueDist_run_ofMappedBoundedProgram
-    {M : CostModel.{uCost}}
-    {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {ProgramOutput : Type uResult} {Output : Type uOut}
-    (measure : NatMeasure M)
-    (A : Crypto.SecPar → CostedAlgebra M S)
-    (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
-    (budget : Crypto.SecPar → Input → M.Cost)
-    (runtime : Crypto.SecPar → Nat)
-    (mapOutput : ProgramOutput → Output)
-    (program :
-      (sec : Crypto.SecPar) →
-        Program.BoundedProgram (Input := Input) (Output := ProgramOutput)
-          (bounds sec) (budget sec))
-    (budget_le_runtime :
-      ∀ sec input, measure (budget sec input) ≤ runtime sec)
-    (sec : Crypto.SecPar) (input : Input) :
-    RandCostedT.valueDist
-        ((ofMappedBoundedProgram measure A bounds budget runtime mapOutput
-          program budget_le_runtime).run sec input) =
-      PMF.map mapOutput (Program.valueDist (program sec).program input) := by
-  change
-    RandCostedT.valueDist
-        (RandCostedT.map mapOutput
-          (RandCostedT.mapCost measure
-            (Program.runCosted (program sec).program input))) =
-      PMF.map mapOutput
-        (RandCostedT.valueDist
-          (Program.runCosted (program sec).program input))
-  rw [RandCostedT.valueDist_map]
-  exact congrArg (PMF.map mapOutput)
-    (RandCostedT.valueDist_mapCost measure
-      (Program.runCosted (program sec).program input))
+      Program.valueDist (program sec).program input :=
+  rfl
 
 end TimedMachine
 
 namespace PPTMachine
 
-/-- Program-derived timed machines are PPT when their projected runtime is polynomial. -/
+/--
+Build a PPT machine from the same exact program run, a polynomial runtime
+certificate, and an independent host-level admission proof.
+
+`BoundedProgram` alone is intentionally insufficient: its higher-order Lean
+boundary can hide computation in inputs, pure values, and continuations.
+-/
 noncomputable def ofBoundedProgram
     {M : CostModel.{uCost}}
     {S : Signature.{uResult, uOp}}
@@ -177,34 +95,45 @@ noncomputable def ofBoundedProgram
           (bounds sec) (budget sec))
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec)
-    (runtime_isPoly : IsPolyBounded runtime) :
-    PPTMachine Input Output :=
-  { TimedMachine.ofBoundedProgram
-      measure A bounds budget runtime program budget_le_runtime with
-    runtime_isPoly := runtime_isPoly }
+    (runtime_isPoly : IsPolyBounded runtime)
+    (admission : PPTAdmissible
+      (TimedMachine.ofBoundedProgram
+        measure A bounds budget runtime program budget_le_runtime).run
+      runtime) :
+    PPTMachine M measure
+      (fun _sec => Input) (fun _sec _input => Output) :=
+  PPTMachine.ofAdmittedTimedMachine
+    (TimedMachine.ofBoundedProgram
+      measure A bounds budget runtime program budget_le_runtime)
+    runtime_isPoly admission
 
-/-- Output-mapped specialization of `ofBoundedProgram`. -/
-noncomputable def ofMappedBoundedProgram
+/-- PPT program conversion preserves the original exact value distribution. -/
+@[simp] theorem valueDist_run_ofBoundedProgram
     {M : CostModel.{uCost}}
     {S : Signature.{uResult, uOp}}
-    {Input : Type uIn} {ProgramOutput : Type uResult} {Output : Type uOut}
+    {Input : Type uIn} {Output : Type uResult}
     (measure : NatMeasure M)
     (A : Crypto.SecPar → CostedAlgebra M S)
     (bounds : (sec : Crypto.SecPar) → OperationBounds (A sec))
     (budget : Crypto.SecPar → Input → M.Cost)
     (runtime : Crypto.SecPar → Nat)
-    (mapOutput : ProgramOutput → Output)
     (program :
       (sec : Crypto.SecPar) →
-        Program.BoundedProgram (Input := Input) (Output := ProgramOutput)
+        Program.BoundedProgram (Input := Input) (Output := Output)
           (bounds sec) (budget sec))
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec)
-    (runtime_isPoly : IsPolyBounded runtime) :
-    PPTMachine Input Output :=
-  { TimedMachine.ofMappedBoundedProgram
-      measure A bounds budget runtime mapOutput program budget_le_runtime with
-    runtime_isPoly := runtime_isPoly }
+    (runtime_isPoly : IsPolyBounded runtime)
+    (admission : PPTAdmissible
+      (TimedMachine.ofBoundedProgram
+        measure A bounds budget runtime program budget_le_runtime).run
+      runtime)
+    (sec : Crypto.SecPar) (input : Input) :
+    RandCosted.valueDist
+        ((ofBoundedProgram measure A bounds budget runtime program
+          budget_le_runtime runtime_isPoly admission).run sec input) =
+      Program.valueDist (program sec).program input :=
+  rfl
 
 end PPTMachine
 

@@ -1,7 +1,11 @@
 import Crypto.Assumption.DL.Parameter
-import Crypto.Infrastructure.Computation.Distribution
-import Crypto.Infrastructure.Computation.Program
-import Crypto.Infrastructure.GameBased.Indistinguishability
+import Crypto.Infrastructure.Computation.Algebra.Signature
+import Crypto.Infrastructure.Computation.Algebra.Handler
+import Crypto.Infrastructure.Computation.Algebra.Laws
+import Crypto.Infrastructure.Computation.Algebra.Bounds
+import Crypto.Infrastructure.Probability.Uniform
+import Crypto.Infrastructure.Computation.Program.Basic
+import Crypto.Infrastructure.GameBased.Distinguishing
 
 namespace Crypto.Assumption.DL
 
@@ -11,7 +15,7 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-universe uCost uScalar uGroup
+universe uCost uAdversaryCost uScalar uGroup
 
 variable {M : CostModel.{uCost}}
 
@@ -44,27 +48,27 @@ structure ExactLaws
     {M : CostModel.{uCost}} {math : MathematicalParam.{uScalar, uGroup}}
     (A : CostedAlgebra M (signature math)) : Prop where
   sampleScalar :
-    RandCostedT.valueDist (A.exec .sampleScalar) =
+    RandCosted.valueDist (A.exec .sampleScalar) =
       PMF.map ULift.up
-        (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+        (@Crypto.Infrastructure.Probability.uniformPMF
           math.Scalar math.fintypeScalar
           ⟨math.commMonoidScalar.one⟩)
   sampleCarrier :
-    RandCostedT.valueDist (A.exec .sampleCarrier) =
+    RandCosted.valueDist (A.exec .sampleCarrier) =
       PMF.map ULift.up
-        (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
-          math.Carrier math.fintypeCarrier math.nonemptyCarrier)
+        (@Crypto.Infrastructure.Probability.uniformPMF
+          math.Carrier math.fintypeCarrier ⟨math.addGroup.zero⟩)
   smul : ∀ scalar value,
-    RandCostedT.valueDist (A.exec (.smul scalar value)) =
+    RandCosted.valueDist (A.exec (.smul scalar value)) =
       PMF.pure (ULift.up (math.smul.smul scalar value))
   add : ∀ left right,
-    RandCostedT.valueDist (A.exec (.add left right)) =
+    RandCosted.valueDist (A.exec (.add left right)) =
       PMF.pure (ULift.up (math.addGroup.add left right))
   sub : ∀ left right,
-    RandCostedT.valueDist (A.exec (.sub left right)) =
+    RandCosted.valueDist (A.exec (.sub left right)) =
       PMF.pure (ULift.up (math.addGroup.sub left right))
   mul : ∀ left right,
-    RandCostedT.valueDist (A.exec (.mul left right)) =
+    RandCosted.valueDist (A.exec (.mul left right)) =
       PMF.pure (ULift.up (math.commMonoidScalar.mul left right))
 
 /-- A mathematical DDH parameter plus its single authoritative exact handler. -/
@@ -148,10 +152,10 @@ noncomputable def algebraLaws (pp : PublicParam.{uCost, uScalar, uGroup} M) :
     match operation with
     | .sampleScalar =>
         PMF.map ULift.up
-          (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
+          (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
     | .sampleCarrier =>
         PMF.map ULift.up
-          (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier)
+          (Crypto.Infrastructure.Probability.uniformPMF pp.Carrier)
     | .smul scalar value => PMF.pure (ULift.up (scalar • value))
     | .add left right => PMF.pure (ULift.up (left + right))
     | .sub left right => PMF.pure (ULift.up (left - right))
@@ -217,17 +221,17 @@ def ParamEfficiencyCertificate.randomSampleTailBudget
 /-- A security-parameter-indexed family of cost-aware DDH parameters. -/
 structure Family (M : CostModel.{uCost}) where
   setup : Crypto.SecPar →
-    RandCostedT M (PublicParam.{uCost, uScalar, uGroup} M)
+    RandCosted M (PublicParam.{uCost, uScalar, uGroup} M)
 
 noncomputable def Family.ofFixed
     (pp : PublicParam.{uCost, uScalar, uGroup} M) (setupCost : M.Cost) :
     Family.{uCost, uScalar, uGroup} M where
-  setup := fun _sec => RandCostedT.liftCosted ⟨pp, setupCost⟩
+  setup := fun _sec => RandCosted.liftCosted ⟨pp, setupCost⟩
 
 noncomputable def Family.setupDist
     (F : Family.{uCost, uScalar, uGroup} M) (sec : Crypto.SecPar) :
     PMF (PublicParam.{uCost, uScalar, uGroup} M) :=
-  RandCostedT.valueDist (F.setup sec)
+  RandCosted.valueDist (F.setup sec)
 
 /-- Family-level operations for setup-dependent DDH sampling. -/
 inductive FamilyOp (F : Family.{uCost, uScalar, uGroup} M) :
@@ -267,22 +271,22 @@ noncomputable def familyAlgebra (F : Family.{uCost, uScalar, uGroup} M) :
     match operation with
     | .setup sec => F.setup sec
     | .sampleScalar pp =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec .sampleScalar)
     | .sampleCarrier pp =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec .sampleCarrier)
     | .smul pp scalar value =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec (.smul scalar value))
     | .add pp left right =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec (.add left right))
     | .sub pp left right =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec (.sub left right))
     | .mul pp left right =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec (.mul left right))
 
 noncomputable def familyAlgebraLaws
@@ -623,9 +627,17 @@ noncomputable def ddhProblem (F : Family.{uCost, uScalar, uGroup} M) :
   left := realSample F
   right := randomSample F
 
-/-- The DDH assumption; its conclusion remains the original `Hard`. -/
-def Assumption (F : Family.{uCost, uScalar, uGroup} M) : Prop :=
-  Crypto.Infrastructure.GameBased.Distinguishing.Hard (ddhProblem F)
+/--
+The DDH assumption against every PPT adversary measured in the explicit
+adversary cost model.  The family handler's exact cost model remains
+independent of the adversary model.
+-/
+def Assumption
+    (adversaryModel : CostModel.{uAdversaryCost})
+    (measure : NatMeasure adversaryModel)
+    (F : Family.{uCost, uScalar, uGroup} M) : Prop :=
+  Crypto.Infrastructure.GameBased.Distinguishing.Hard
+    adversaryModel measure (ddhProblem F)
 
 end DDH
 

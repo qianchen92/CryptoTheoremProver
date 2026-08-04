@@ -31,24 +31,34 @@ abbrev nat : CostModel where
 end CostModel
 
 /--
-A cost model equipped with a least common upper bound, used for deriving
-branching bounds automatically.
+A cost model equipped with a least common upper bound in its existing order.
 
-The semilattice order must agree with the order in `toCostModel`.  Keeping the
-capability separate means straight-line exact interpreters require only a
-`CostModel`.
+The operation and its three order laws are stored directly against
+`CostModel.instPartialOrder`.  In particular, this capability does not carry a
+second `PartialOrder` whose coherence with the exact-cost order would need to
+be proved separately.
 -/
 structure WorstCaseCostModel extends CostModel where
-  instSemilatticeSup : SemilatticeSup Cost
-  partialOrder_eq : instSemilatticeSup.toPartialOrder = instPartialOrder
+  sup : Cost → Cost → Cost
+  le_sup_left : ∀ left right,
+    instPartialOrder.le left (sup left right)
+  le_sup_right : ∀ left right,
+    instPartialOrder.le right (sup left right)
+  sup_le : ∀ left right upper,
+    instPartialOrder.le left upper →
+    instPartialOrder.le right upper →
+    instPartialOrder.le (sup left right) upper
 
 namespace WorstCaseCostModel
 
 /-- The natural-number model with `max` as its worst-case combination. -/
 def nat : WorstCaseCostModel where
   toCostModel := CostModel.nat
-  instSemilatticeSup := (inferInstance : SemilatticeSup Nat)
-  partialOrder_eq := rfl
+  sup := max
+  le_sup_left := Nat.le_max_left
+  le_sup_right := Nat.le_max_right
+  sup_le := fun _left _right _upper left_le right_le =>
+    Nat.max_le.mpr ⟨left_le, right_le⟩
 
 end WorstCaseCostModel
 

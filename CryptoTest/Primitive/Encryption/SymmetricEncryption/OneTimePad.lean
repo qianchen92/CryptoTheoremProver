@@ -1,4 +1,5 @@
 import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Basic
+import Crypto.Infrastructure.Probability.Uniform
 import Mathlib.Data.ZMod.Basic
 
 namespace CryptoTest.Primitive.Encryption.SymmetricEncryption.OneTimePad
@@ -8,7 +9,6 @@ open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.SymmetricEncryption
 open Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
-open scoped AdditiveGroupParam
 open scoped OneTimePadParameter
 
 /-- The finite additive group used by the concrete two-element OTP fixture. -/
@@ -16,7 +16,6 @@ noncomputable def testMathematicalParam : MathematicalParam where
   Carrier := ZMod 2
   addGroup := inferInstance
   fintypeCarrier := inferInstance
-  nonemptyCarrier := inferInstance
 
 /-- One authoritative exact handler for every primitive used by the test OTP. -/
 noncomputable def testAlgebra :
@@ -24,19 +23,21 @@ noncomputable def testAlgebra :
   exec operation :=
     match operation with
     | .sampleKey =>
-        RandCostedT.sampleWithCost
-          (Crypto.Infrastructure.Computation.Distribution.uniformPMF (ZMod 2))
+        RandCosted.sampleWithCost
+          (Crypto.Infrastructure.Probability.uniformPMF (ZMod 2))
           (fun _key => 2)
     | .add left right =>
-        RandCostedT.liftCosted
-          (⟨left + right, 1⟩ : CostedT CostModel.nat (ZMod 2))
+        RandCosted.liftCosted
+          (⟨testMathematicalParam.addGroup.add left right, 1⟩ :
+            Costed CostModel.nat (ZMod 2))
     | .neg value =>
-        RandCostedT.liftCosted
-          (⟨-value, 1⟩ : CostedT CostModel.nat (ZMod 2))
+        RandCosted.liftCosted
+          (⟨testMathematicalParam.addGroup.neg value, 1⟩ :
+            Costed CostModel.nat (ZMod 2))
 
 /-- Cost erasure of the exact handler yields only the mathematical operations. -/
 noncomputable def testExactLaws : ExactLaws testAlgebra where
-  sampleKey := RandCostedT.valueDist_sampleWithCost _ _
+  sampleKey := RandCosted.valueDist_sampleWithCost _ _
   add left right := by
     simp [testAlgebra]
   neg value := by
@@ -52,17 +53,17 @@ noncomputable def testOperationBounds : OperationBounds testAlgebra where
   cost_le operation result hresult := by
     cases operation with
     | sampleKey =>
-        simp only [testAlgebra, RandCostedT.sampleWithCost] at hresult
+        simp only [testAlgebra, RandCosted.sampleWithCost] at hresult
         rw [PMF.mem_support_map_iff] at hresult
         rcases hresult with ⟨key, _hkey, rfl⟩
         exact Nat.le_refl 2
     | add left right =>
-        simp only [testAlgebra, RandCostedT.liftCosted,
+        simp only [testAlgebra, RandCosted.liftCosted,
           PMF.mem_support_pure_iff] at hresult
         subst result
         exact Nat.le_refl 1
     | neg value =>
-        simp only [testAlgebra, RandCostedT.liftCosted,
+        simp only [testAlgebra, RandCosted.liftCosted,
           PMF.mem_support_pure_iff] at hresult
         subst result
         exact Nat.le_refl 1
@@ -92,6 +93,11 @@ noncomputable def testFamily : Family CostModel.nat :=
 noncomputable def testEfficiency : EfficiencyCertificate testFamily :=
   EfficiencyCertificate.ofFixed testPublicParam 3
 
+/-- OTP setup is dispatched through the family-level typed program. -/
+example (sec : Crypto.SecPar) :
+    Program.runCosted (setupProgram testFamily) sec = testFamily.setup sec :=
+  setupProgram_runCosted testFamily sec
+
 /-- The bounded wrapper indexes the same encryption program rather than copying it. -/
 example :
     (encryptBoundedProgram testPublicParam testParamEfficiency).program =
@@ -102,15 +108,15 @@ example :
 example
     (key message : testPublicParam.Carrier) :
     Program.runCosted (encryptProgram testPublicParam) (key, message) =
-      RandCostedT.liftCosted
+      RandCosted.liftCosted
         (⟨key + message, 1⟩ :
-          CostedT CostModel.nat testPublicParam.Carrier) :=
+          Costed CostModel.nat testPublicParam.Carrier) :=
   rfl
 
 /-- The structural encryption certificate bounds every exact execution path. -/
 example
     (key message : testPublicParam.Carrier)
-    (result : CostedT CostModel.nat testPublicParam.Carrier)
+    (result : Costed CostModel.nat testPublicParam.Carrier)
     (hresult :
       result ∈
         (Program.runCosted
@@ -121,7 +127,7 @@ example
 
 /-- Key sampling retains its exact two-unit path bound after interpretation. -/
 example
-    (result : CostedT CostModel.nat testPublicParam.Carrier)
+    (result : Costed CostModel.nat testPublicParam.Carrier)
     (hresult :
       result ∈
         (Program.runCosted (keygenProgram testPublicParam) ()).support) :
@@ -143,7 +149,7 @@ example (sec : Crypto.SecPar) :
 /-- The scheme boundary exposes the intended uniform key distribution. -/
 example :
     (scheme testFamily).keygenDist testPublicParam =
-      Crypto.Infrastructure.Computation.Distribution.uniformPMF
+      Crypto.Infrastructure.Probability.uniformPMF
         testPublicParam.Carrier :=
   scheme_keygenDist testFamily testPublicParam
 
@@ -158,21 +164,22 @@ example
 example
     (key ciphertext : testPublicParam.Carrier) :
     (scheme testFamily).decrypt testPublicParam key ciphertext =
-      RandCostedT.liftCosted
+      RandCosted.liftCosted
         (⟨-key + ciphertext, 2⟩ :
-          CostedT CostModel.nat testPublicParam.Carrier) :=
+          Costed CostModel.nat testPublicParam.Carrier) :=
   by
     simp only [scheme, decryptProgram, Program.runCosted, Program.Code.runCosted,
-      testPublicParam, testAlgebra, RandCostedT.bind, RandCostedT.liftCosted,
-      CostedT.bind, PMF.pure_bind, PMF.pure_map]
+      testPublicParam, testAlgebra, RandCosted.bind, RandCosted.liftCosted,
+      Costed.bind, PMF.pure_bind, PMF.pure_map]
     rfl
 
-/-- The exact setup path satisfies its separate global efficiency certificate. -/
-example :
-    RandomizedComputationT.CostBound
-      (fun sec (_input : Unit) => testFamily.setup sec)
-      (fun _sec => 3) :=
-  setup_costBound testFamily testEfficiency
+/-- The exact setup Program satisfies its separate global efficiency certificate. -/
+example (sec : Crypto.SecPar)
+    (result : Costed CostModel.nat (PublicParam CostModel.nat))
+    (hresult :
+      result ∈ (Program.runCosted (setupProgram testFamily) sec).support) :
+    result.cost ≤ 3 := by
+  exact setup_costBound testFamily testEfficiency sec result hresult
 
 /-- Fixed-parameter encryption exposes its distribution after explicit projection. -/
 example

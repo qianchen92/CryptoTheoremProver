@@ -1,4 +1,5 @@
 import Crypto.Assumption.DL.DLog
+import Crypto.Infrastructure.Probability.Uniform
 import Mathlib.Data.ZMod.Basic
 
 namespace CryptoTest.Assumption.DL.DLog
@@ -6,9 +7,12 @@ namespace CryptoTest.Assumption.DL.DLog
 open scoped DLogParameter
 
 open Crypto.Assumption.DL.DLog
+open Crypto.Infrastructure.Complexity
 open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
+
+universe uAdversaryCost
 
 /-- The mathematical parameter contains no execution backend or sampler. -/
 def testMath : MathematicalParam where
@@ -16,7 +20,6 @@ def testMath : MathematicalParam where
   Carrier := ZMod 2
   addGroup := inferInstance
   fintypeCarrier := inferInstance
-  nonemptyCarrier := inferInstance
   fintypeScalar := inferInstance
   smul := inferInstance
   generator := 1
@@ -30,22 +33,22 @@ noncomputable def testAlgebra :
   exec operation :=
     match operation with
     | .sampleScalar =>
-        RandCostedT.sampleWithCost
+        RandCosted.sampleWithCost
           (PMF.map ULift.up
-            (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+            (@Crypto.Infrastructure.Probability.uniformPMF
               testMath.Scalar testMath.fintypeScalar
               (@Crypto.Assumption.DL.Parameter.scalarNonemptyOfGenerator
                 testMath.Scalar testMath.Carrier testMath.addGroup testMath.smul
                 testMath.generator testMath.generator_generates)))
           (fun _ => 2)
     | .smul scalar value =>
-        RandCostedT.liftCosted
+        RandCosted.liftCosted
           (⟨ULift.up (testMath.smul.smul scalar value), 11⟩ :
-            CostedT CostModel.nat (ULift testMath.Carrier))
+            Costed CostModel.nat (ULift testMath.Carrier))
 
 noncomputable def testLaws : ExactLaws testAlgebra where
-  sampleScalar := RandCostedT.valueDist_sampleWithCost _ _
-  smul _scalar _value := RandCostedT.valueDist_liftCosted _
+  sampleScalar := RandCosted.valueDist_sampleWithCost _ _
+  smul _scalar _value := RandCosted.valueDist_liftCosted _
 
 noncomputable def testPublicParam : PublicParam CostModel.nat where
   toCyclicAction := testMath
@@ -60,13 +63,13 @@ noncomputable def testBounds : OperationBounds testAlgebra where
   cost_le operation result hresult := by
     cases operation with
     | sampleScalar =>
-        simp only [testAlgebra, RandCostedT.sampleWithCost] at hresult
+        simp only [testAlgebra, RandCosted.sampleWithCost] at hresult
         rw [PMF.mem_support_map_iff] at hresult
         rcases hresult with ⟨value, _hvalue, hresult⟩
         subst result
         exact Nat.le_refl 2
     | smul scalar value =>
-        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        simp only [testAlgebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact Nat.le_refl 11
@@ -82,7 +85,12 @@ noncomputable def testParamEfficiency :
 noncomputable def testFamily : Family CostModel.nat :=
   Family.ofFixed testPublicParam 3
 
-example : Prop := Assumption testFamily
+example : Prop := Assumption CostModel.nat NatMeasure.nat testFamily
+
+/-- Algorithm and adversary costs are independent parameters of the assumption. -/
+example (adversaryModel : CostModel.{uAdversaryCost})
+    (measure : NatMeasure adversaryModel) : Prop :=
+  Assumption adversaryModel measure testFamily
 
 example (sec : Crypto.SecPar) :
     Program.runCosted (setupProgram testFamily) sec = testFamily.setup sec :=
@@ -110,7 +118,53 @@ example (secret : testPublicParam.Scalar) :
     Program.runCosted (challengeProgram testPublicParam) secret =
       PMF.pure
         (⟨ULift.up (testPublicParam.smul.smul secret testPublicParam.generator), 11⟩ :
-          CostedT CostModel.nat (ULift testPublicParam.Carrier)) :=
+          Costed CostModel.nat (ULift testPublicParam.Carrier)) :=
   rfl
+
+/-! ## Host-computation admission regression -/
+
+/-- Choice extracts a mathematically guaranteed logarithm without an algorithm. -/
+noncomputable def chosenLog
+    (challenge : ChallengeInput CostModel.nat) : Witness challenge :=
+  Classical.choose (challenge.1.generator_generates challenge.2)
+
+theorem chosenLog_isSolution
+    (challenge : ChallengeInput CostModel.nat) :
+    IsSolution challenge (chosenLog challenge) :=
+  Classical.choose_spec (challenge.1.generator_generates challenge.2)
+
+/--
+The annotation layer can still describe this host function at zero annotated
+cost; it deliberately does not call the result PPT.
+-/
+noncomputable def chosenLogTimedMachine :
+    TimedMachine CostModel.nat NatMeasure.nat
+      (fun _sec => ChallengeInput CostModel.nat)
+      (fun _sec challenge => Witness challenge) :=
+  TimedMachine.ofFunction CostModel.nat NatMeasure.nat
+    (fun _sec challenge => chosenLog challenge)
+
+example : chosenLogTimedMachine.runtime = fun _sec => 0 := rfl
+
+/-- The only promotion route exposes the exact external admission obligation. -/
+noncomputable def chosenLogPPTMachine_of_admission
+    (admission : PPTAdmissible chosenLogTimedMachine.run
+      chosenLogTimedMachine.runtime) :
+    PPTMachine CostModel.nat NatMeasure.nat
+      (fun _sec => ChallengeInput CostModel.nat)
+      (fun _sec challenge => Witness challenge) :=
+  PPTMachine.ofAdmittedTimedMachine chosenLogTimedMachine
+    Crypto.Infrastructure.Asymptotic.IsPolyBounded.zero admission
+
+/-- The former zero-cost automatic promotion is no longer an available API. -/
+example : True := by
+  fail_if_success
+    have _adversary :
+        PPTMachine CostModel.nat NatMeasure.nat
+          (fun _sec => ChallengeInput CostModel.nat)
+          (fun _sec challenge => Witness challenge) :=
+      PPTMachine.ofFunction CostModel.nat NatMeasure.nat
+        (fun _sec challenge => chosenLog challenge)
+  trivial
 
 end CryptoTest.Assumption.DL.DLog

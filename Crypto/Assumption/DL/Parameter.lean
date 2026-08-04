@@ -1,4 +1,4 @@
-import Crypto.Infrastructure.Computation.Algebra.Group
+import Crypto.Infrastructure.Computation.Algebra.Parameter
 import Mathlib.Algebra.Group.Action.Defs
 
 namespace Crypto.Assumption.DL.Parameter
@@ -25,7 +25,7 @@ distributional laws, and resource bounds belong to the assumption-specific
 `PublicParam` records built over this structure.
 -/
 structure CyclicAction extends
-    Crypto.Infrastructure.Computation.Algebra.Group.AdditiveGroupParam.{uGroup} where
+    Crypto.Infrastructure.Computation.Algebra.Parameter.AdditiveGroupParam.{uGroup} where
   Scalar : Type uScalar
   fintypeScalar : Fintype Scalar
   smul : SMul Scalar Carrier
@@ -47,7 +47,7 @@ abbrev instFintypeCarrier (pp : CyclicAction.{uScalar, uGroup}) :
 /-- Scoped carrier-nonemptiness projection inherited from the finite additive base. -/
 abbrev instNonemptyCarrier (pp : CyclicAction.{uScalar, uGroup}) :
     Nonempty pp.Carrier :=
-  pp.toAdditiveGroupParam.nonemptyCarrier
+  ⟨pp.toAdditiveGroupParam.addGroup.zero⟩
 
 end CyclicAction
 

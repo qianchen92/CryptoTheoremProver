@@ -1,5 +1,6 @@
 import CryptoTest.Assumption.DL.DDH
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Basic
+import Crypto.Infrastructure.Probability.Uniform
 
 namespace CryptoTest.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
@@ -23,7 +24,7 @@ example :
 /-- Every concrete encryption path has exact cost `2 + 11 + 11 + 5`. -/
 example
     (publicKey message : DDH.testPublicParam.Carrier)
-    (result : CostedT CostModel.nat
+    (result : Costed CostModel.nat
       (ULift (DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier)))
     (hresult : result ∈
       (Program.runCosted
@@ -35,26 +36,26 @@ example
       sharedResult, hshared, additionResult, haddition, _hvalue, hcost⟩
   have hsampleCost : sampleResult.cost = 2 := by
     simp only [DDH.testPublicParam, DDH.testAlgebra,
-      RandCostedT.sampleWithCost] at hsample
+      RandCosted.sampleWithCost] at hsample
     rw [PMF.support_map] at hsample
     rcases hsample with ⟨sampleValue, _hsampleValue, hsample⟩
     subst sampleResult
     rfl
   have hfirstCost : firstResult.cost = 11 := by
     simp only [DDH.testPublicParam, DDH.testAlgebra,
-      RandCostedT.liftCosted] at hfirst
+      RandCosted.liftCosted] at hfirst
     rw [PMF.support_pure] at hfirst
-    exact congrArg CostedT.cost (show firstResult = _ from hfirst)
+    exact congrArg Costed.cost (show firstResult = _ from hfirst)
   have hsharedCost : sharedResult.cost = 11 := by
     simp only [DDH.testPublicParam, DDH.testAlgebra,
-      RandCostedT.liftCosted] at hshared
+      RandCosted.liftCosted] at hshared
     rw [PMF.support_pure] at hshared
-    exact congrArg CostedT.cost (show sharedResult = _ from hshared)
+    exact congrArg Costed.cost (show sharedResult = _ from hshared)
   have hadditionCost : additionResult.cost = 5 := by
     simp only [DDH.testPublicParam, DDH.testAlgebra,
-      RandCostedT.liftCosted] at haddition
+      RandCosted.liftCosted] at haddition
     rw [PMF.support_pure] at haddition
-    exact congrArg CostedT.cost (show additionResult = _ from haddition)
+    exact congrArg Costed.cost (show additionResult = _ from haddition)
   rw [hcost, hsampleCost, hfirstCost, hsharedCost, hadditionCost]
   rfl
 
@@ -73,7 +74,7 @@ example (sec : Crypto.SecPar) :
 example :
     (scheme DDH.testFamily).keygenDist DDH.testPublicParam =
       PMF.bind
-        (Crypto.Infrastructure.Computation.Distribution.uniformPMF
+        (Crypto.Infrastructure.Probability.uniformPMF
           DDH.testPublicParam.Scalar)
         (fun secretKey =>
           PMF.pure
@@ -99,7 +100,7 @@ example
         (secretKey, ciphertext) =
       PMF.pure
         (⟨ULift.up (ciphertext.2 - secretKey • ciphertext.1), 17⟩ :
-          CostedT CostModel.nat (ULift DDH.testPublicParam.Carrier)) := by
+          Costed CostModel.nat (ULift DDH.testPublicParam.Carrier)) := by
   change
     Program.runCosted (decryptProgram DDH.testPublicParam)
         (secretKey, ciphertext) =
@@ -107,10 +108,10 @@ example
         (⟨ULift.up
             (DDH.testMath.addGroup.sub ciphertext.2
               (DDH.testMath.smul.smul secretKey ciphertext.1)), 17⟩ :
-          CostedT CostModel.nat (ULift DDH.testMath.Carrier))
+          Costed CostModel.nat (ULift DDH.testMath.Carrier))
   simp [Program.runCosted, decryptProgram, Program.Code.runCosted,
-    DDH.testPublicParam, DDH.testAlgebra, RandCostedT.bind,
-    RandCostedT.liftCosted, PMF.pure_map, CostedT.bind]
+    DDH.testPublicParam, DDH.testAlgebra, RandCosted.bind,
+    RandCosted.liftCosted, PMF.pure_map, Costed.bind]
 
 /-- The timed adapter preserves the ordinary ElGamal encryption distribution. -/
 example

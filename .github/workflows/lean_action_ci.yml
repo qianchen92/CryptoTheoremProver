@@ -17,8 +17,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+      - name: Check Infrastructure import hierarchy
+        run: python3 scripts/check_infrastructure_imports.py
       - uses: leanprover/lean-action@v1
-      - uses: leanprover-community/docgen-action@v1
+      - name: Build library target
+        run: lake build Crypto
+      - name: Build theorem regression target
+        run: lake build CryptoTest
+      - name: Build default targets
+        run: lake build
+      # The upstream action generates API docs only for `push` events. Build
+      # them on every push, but deploy only from the canonical branch.
+      - name: Build API documentation
+        if: github.event_name == 'push'
+        uses: leanprover-community/docgen-action@10db47458f91456d87804787d3dfcd914b9a19e3
         # `docs/` contains source notes, not a Jekyll site.
         with:
           homepage: generated-docs
+          build-page: false
+          deploy: ${{ github.ref == 'refs/heads/main' }}

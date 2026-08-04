@@ -1,4 +1,5 @@
 import Crypto.Infrastructure.Complexity.ProgramMachine
+import Crypto.Infrastructure.Probability.Uniform
 import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Construction
 import Crypto.Primitive.Encryption.SymmetricEncryption.Syntax
 
@@ -93,11 +94,11 @@ def decryptBoundedProgram
             (bounds := certificate.bounds) (Operation.add negatedKey input.2))
           (certificate.addBudget_sound negatedKey input.2))
 
-/-- The OTP scheme executes only the three public Programs above. -/
+/-- The OTP scheme executes setup and its three parameter operations only through Programs. -/
 noncomputable def scheme (F : Family M) :
     Scheme M Crypto.SecPar (PublicParam M)
       (fun pp => pp.Carrier) (fun pp => pp.Carrier) (fun pp => pp.Carrier) where
-  setup := F.setup
+  setup := fun sec => Program.runCosted (setupProgram F) sec
   keygen := fun pp => Program.runCosted (keygenProgram pp) ()
   encrypt := fun pp key message =>
     Program.runCosted (encryptProgram pp) (key, message)
@@ -107,7 +108,7 @@ noncomputable def scheme (F : Family M) :
 /-- Cost erasure of key generation is uniform sampling. -/
 @[simp] theorem keygenProgram_valueDist (pp : PublicParam M) :
     Program.valueDist (keygenProgram pp) () =
-      Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier := by
+      Crypto.Infrastructure.Probability.uniformPMF pp.Carrier := by
   exact (algebraLaws pp).exec_spec Operation.sampleKey
 
 /-- Cost erasure of encryption is mathematical addition. -/
@@ -123,11 +124,11 @@ noncomputable def scheme (F : Family M) :
     Program.valueDist (decryptProgram pp) (key, ciphertext) =
       PMF.pure (-key + ciphertext) := by
   simp only [Program.valueDist, Program.runCosted, decryptProgram,
-    Program.Code.runCosted, RandCostedT.valueDist_bind]
+    Program.Code.runCosted, RandCosted.valueDist_bind]
   rw [(algebraLaws pp).exec_spec (Operation.neg key)]
   change
     PMF.bind (PMF.pure (-key))
-        (fun value => RandCostedT.valueDist
+        (fun value => RandCosted.valueDist
           (pp.algebra.exec (Operation.add value ciphertext))) =
       PMF.pure (-key + ciphertext)
   rw [PMF.pure_bind]
@@ -139,7 +140,7 @@ noncomputable def scheme (F : Family M) :
 
 @[simp] theorem scheme_keygenDist (F : Family M) (pp : PublicParam M) :
     (scheme F).keygenDist pp =
-      Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Carrier :=
+      Crypto.Infrastructure.Probability.uniformPMF pp.Carrier :=
   keygenProgram_valueDist pp
 
 @[simp] theorem scheme_encryptDist
@@ -170,11 +171,13 @@ theorem decryptProgram_costBound
       (fun _input => decryptBudget pp certificate) :=
   (decryptBoundedProgram pp certificate).costBound
 
-/-- Fixed-parameter encryption projected explicitly to Nat runtime. -/
+/-- Fixed-parameter encryption with an explicit natural-number runtime observation. -/
 noncomputable def encryptTimedMachine
     (measure : NatMeasure M)
     (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    TimedMachine (pp.Carrier × pp.Carrier) pp.Carrier :=
+    TimedMachine M measure
+      (fun _sec => pp.Carrier × pp.Carrier)
+      (fun _sec _input => pp.Carrier) :=
   TimedMachine.ofBoundedProgram measure
     (fun _sec => pp.algebra)
     (fun _sec => certificate.bounds)
@@ -192,11 +195,6 @@ noncomputable def encryptTimedMachine
     (sec : Crypto.SecPar) (input : pp.Carrier × pp.Carrier) :
     (encryptTimedMachine measure pp certificate).runDist sec input =
       (scheme F).encryptDist pp input.1 input.2 := by
-  change
-    RandCostedT.valueDist
-        (RandCostedT.mapCost measure
-          (Program.runCosted (encryptProgram pp) input)) =
-      RandCostedT.valueDist (Program.runCosted (encryptProgram pp) input)
-  exact RandCostedT.valueDist_mapCost measure _
+  rfl
 
 end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad

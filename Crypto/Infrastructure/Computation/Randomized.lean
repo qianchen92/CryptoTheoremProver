@@ -1,73 +1,92 @@
-import Crypto.Infrastructure.Asymptotic.SecurityParameter
-import Crypto.Infrastructure.Computation.Cost.Basic
+import Crypto.Infrastructure.SecurityParameter
+import Crypto.Infrastructure.Computation.Cost.PathBound
 
 namespace Crypto.Infrastructure.Computation
 
 open Crypto.Infrastructure.Computation.Cost
 
-universe uCost uIn uOut
+universe uCost uIn uOut uMapped
 
-/-- A security-parameter-indexed randomized computation over an exact cost model. -/
-abbrev RandomizedComputationT (M : CostModel.{uCost})
-    (Input : Type uIn) (Output : Type uOut) :=
-  Crypto.SecPar → Input → RandCostedT M Output
+/--
+A security-parameter-indexed randomized computation over one exact cost model.
 
-namespace RandomizedComputationT
+Both the input type and the output family may depend on the security parameter;
+the output may additionally depend on the concrete input.  This is the sole
+randomized-computation core used by ordinary and dependent machines.
+-/
+abbrev RandomizedComputation
+    (M : CostModel.{uCost})
+    (Input : Crypto.SecPar → Type uIn)
+    (Output : (sec : Crypto.SecPar) → Input sec → Type uOut) :=
+  (sec : Crypto.SecPar) → (input : Input sec) →
+    RandCosted M (Output sec input)
 
-/-- The ordinary output distribution induced by a generic costed computation. -/
-noncomputable def valueDist {M : CostModel.{uCost}}
-    {Input : Type uIn} {Output : Type uOut}
-    (C : RandomizedComputationT M Input Output)
-    (sec : Crypto.SecPar) (input : Input) : PMF Output :=
-  RandCostedT.valueDist (C sec input)
+namespace RandomizedComputation
 
-/-- The exact resource distribution induced by a generic costed computation. -/
-noncomputable def costDist {M : CostModel.{uCost}}
-    {Input : Type uIn} {Output : Type uOut}
-    (C : RandomizedComputationT M Input Output)
-    (sec : Crypto.SecPar) (input : Input) : PMF M.Cost :=
-  RandCostedT.costDist (C sec input)
+noncomputable section
 
-/-- A uniform upper bound on every exact execution-path cost. -/
-def CostBound {M : CostModel.{uCost}}
-    {Input : Type uIn} {Output : Type uOut}
-    (C : RandomizedComputationT M Input Output)
-    (bound : Crypto.SecPar → M.Cost) : Prop :=
-  ∀ sec input result, result ∈ (C sec input).support →
-    M.instPartialOrder.le result.cost (bound sec)
+/-- Forget exact costs and expose the ordinary dependent output distribution. -/
+def valueDist {M : CostModel.{uCost}}
+    {Input : Crypto.SecPar → Type uIn}
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    (computation : RandomizedComputation M Input Output)
+    (sec : Crypto.SecPar) (input : Input sec) :
+    PMF (Output sec input) :=
+  RandCosted.valueDist (computation sec input)
 
-end RandomizedComputationT
+/-- Expose the exact resource distribution at one security parameter and input. -/
+def costDist {M : CostModel.{uCost}}
+    {Input : Crypto.SecPar → Type uIn}
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    (computation : RandomizedComputation M Input Output)
+    (sec : Crypto.SecPar) (input : Input sec) : PMF M.Cost :=
+  RandCosted.costDist (computation sec input)
 
-/-- A generic-cost randomized computation whose output type may depend on its input. -/
-abbrev DependentRandomizedComputationT (M : CostModel.{uCost})
-    (Input : Type uIn) (Output : Input → Type uOut) :=
-  (sec : Crypto.SecPar) → (input : Input) →
-    RandCostedT M (Output input)
+/-- A deterministic dependent function viewed as a zero-cost computation. -/
+def pure
+    (M : CostModel.{uCost})
+    {Input : Crypto.SecPar → Type uIn}
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    (value : (sec : Crypto.SecPar) → (input : Input sec) → Output sec input) :
+    RandomizedComputation M Input Output :=
+  fun sec input => RandCosted.pure M (value sec input)
 
-namespace DependentRandomizedComputationT
+/-- Apply a security-parameter- and input-dependent value map without changing costs. -/
+def map {M : CostModel.{uCost}}
+    {Input : Crypto.SecPar → Type uIn}
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
+    (transform :
+      (sec : Crypto.SecPar) → (input : Input sec) →
+        Output sec input → Mapped sec input)
+    (computation : RandomizedComputation M Input Output) :
+    RandomizedComputation M Input Mapped :=
+  fun sec input => RandCosted.map (transform sec input) (computation sec input)
 
-/-- The value distribution of a dependent generic-cost computation. -/
-noncomputable def valueDist {M : CostModel.{uCost}}
-    {Input : Type uIn} {Output : Input → Type uOut}
-    (C : DependentRandomizedComputationT M Input Output)
-    (sec : Crypto.SecPar) (input : Input) : PMF (Output input) :=
-  RandCostedT.valueDist (C sec input)
+@[simp] theorem valueDist_pure
+    (M : CostModel.{uCost})
+    {Input : Crypto.SecPar → Type uIn}
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    (value : (sec : Crypto.SecPar) → (input : Input sec) → Output sec input)
+    (sec : Crypto.SecPar) (input : Input sec) :
+    valueDist (pure M value) sec input = PMF.pure (value sec input) := by
+  exact RandCosted.valueDist_pure M (value sec input)
 
-/-- The exact cost distribution of a dependent generic-cost computation. -/
-noncomputable def costDist {M : CostModel.{uCost}}
-    {Input : Type uIn} {Output : Input → Type uOut}
-    (C : DependentRandomizedComputationT M Input Output)
-    (sec : Crypto.SecPar) (input : Input) : PMF M.Cost :=
-  RandCostedT.costDist (C sec input)
+@[simp] theorem valueDist_map {M : CostModel.{uCost}}
+    {Input : Crypto.SecPar → Type uIn}
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+    {Mapped : (sec : Crypto.SecPar) → Input sec → Type uMapped}
+    (transform :
+      (sec : Crypto.SecPar) → (input : Input sec) →
+        Output sec input → Mapped sec input)
+    (computation : RandomizedComputation M Input Output)
+    (sec : Crypto.SecPar) (input : Input sec) :
+    valueDist (map transform computation) sec input =
+      PMF.map (transform sec input) (valueDist computation sec input) := by
+  exact RandCosted.valueDist_map (transform sec input) (computation sec input)
 
-/-- A uniform bound on every path of a dependent generic-cost computation. -/
-def CostBound {M : CostModel.{uCost}}
-    {Input : Type uIn} {Output : Input → Type uOut}
-    (C : DependentRandomizedComputationT M Input Output)
-    (bound : Crypto.SecPar → M.Cost) : Prop :=
-  ∀ sec input result, result ∈ (C sec input).support →
-    M.instPartialOrder.le result.cost (bound sec)
+end
 
-end DependentRandomizedComputationT
+end RandomizedComputation
 
 end Crypto.Infrastructure.Computation

@@ -1,4 +1,5 @@
 import Crypto.Assumption.DL.DDH
+import Crypto.Infrastructure.Probability.Uniform
 import Mathlib.Data.ZMod.Basic
 
 namespace CryptoTest.Assumption.DL.DDH
@@ -10,13 +11,14 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
+universe uAdversaryCost
+
 /-- The DDH mathematical parameter contains no costed operations or samplers. -/
 def testMath : MathematicalParam where
   Scalar := ZMod 2
   Carrier := ZMod 2
   addGroup := inferInstance
   fintypeCarrier := inferInstance
-  nonemptyCarrier := inferInstance
   fintypeScalar := inferInstance
   smul := inferInstance
   commMonoidScalar := inferInstance
@@ -37,43 +39,43 @@ noncomputable def testAlgebra :
   exec operation :=
     match operation with
     | .sampleScalar =>
-        RandCostedT.sampleWithCost
+        RandCosted.sampleWithCost
           (PMF.map ULift.up
-            (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+            (@Crypto.Infrastructure.Probability.uniformPMF
               testMath.Scalar testMath.fintypeScalar
               ⟨testMath.commMonoidScalar.one⟩))
           (fun _ => 2)
     | .sampleCarrier =>
-        RandCostedT.sampleWithCost
+        RandCosted.sampleWithCost
           (PMF.map ULift.up
-            (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+            (@Crypto.Infrastructure.Probability.uniformPMF
               testMath.Carrier testMath.fintypeCarrier
-              testMath.nonemptyCarrier))
+              ⟨testMath.addGroup.zero⟩))
           (fun _ => 4)
     | .smul scalar value =>
-        RandCostedT.liftCosted
+        RandCosted.liftCosted
           (⟨ULift.up (testMath.smul.smul scalar value), 11⟩ :
-            CostedT CostModel.nat (ULift testMath.Carrier))
+            Costed CostModel.nat (ULift testMath.Carrier))
     | .add left right =>
-        RandCostedT.liftCosted
+        RandCosted.liftCosted
           (⟨ULift.up (testMath.addGroup.add left right), 5⟩ :
-            CostedT CostModel.nat (ULift testMath.Carrier))
+            Costed CostModel.nat (ULift testMath.Carrier))
     | .sub left right =>
-        RandCostedT.liftCosted
+        RandCosted.liftCosted
           (⟨ULift.up (testMath.addGroup.sub left right), 6⟩ :
-            CostedT CostModel.nat (ULift testMath.Carrier))
+            Costed CostModel.nat (ULift testMath.Carrier))
     | .mul left right =>
-        RandCostedT.liftCosted
+        RandCosted.liftCosted
           (⟨ULift.up (testMath.commMonoidScalar.mul left right), 13⟩ :
-            CostedT CostModel.nat (ULift testMath.Scalar))
+            Costed CostModel.nat (ULift testMath.Scalar))
 
 noncomputable def testLaws : ExactLaws testAlgebra where
-  sampleScalar := RandCostedT.valueDist_sampleWithCost _ _
-  sampleCarrier := RandCostedT.valueDist_sampleWithCost _ _
-  smul _scalar _value := RandCostedT.valueDist_liftCosted _
-  add _left _right := RandCostedT.valueDist_liftCosted _
-  sub _left _right := RandCostedT.valueDist_liftCosted _
-  mul _left _right := RandCostedT.valueDist_liftCosted _
+  sampleScalar := RandCosted.valueDist_sampleWithCost _ _
+  sampleCarrier := RandCosted.valueDist_sampleWithCost _ _
+  smul _scalar _value := RandCosted.valueDist_liftCosted _
+  add _left _right := RandCosted.valueDist_liftCosted _
+  sub _left _right := RandCosted.valueDist_liftCosted _
+  mul _left _right := RandCosted.valueDist_liftCosted _
 
 noncomputable def testPublicParam : PublicParam CostModel.nat where
   toDecisionalCyclicAction := testMath
@@ -92,34 +94,34 @@ noncomputable def testBounds : OperationBounds testAlgebra where
   cost_le operation result hresult := by
     cases operation with
     | sampleScalar =>
-        simp only [testAlgebra, RandCostedT.sampleWithCost] at hresult
+        simp only [testAlgebra, RandCosted.sampleWithCost] at hresult
         rw [PMF.mem_support_map_iff] at hresult
         rcases hresult with ⟨value, _hvalue, hresult⟩
         subst result
         exact Nat.le_refl 2
     | sampleCarrier =>
-        simp only [testAlgebra, RandCostedT.sampleWithCost] at hresult
+        simp only [testAlgebra, RandCosted.sampleWithCost] at hresult
         rw [PMF.mem_support_map_iff] at hresult
         rcases hresult with ⟨value, _hvalue, hresult⟩
         subst result
         exact Nat.le_refl 4
     | smul scalar value =>
-        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        simp only [testAlgebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact Nat.le_refl 11
     | add left right =>
-        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        simp only [testAlgebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact Nat.le_refl 5
     | sub left right =>
-        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        simp only [testAlgebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact Nat.le_refl 6
     | mul left right =>
-        simp only [testAlgebra, RandCostedT.liftCosted] at hresult
+        simp only [testAlgebra, RandCosted.liftCosted] at hresult
         rw [PMF.mem_support_pure_iff] at hresult
         subst result
         exact Nat.le_refl 13
@@ -143,7 +145,12 @@ noncomputable def testParamEfficiency :
 noncomputable def testFamily : Family CostModel.nat :=
   Family.ofFixed testPublicParam 3
 
-example : Prop := Assumption testFamily
+example : Prop := Assumption CostModel.nat NatMeasure.nat testFamily
+
+/-- Algorithm and adversary costs are independent parameters of the assumption. -/
+example (adversaryModel : CostModel.{uAdversaryCost})
+    (measure : NatMeasure adversaryModel) : Prop :=
+  Assumption adversaryModel measure testFamily
 
 example (sec : Crypto.SecPar) :
     Program.runCosted (setupProgram testFamily) sec = testFamily.setup sec :=

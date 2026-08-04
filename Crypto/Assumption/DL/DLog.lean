@@ -1,6 +1,10 @@
 import Crypto.Assumption.DL.Parameter
-import Crypto.Infrastructure.Computation.Distribution
-import Crypto.Infrastructure.Computation.Program
+import Crypto.Infrastructure.Computation.Algebra.Signature
+import Crypto.Infrastructure.Computation.Algebra.Handler
+import Crypto.Infrastructure.Computation.Algebra.Laws
+import Crypto.Infrastructure.Computation.Algebra.Bounds
+import Crypto.Infrastructure.Probability.Uniform
+import Crypto.Infrastructure.Computation.Program.Basic
 import Crypto.Infrastructure.GameBased.Search
 
 namespace Crypto.Assumption.DL
@@ -11,7 +15,7 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-universe uCost uScalar uGroup
+universe uCost uAdversaryCost uScalar uGroup
 
 variable {M : CostModel.{uCost}}
 
@@ -35,15 +39,15 @@ structure ExactLaws
     {M : CostModel.{uCost}} {math : MathematicalParam.{uScalar, uGroup}}
     (A : CostedAlgebra M (signature math)) : Prop where
   sampleScalar :
-    RandCostedT.valueDist (A.exec .sampleScalar) =
+    RandCosted.valueDist (A.exec .sampleScalar) =
       PMF.map ULift.up
-        (@Crypto.Infrastructure.Computation.Distribution.uniformPMF
+        (@Crypto.Infrastructure.Probability.uniformPMF
           math.Scalar math.fintypeScalar
           (@Crypto.Assumption.DL.Parameter.scalarNonemptyOfGenerator
             math.Scalar math.Carrier math.addGroup math.smul
             math.generator math.generator_generates))
   smul : ∀ scalar value,
-    RandCostedT.valueDist (A.exec (.smul scalar value)) =
+    RandCosted.valueDist (A.exec (.smul scalar value)) =
       PMF.pure (ULift.up (math.smul.smul scalar value))
 
 /--
@@ -101,7 +105,7 @@ noncomputable def algebraLaws (pp : PublicParam.{uCost, uScalar, uGroup} M) :
     match operation with
     | .sampleScalar =>
         PMF.map ULift.up
-          (Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
+          (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
     | .smul scalar value => PMF.pure (ULift.up (scalar • value))
   exec_spec operation := by
     cases operation with
@@ -129,19 +133,19 @@ def ParamEfficiencyCertificate.sampleTailBudget
 /-- A security-parameter-indexed family of cost-aware DLog parameters. -/
 structure Family (M : CostModel.{uCost}) where
   setup : Crypto.SecPar →
-    RandCostedT M (PublicParam.{uCost, uScalar, uGroup} M)
+    RandCosted M (PublicParam.{uCost, uScalar, uGroup} M)
 
 /-- A family with one fixed public parameter and an explicit setup cost. -/
 noncomputable def Family.ofFixed
     (pp : PublicParam.{uCost, uScalar, uGroup} M) (setupCost : M.Cost) :
     Family.{uCost, uScalar, uGroup} M where
-  setup := fun _sec => RandCostedT.liftCosted ⟨pp, setupCost⟩
+  setup := fun _sec => RandCosted.liftCosted ⟨pp, setupCost⟩
 
 /-- Setup distribution obtained solely by erasing exact costs. -/
 noncomputable def Family.setupDist
     (F : Family.{uCost, uScalar, uGroup} M) (sec : Crypto.SecPar) :
     PMF (PublicParam.{uCost, uScalar, uGroup} M) :=
-  RandCostedT.valueDist (F.setup sec)
+  RandCosted.valueDist (F.setup sec)
 
 /-- Family-level operations for setup-dependent DLog sampling. -/
 inductive FamilyOp (F : Family.{uCost, uScalar, uGroup} M) :
@@ -167,10 +171,10 @@ noncomputable def familyAlgebra (F : Family.{uCost, uScalar, uGroup} M) :
     match operation with
     | .setup sec => F.setup sec
     | .sampleScalar pp =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec .sampleScalar)
     | .smul pp scalar value =>
-        RandCostedT.map (fun result => ULift.up result.down)
+        RandCosted.map (fun result => ULift.up result.down)
           (pp.algebra.exec (.smul scalar value))
 
 /-- Cost-erased specifications for setup and delegated DLog operations. -/
@@ -300,9 +304,17 @@ noncomputable def dLogProblem (F : Family.{uCost, uScalar, uGroup} M) :
   relation := IsSolution
   decidableRelation := instDecidableIsSolution
 
-/-- The discrete-log assumption; its conclusion remains the original `Hard`. -/
-def Assumption (F : Family.{uCost, uScalar, uGroup} M) : Prop :=
-  Crypto.Infrastructure.GameBased.Search.Hard (dLogProblem F)
+/--
+The discrete-log assumption against every PPT adversary measured in the
+explicit adversary cost model.  The family handler's exact cost model remains
+independent of the adversary model.
+-/
+def Assumption
+    (adversaryModel : CostModel.{uAdversaryCost})
+    (measure : NatMeasure adversaryModel)
+    (F : Family.{uCost, uScalar, uGroup} M) : Prop :=
+  Crypto.Infrastructure.GameBased.Search.Hard
+    adversaryModel measure (dLogProblem F)
 
 end DLog
 

@@ -1,0 +1,125 @@
+\section{Logical Architecture and Dependency Discipline}
+\label{sec:hierarchy}
+
+The Infrastructure tree is organized as a directed acyclic graph rather than a
+flat collection of utilities.  Three independent roots have distinct roles:
+\decl{SecurityParameter} defines \decl{Crypto.SecPar};
+\decl{Probability} contains cost-free probability constructions; and
+\decl{Cost.Model} defines the exact resource interface.  In particular,
+computation modules no longer import the asymptotic layer merely to name a
+security parameter.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[node distance=7mm and 10mm]
+    \node[rootbox] (sp) {Security\\Parameter};
+    \node[rootbox, right=of sp] (prob) {Probability};
+    \node[rootbox, right=of prob] (model) {Cost.Model};
+
+    \node[archbox, below=of sp] (asy) {Asymptotic};
+    \node[archbox, below=of model] (cost) {Cost writer, randomized\\semantics, path bounds};
+    \node[archbox, below=of cost] (alg) {Typed algebra};
+    \node[archbox, below left=of alg] (program) {Program};
+    \node[archbox, below right=of alg] (oracle) {Oracle};
+    \node[certbox, below=13mm of alg] (machine) {Complexity certificates\\and machines};
+    \node[archbox, below=of machine] (game) {GameBased};
+    \node[archbox, below=of game] (uc) {Typed UC execution};
+
+    \draw[archarrow] (sp) -- (asy);
+    \draw[archarrow] (model) -- (cost);
+    \draw[archarrow] (cost) -- (alg);
+    \draw[archarrow] (alg) -- (program);
+    \draw[archarrow] (alg) -- (oracle);
+    \draw[archarrow] (program) -- (machine);
+    \draw[archarrow] (oracle) -- (machine);
+    \draw[archarrow] (asy) -- (machine);
+    \draw[archarrow] (machine) -- (game);
+    \draw[archarrow] (game) -- (uc);
+    \draw[archarrow] (machine.east) .. controls +(18mm,0) and +(18mm,0) .. (uc.east);
+    \draw[archarrow] (sp.west) .. controls +(-14mm,-8mm) and +(-14mm,8mm) .. (uc.west);
+  \end{tikzpicture}}
+  \caption{Permitted logical flow.  Arrows denote admissible dependency
+    directions, not necessarily direct Lean imports.  Probability,
+    security parameters, and the base cost model are independent roots.}
+  \label{fig:dependency-dag}
+\end{figure}
+
+The executable checker
+\decl{scripts/check_infrastructure_imports.py} parses Infrastructure imports,
+rejects cycles, and rejects edges that point upward in the declared subsystem
+order.  Aggregation modules may import completed members of their own layer;
+implementation modules must follow the finer order encoded by the checker.
+This is a CI-enforced engineering invariant.  It is not presented as a
+metatheorem about Lean's logic.
+
+\begin{table}[t]
+  \centering
+  \caption{Authoritative objects by layer.  A higher row may export evidence
+    consumed below it, but does not replace the semantic object it certifies.}
+  \label{tab:layer-objects}
+  \small
+  \begin{tabular}{@{}>{\raggedright\arraybackslash}p{.20\linewidth}
+      >{\raggedright\arraybackslash}p{.38\linewidth}
+      >{\raggedright\arraybackslash}p{.34\linewidth}@{}}
+    \toprule
+    Layer & Authoritative object & Evidence or public view \\
+    \midrule
+    Cost & joint value--cost computation & support-wise path bound; cost erasure \\
+    Algebra & typed exact operation handler & erased operation law; operation bound \\
+    Program & one typed program and interpreter & execution relation; structural bound \\
+    Oracle & one exact recursive interpreter & trace/count projections; composition bound \\
+    Complexity & one dependent exact machine run & exact, measured, and polynomial certificates \\
+    GameBased & cost-erased experiment & advantage, hardness, indistinguishability \\
+    UC & typed closed-world kernel run & fuel/cost certificates; real/ideal decision distributions \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Two orthogonal refinement directions}
+
+The dependency DAG contains two conceptually different forms of refinement.
+The semantic direction adds structure to exact execution:
+
+\[
+  \begin{gathered}
+    \text{resource writer}\longrightarrow\text{typed operation handler}
+    \\
+    \longrightarrow\text{program/oracle/kernel execution}.
+  \end{gathered}
+\]
+
+The certificate direction proves progressively more uniform statements without
+changing that execution:
+
+\[
+  \begin{aligned}
+    \text{path bound}&\longrightarrow\text{input-dependent exact budget}
+    \\
+    &\longrightarrow\text{uniform measured runtime}
+      \longrightarrow\text{polynomial runtime}.
+  \end{aligned}
+\]
+
+This distinction explains why asymptotics joins only at the complexity layer.
+The definitions \decl{IsPolyBounded} and \decl{IsNegligible} do not participate
+in exact evaluation.  Negligibility is stated using the eventual bound on
+\(\lvert f(n)\rvert\), preventing a negative function from becoming negligible
+merely because it lies below a positive threshold.
+
+\subsection{Stable semantic boundaries}
+
+Cost parameters do not enter ordinary games, advantages, or correctness
+statements.  A security predicate instead selects an adversary cost model and
+natural-number measure and then quantifies inhabitants of the resulting
+PPT-machine interface whose exact run and claimed runtime also carry an
+independent operational-admission witness.  Polynomial path annotations do not
+construct that witness.  This preserves the distinction between the cost model
+used to describe a construction and the independently selected operational
+model used to admit adversaries.  Similarly, real and ideal UC worlds share
+their environment, routing policy, corruption policy, and fuel convention;
+only the installed protocol/adversary versus functionality/simulator components
+differ.
+
+The same pattern appears repeatedly: packaging may change as exact semantics
+is exposed, but cost-erased probability statements remain the public boundary.

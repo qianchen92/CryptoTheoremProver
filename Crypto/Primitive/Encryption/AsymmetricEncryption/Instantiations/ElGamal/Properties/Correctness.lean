@@ -1,5 +1,6 @@
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Scheme
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Properties.Correctness
+import Crypto.Infrastructure.Probability.Uniform
 
 namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
 
@@ -17,7 +18,7 @@ theorem correct
   intro _sec pp publicKey secretKey message _hpp hkey
   rw [scheme_keygenDist] at hkey
   have hkey' := (PMF.mem_support_bind_iff
-    (p := Crypto.Infrastructure.Computation.Distribution.uniformPMF pp.Scalar)
+    (p := Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
     (f := fun secretKey => PMF.pure (secretKey • pp.generator, secretKey))
     (b := (publicKey, secretKey))).mp hkey
   rcases hkey' with ⟨sampledSecretKey, _hsampled, hkeys⟩

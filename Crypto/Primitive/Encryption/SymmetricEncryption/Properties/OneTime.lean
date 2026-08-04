@@ -1,10 +1,10 @@
 import Crypto.Primitive.Encryption.SymmetricEncryption.Syntax
-import Crypto.Infrastructure.GameBased.Indistinguishability
+import Crypto.Infrastructure.GameBased.OracleDistinguishing
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption
 
-universe uCost uParam uKey uMessage uCiphertext
+universe uCost uAdversaryCost uParam uKey uMessage uCiphertext
 
 abbrev ChallengeQuery (Message : Type uMessage) :=
   Message × Message
@@ -69,14 +69,16 @@ noncomputable def oneTimeProblem
 /-- The one-time indistinguishability security game for a fixed challenge bit. -/
 noncomputable def oneTimeSecurityGame
     {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+    {adversaryModel :
+      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
     {Param : Type uParam}
     {Key : Param → Type uKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext)
-    (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      Crypto.Infrastructure.Computation.Cost.CostModel.nat
-      (fun _ => Param) (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext))
+    (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
+      (fun _ => Param) (fun _sec _input => Bool)
+      (oneTimeOracleSpec Message Ciphertext))
     (b : Bool) : Crypto.Infrastructure.Computation.Game Bool :=
   if b then
     Crypto.Infrastructure.GameBased.OracleDistinguishing.rightSecurityGame (oneTimeProblem E) A
@@ -86,14 +88,16 @@ noncomputable def oneTimeSecurityGame
 /-- One-time left-or-right distinguishing advantage. -/
 noncomputable def OneTimeAdvantage
     {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+    {adversaryModel :
+      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
     {Param : Type uParam}
     {Key : Param → Type uKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext)
-    (A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      Crypto.Infrastructure.Computation.Cost.CostModel.nat
-      (fun _ => Param) (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext)) :
+    (A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
+      (fun _ => Param) (fun _sec _input => Bool)
+      (oneTimeOracleSpec Message Ciphertext)) :
     Crypto.SecPar → Real :=
   Crypto.Infrastructure.GameBased.Advantage
     (oneTimeSecurityGame E A false) (oneTimeSecurityGame E A true)
@@ -105,10 +109,12 @@ def PerfectOneTimeSecure
     {Key : Param → Type uKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
+    (adversaryModel :
+      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext) : Prop :=
-  ∀ A : Crypto.Infrastructure.Complexity.ProbabilisticOracleMachine
-      Crypto.Infrastructure.Computation.Cost.CostModel.nat
-      (fun _ => Param) (fun _ => Bool) (oneTimeOracleSpec Message Ciphertext),
+  ∀ A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
+      (fun _ => Param) (fun _sec _input => Bool)
+      (oneTimeOracleSpec Message Ciphertext),
     OneTimeAdvantage E A = fun _ => 0
 
 /-- One-time security against PPT oracle adversaries. -/
@@ -118,22 +124,30 @@ def OneTimeSecure
     {Key : Param → Type uKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
+    (adversaryModel :
+      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
+    (measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel)
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext) : Prop :=
-  Crypto.Infrastructure.GameBased.OracleDistinguishing.Hard (oneTimeProblem E)
+  Crypto.Infrastructure.GameBased.OracleDistinguishing.Hard
+    adversaryModel measure (oneTimeProblem E)
 
 /-- Perfect one-time security implies PPT one-time security. -/
 theorem PerfectOneTimeSecure.toOneTimeSecure
     {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+    {adversaryModel :
+      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
+    {measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel}
     {Param : Type uParam}
     {Key : Param → Type uKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
     {E : Scheme M Crypto.SecPar Param Key Message Ciphertext} :
-    PerfectOneTimeSecure E → OneTimeSecure E := by
+    PerfectOneTimeSecure adversaryModel E →
+      OneTimeSecure adversaryModel measure E := by
   intro hPerfect A
   change Crypto.Infrastructure.Asymptotic.IsNegligible
-    (OneTimeAdvantage E A.toProbabilisticOracleMachine)
-  rw [hPerfect A.toProbabilisticOracleMachine]
+    (OneTimeAdvantage E A.toOracleMachine)
+  rw [hPerfect A.toOracleMachine]
   exact Crypto.Infrastructure.Asymptotic.isNegligible_zero
 
 end Crypto.Primitive.Encryption.SymmetricEncryption

@@ -1,301 +1,331 @@
-import Crypto.Infrastructure.Complexity.Machine
-import Crypto.Infrastructure.GameBased.Indistinguishability
-import Mathlib.Probability.ProbabilityMassFunction.Basic
+import Crypto.Infrastructure.Computation.Game
+import Crypto.Infrastructure.UC.Complexity
+import Crypto.Infrastructure.UC.Composition
 
 namespace Crypto.Infrastructure.UC
 
-open Crypto.Infrastructure.Complexity
+open Crypto.Infrastructure.Asymptotic
 open Crypto.Infrastructure.Computation
-open Crypto.Infrastructure.Computation.Oracle
-open Crypto.Infrastructure.GameBased
+open Crypto.Infrastructure.Computation.Cost
 
-universe uInput uOutput uState
-universe uEnvInput uEnvOracle uEnvQuery uEnvResponse uEnvState
-universe uAdvInput uAdvOutput uAdvOracle uAdvQuery uAdvResponse
-universe uSimInput uSimOutput uSimOracle uSimQuery uSimResponse
+universe uCost uAddress uPayload uPort uCapability
+universe uState uLeakage uErasure uOutput
 
-/--
-A semantic interactive system, indexed by the security parameter.
+variable {M : CostModel.{uCost}}
+variable {EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress :
+  Type uAddress}
+variable [DecidableEq EnvironmentAddress] [DecidableEq SystemAddress]
+variable [DecidableEq AdversarialAddress] [DecidableEq NetworkAddress]
+variable {schema : PortSchema.{uAddress, uPayload, uPort, uCapability}
+  (WorldAddress EnvironmentAddress SystemAddress
+    AdversarialAddress NetworkAddress)}
 
-This is intentionally lower-level than a UC protocol.  It is the common shape
-used for ideal functionalities, real protocols, trusted setup components, and
-hybrid functionalities whose full message syntax will be fixed by later MPC
-modules.
--/
-structure InteractiveSystem
-    (Input : Crypto.SecPar → Type uInput)
-    (Output : Crypto.SecPar → Type uOutput) where
-  State : Crypto.SecPar → Type uState
-  init : (sec : Crypto.SecPar) → PMF (State sec)
-  step : (sec : Crypto.SecPar) → State sec → Input sec → PMF (Output sec × State sec)
-
-/-- The external UC environment, modeled semantically as an oracle machine. -/
-abbrev Environment
-    (EnvInput : Crypto.SecPar → Type uEnvInput)
-    (EnvSpec :
-      (sec : Crypto.SecPar) →
-      EnvInput sec →
-      OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse}) :=
-  ProbabilisticOracleMachine Cost.CostModel.nat EnvInput (fun _ => Bool) EnvSpec
-
-/-- A PPT external UC environment. -/
-abbrev PPTEnvironment
-    (EnvInput : Crypto.SecPar → Type uEnvInput)
-    (EnvSpec :
-      (sec : Crypto.SecPar) →
-      EnvInput sec →
-      OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse}) :=
-  PPTOracleMachine Cost.CostModel.nat Cost.NatMeasure.nat
-    EnvInput (fun _ => Bool) EnvSpec
-
-/-- The real-world adversary, modeled semantically as an oracle machine. -/
-abbrev Adversary
-    (AdversaryInput : Crypto.SecPar → Type uAdvInput)
-    (AdversaryOutput : Crypto.SecPar → Type uAdvOutput)
-    (AdversarySpec :
-      (sec : Crypto.SecPar) →
-      AdversaryInput sec →
-      OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse}) :=
-  ProbabilisticOracleMachine Cost.CostModel.nat
-    AdversaryInput AdversaryOutput AdversarySpec
-
-/-- A PPT real-world adversary. -/
-abbrev PPTAdversary
-    (AdversaryInput : Crypto.SecPar → Type uAdvInput)
-    (AdversaryOutput : Crypto.SecPar → Type uAdvOutput)
-    (AdversarySpec :
-      (sec : Crypto.SecPar) →
-      AdversaryInput sec →
-      OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse}) :=
-  PPTOracleMachine Cost.CostModel.nat Cost.NatMeasure.nat
-    AdversaryInput AdversaryOutput AdversarySpec
-
-/-- The ideal-world simulator, modeled semantically as an oracle machine. -/
-abbrev Simulator
-    (SimulatorInput : Crypto.SecPar → Type uSimInput)
-    (SimulatorOutput : Crypto.SecPar → Type uSimOutput)
-    (SimulatorSpec :
-      (sec : Crypto.SecPar) →
-      SimulatorInput sec →
-      OracleSpec.{uSimOracle, uSimQuery, uSimResponse}) :=
-  ProbabilisticOracleMachine Cost.CostModel.nat
-    SimulatorInput SimulatorOutput SimulatorSpec
-
-/-- A PPT ideal-world simulator. -/
-abbrev PPTSimulator
-    (SimulatorInput : Crypto.SecPar → Type uSimInput)
-    (SimulatorOutput : Crypto.SecPar → Type uSimOutput)
-    (SimulatorSpec :
-      (sec : Crypto.SecPar) →
-      SimulatorInput sec →
-      OracleSpec.{uSimOracle, uSimQuery, uSimResponse}) :=
-  PPTOracleMachine Cost.CostModel.nat Cost.NatMeasure.nat
-    SimulatorInput SimulatorOutput SimulatorSpec
+namespace RealWorld
 
 /--
-A UC experiment exposes the same oracle interface to the environment in both
-worlds.  The real world is parameterized by an adversary and the ideal world by
-a simulator; both internal schedulers are abstracted as oracle environments for
-the external environment.
+Erase exact costs from the unique real-world runner and map its observable
+outcome to a Boolean decision.  The fuel is an execution parameter, not a
+runtime check and not a field of a cost certificate.
 -/
-structure Experiment
-    (EnvInput : Crypto.SecPar → Type uEnvInput)
-    (EnvSpec :
-      (sec : Crypto.SecPar) →
-      EnvInput sec →
-      OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse})
-    (AdversaryInput : Crypto.SecPar → Type uAdvInput)
-    (AdversaryOutput : Crypto.SecPar → Type uAdvOutput)
-    (AdversarySpec :
-      (sec : Crypto.SecPar) →
-      AdversaryInput sec →
-      OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse})
-    (SimulatorInput : Crypto.SecPar → Type uSimInput)
-    (SimulatorOutput : Crypto.SecPar → Type uSimOutput)
-    (SimulatorSpec :
-      (sec : Crypto.SecPar) →
-      SimulatorInput sec →
-      OracleSpec.{uSimOracle, uSimQuery, uSimResponse}) where
-  setup : (sec : Crypto.SecPar) → PMF (EnvInput sec)
-  realWorld :
-    Adversary AdversaryInput AdversaryOutput AdversarySpec →
-    (sec : Crypto.SecPar) →
-    (input : EnvInput sec) →
-    OracleEnv.{uEnvOracle, uEnvQuery, uEnvResponse, uEnvState} (EnvSpec sec input)
-  idealWorld :
-    Simulator SimulatorInput SimulatorOutput SimulatorSpec →
-    (sec : Crypto.SecPar) →
-    (input : EnvInput sec) →
-    OracleEnv.{uEnvOracle, uEnvQuery, uEnvResponse, uEnvState} (EnvSpec sec input)
+noncomputable def execution
+    (world : RealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      M EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress schema)
+    (fuel : Crypto.SecPar → Nat) : Game Bool :=
+  fun sec =>
+    PMF.map
+      (fun result => result.outcome.toBool (world.decision sec))
+      (RandCosted.valueDist (world.runCosted sec (fuel sec)))
 
-namespace Experiment
+end RealWorld
 
-variable
-    {EnvInput : Crypto.SecPar → Type uEnvInput}
-    {EnvSpec :
-      (sec : Crypto.SecPar) →
-      EnvInput sec →
-      OracleSpec.{uEnvOracle, uEnvQuery, uEnvResponse}}
-    {AdversaryInput : Crypto.SecPar → Type uAdvInput}
-    {AdversaryOutput : Crypto.SecPar → Type uAdvOutput}
-    {AdversarySpec :
-      (sec : Crypto.SecPar) →
-      AdversaryInput sec →
-      OracleSpec.{uAdvOracle, uAdvQuery, uAdvResponse}}
-    {SimulatorInput : Crypto.SecPar → Type uSimInput}
-    {SimulatorOutput : Crypto.SecPar → Type uSimOutput}
-    {SimulatorSpec :
-      (sec : Crypto.SecPar) →
-      SimulatorInput sec →
-      OracleSpec.{uSimOracle, uSimQuery, uSimResponse}}
+namespace IdealWorld
 
-/-- Run the external environment against the real-world scheduler. -/
+/--
+Erase exact costs from the unique ideal-world runner and map its observable
+outcome to a Boolean decision.
+-/
+noncomputable def execution
+    (world : IdealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      M EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress schema)
+    (fuel : Crypto.SecPar → Nat) : Game Bool :=
+  fun sec =>
+    PMF.map
+      (fun result => result.outcome.toBool (world.decision sec))
+      (RandCosted.valueDist (world.runCosted sec (fuel sec)))
+
+end IdealWorld
+
+/--
+A real closed world and the complete exact-to-measured PPT execution
+certificate for that same world.  Its Boolean interpretation is derived from
+the environment stored in `world`.
+-/
+structure CertifiedRealWorld
+    (measure : NatMeasure M)
+    (EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress :
+      Type uAddress)
+    [DecidableEq EnvironmentAddress] [DecidableEq SystemAddress]
+    [DecidableEq AdversarialAddress] [DecidableEq NetworkAddress]
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability}
+      (WorldAddress EnvironmentAddress SystemAddress
+        AdversarialAddress NetworkAddress)) where
+  world : RealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput}
+    M EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress schema
+  certificate :
+    PPTExecutionCertificate
+      (family := world.family) (policy := world.policy)
+      measure world.kernelAlgebra world.networkAdapter world.initial
+
+/--
+An ideal closed world and the complete exact-to-measured PPT execution
+certificate for that same world.  Its Boolean interpretation is derived from
+the environment stored in `world`.
+-/
+structure CertifiedIdealWorld
+    (measure : NatMeasure M)
+    (EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress :
+      Type uAddress)
+    [DecidableEq EnvironmentAddress] [DecidableEq SystemAddress]
+    [DecidableEq AdversarialAddress] [DecidableEq NetworkAddress]
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability}
+      (WorldAddress EnvironmentAddress SystemAddress
+        AdversarialAddress NetworkAddress)) where
+  world : IdealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput}
+    M EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress schema
+  certificate :
+    PPTExecutionCertificate
+      (family := world.family) (policy := world.policy)
+      measure world.kernelAlgebra world.networkAdapter world.initial
+
+namespace CertifiedRealWorld
+
+variable {measure : NatMeasure M}
+
+/-- Execute a certified real world at its own certified activation limit. -/
+noncomputable def execution
+    (certified : CertifiedRealWorld.{uCost, uAddress, uPayload, uPort,
+      uCapability, uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema) : Game Bool :=
+  certified.world.execution certified.certificate.activationLimit
+
+/-- Any larger certified fuel yields the same real Boolean game. -/
+theorem execution_eq_of_activationLimit_le
+    (certified : CertifiedRealWorld.{uCost, uAddress, uPayload, uPort,
+      uCapability, uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema)
+    (fuel : Crypto.SecPar → Nat)
+    (fuel_le : ∀ sec, certified.certificate.activationLimit sec ≤ fuel sec) :
+    certified.world.execution fuel = certified.execution := by
+  funext sec
+  let extra := fuel sec - certified.certificate.activationLimit sec
+  have fuel_eq : certified.certificate.activationLimit sec + extra = fuel sec :=
+    Nat.add_sub_of_le (fuel_le sec)
+  have stable :
+      RandCosted.valueDist (certified.world.runCosted sec (fuel sec)) =
+        RandCosted.valueDist
+          (certified.world.runCosted sec
+            (certified.certificate.activationLimit sec)) := by
+    simpa only [RealWorld.runCosted, fuel_eq] using
+      certified.certificate.fuel.stable sec extra
+  simp only [CertifiedRealWorld.execution, RealWorld.execution]
+  rw [stable]
+
+end CertifiedRealWorld
+
+namespace CertifiedIdealWorld
+
+variable {measure : NatMeasure M}
+
+/-- Execute a certified ideal world at its own certified activation limit. -/
+noncomputable def execution
+    (certified : CertifiedIdealWorld.{uCost, uAddress, uPayload, uPort,
+      uCapability, uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema) : Game Bool :=
+  certified.world.execution certified.certificate.activationLimit
+
+/-- Any larger certified fuel yields the same ideal Boolean game. -/
+theorem execution_eq_of_activationLimit_le
+    (certified : CertifiedIdealWorld.{uCost, uAddress, uPayload, uPort,
+      uCapability, uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema)
+    (fuel : Crypto.SecPar → Nat)
+    (fuel_le : ∀ sec, certified.certificate.activationLimit sec ≤ fuel sec) :
+    certified.world.execution fuel = certified.execution := by
+  funext sec
+  let extra := fuel sec - certified.certificate.activationLimit sec
+  have fuel_eq : certified.certificate.activationLimit sec + extra = fuel sec :=
+    Nat.add_sub_of_le (fuel_le sec)
+  have stable :
+      RandCosted.valueDist (certified.world.runCosted sec (fuel sec)) =
+        RandCosted.valueDist
+          (certified.world.runCosted sec
+            (certified.certificate.activationLimit sec)) := by
+    simpa only [IdealWorld.runCosted, fuel_eq] using
+      certified.certificate.fuel.stable sec extra
+  simp only [CertifiedIdealWorld.execution, IdealWorld.execution]
+  rw [stable]
+
+end CertifiedIdealWorld
+
+/--
+A real and ideal certified world whose executions are compared at one common
+fuel.  The exact result types may differ; only their Boolean observations are
+compared.
+-/
+structure CertifiedWorldPair
+    (measure : NatMeasure M)
+    (EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress :
+      Type uAddress)
+    [DecidableEq EnvironmentAddress] [DecidableEq SystemAddress]
+    [DecidableEq AdversarialAddress] [DecidableEq NetworkAddress]
+    (schema : PortSchema.{uAddress, uPayload, uPort, uCapability}
+      (WorldAddress EnvironmentAddress SystemAddress
+        AdversarialAddress NetworkAddress)) where
+  real : CertifiedRealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput}
+    measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress schema
+  ideal : CertifiedIdealWorld.{uCost, uAddress, uPayload, uPort, uCapability,
+    uState, uLeakage, uErasure, uOutput}
+    measure EnvironmentAddress SystemAddress AdversarialAddress NetworkAddress schema
+  environment_eq : real.world.environment = ideal.world.environment
+  /-- Both executions use one common corruption policy. -/
+  policy_eq : real.world.policy = ideal.world.policy
+
+namespace CertifiedWorldPair
+
+variable {measure : NatMeasure M}
+
+/-- The least pointwise fuel that covers both certified activation limits. -/
+def commonFuel
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema)
+    (sec : Crypto.SecPar) : Nat :=
+  max (pair.real.certificate.activationLimit sec)
+    (pair.ideal.certificate.activationLimit sec)
+
+/-- The common real/ideal fuel remains polynomially bounded. -/
+theorem commonFuel_isPoly
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema) :
+    IsPolyBounded pair.commonFuel :=
+  IsPolyBounded.max
+    pair.real.certificate.activationLimit_isPoly
+    pair.ideal.certificate.activationLimit_isPoly
+
+/-- Extend the real world's semantic fuel certificate to the common fuel. -/
+noncomputable def realFuelCertificate
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema) :
+    FuelCertificate
+      (family := pair.real.world.family) (policy := pair.real.world.policy)
+      pair.real.world.kernelAlgebra pair.real.world.networkAdapter
+        pair.real.world.initial pair.commonFuel :=
+  pair.real.certificate.fuel.extend
+    (fun _sec => Nat.le_max_left _ _)
+
+/-- Extend the ideal world's semantic fuel certificate to the common fuel. -/
+noncomputable def idealFuelCertificate
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema) :
+    FuelCertificate
+      (family := pair.ideal.world.family) (policy := pair.ideal.world.policy)
+      pair.ideal.world.kernelAlgebra pair.ideal.world.networkAdapter
+        pair.ideal.world.initial pair.commonFuel :=
+  pair.ideal.certificate.fuel.extend
+    (fun _sec => Nat.le_max_right _ _)
+
+/-- Execute the real world at the shared fuel, then erase exact costs. -/
 noncomputable def realExecution
-    (experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec)
-    (adversary : Adversary AdversaryInput AdversaryOutput AdversarySpec)
-    (environment : Environment EnvInput EnvSpec) :
-    Game Bool :=
-  fun sec =>
-    PMF.bind (experiment.setup sec) fun input =>
-      environment.runWithEnv sec input (experiment.realWorld adversary sec input)
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema) : Game Bool :=
+  pair.real.world.execution pair.commonFuel
 
-/-- Run the external environment against the ideal-world scheduler. -/
+/-- Execute the ideal world at the shared fuel, then erase exact costs. -/
 noncomputable def idealExecution
-    (experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec)
-    (simulator : Simulator SimulatorInput SimulatorOutput SimulatorSpec)
-    (environment : Environment EnvInput EnvSpec) :
-    Game Bool :=
-  fun sec =>
-    PMF.bind (experiment.setup sec) fun input =>
-      environment.runWithEnv sec input (experiment.idealWorld simulator sec input)
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema) : Game Bool :=
+  pair.ideal.world.execution pair.commonFuel
 
-/--
-Computational UC emulation: for every PPT real-world adversary there is a PPT
-ideal-world simulator such that every PPT environment sees negligible
-distinguishing advantage.
--/
-def UCEmulates
-    (experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec) : Prop :=
-  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
-      ∀ environment : PPTEnvironment EnvInput EnvSpec,
-        Indistinguishable
-          (realExecution experiment adversary.toProbabilisticOracleMachine
-            environment.toProbabilisticOracleMachine)
-          (idealExecution experiment simulator.toProbabilisticOracleMachine
-            environment.toProbabilisticOracleMachine)
+/-- No exact real-world path at the common fuel can end in a timeout. -/
+theorem real_noTimeout
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema)
+    (sec : Crypto.SecPar)
+    (result : Costed M
+      (Kernel.ExecutionResult pair.real.world.family
+        pair.real.world.policy sec))
+    (hresult : result ∈
+      (pair.real.world.runCosted sec (pair.commonFuel sec)).support) :
+    result.val.outcome ≠ Kernel.ExecutionOutcome.timeout := by
+  apply pair.realFuelCertificate.noTimeout sec result
+  simpa only [RealWorld.runCosted] using hresult
 
-/--
-UC emulation against a restricted class of environments.  This matches the
-"controlled environment" phrasing used by layered/YOSO MPC papers.
--/
-def ControlledUCEmulates
-    (experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec)
-    (AllowedEnvironment : Environment EnvInput EnvSpec → Prop) : Prop :=
-  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
-      ∀ environment : PPTEnvironment EnvInput EnvSpec,
-        AllowedEnvironment environment.toProbabilisticOracleMachine →
-          Indistinguishable
-            (realExecution experiment adversary.toProbabilisticOracleMachine
-              environment.toProbabilisticOracleMachine)
-            (idealExecution experiment simulator.toProbabilisticOracleMachine
-              environment.toProbabilisticOracleMachine)
+/-- No exact ideal-world path at the common fuel can end in a timeout. -/
+theorem ideal_noTimeout
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema)
+    (sec : Crypto.SecPar)
+    (result : Costed M
+      (Kernel.ExecutionResult pair.ideal.world.family
+        pair.ideal.world.policy sec))
+    (hresult : result ∈
+      (pair.ideal.world.runCosted sec (pair.commonFuel sec)).support) :
+    result.val.outcome ≠ Kernel.ExecutionOutcome.timeout := by
+  apply pair.idealFuelCertificate.noTimeout sec result
+  simpa only [IdealWorld.runCosted] using hresult
 
-/--
-Perfect UC emulation with an efficient simulator: for every PPT real-world
-adversary there is a PPT ideal-world simulator such that every semantic
-environment sees exactly the same boolean game at every security parameter.
--/
-def PerfectUCEmulates
-    (experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec) : Prop :=
-  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
-      ∀ environment : Environment EnvInput EnvSpec,
-        ∀ sec : Crypto.SecPar,
-          realExecution experiment adversary.toProbabilisticOracleMachine environment sec =
-            idealExecution experiment simulator.toProbabilisticOracleMachine environment sec
+/-- Increasing the common fuel cannot change the erased real distribution. -/
+theorem real_stable
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema)
+    (sec : Crypto.SecPar) (extra : Nat) :
+    RandCosted.valueDist
+        (pair.real.world.runCosted sec (pair.commonFuel sec + extra)) =
+      RandCosted.valueDist
+        (pair.real.world.runCosted sec (pair.commonFuel sec)) := by
+  simpa only [RealWorld.runCosted] using
+    pair.realFuelCertificate.stable sec extra
 
-/-- Perfect UC emulation against a restricted class of environments. -/
-def PerfectControlledUCEmulates
-    (experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec)
-    (AllowedEnvironment : Environment EnvInput EnvSpec → Prop) : Prop :=
-  ∀ adversary : PPTAdversary AdversaryInput AdversaryOutput AdversarySpec,
-    ∃ simulator : PPTSimulator SimulatorInput SimulatorOutput SimulatorSpec,
-      ∀ environment : Environment EnvInput EnvSpec,
-        AllowedEnvironment environment →
-          ∀ sec : Crypto.SecPar,
-            realExecution experiment adversary.toProbabilisticOracleMachine environment sec =
-              idealExecution experiment simulator.toProbabilisticOracleMachine environment sec
+/-- Increasing the common fuel cannot change the erased ideal distribution. -/
+theorem ideal_stable
+    (pair : CertifiedWorldPair.{uCost, uAddress, uPayload, uPort, uCapability,
+      uState, uLeakage, uErasure, uOutput}
+      measure EnvironmentAddress SystemAddress AdversarialAddress
+        NetworkAddress schema)
+    (sec : Crypto.SecPar) (extra : Nat) :
+    RandCosted.valueDist
+        (pair.ideal.world.runCosted sec (pair.commonFuel sec + extra)) =
+      RandCosted.valueDist
+        (pair.ideal.world.runCosted sec (pair.commonFuel sec)) := by
+  simpa only [IdealWorld.runCosted] using
+    pair.idealFuelCertificate.stable sec extra
 
-theorem PerfectUCEmulates.ucEmulates
-    {experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec}
-    (h : PerfectUCEmulates experiment) :
-    UCEmulates experiment := by
-  intro adversary
-  obtain ⟨simulator, hsimulator⟩ := h adversary
-  refine ⟨simulator, ?_⟩
-  intro environment
-  have hAdvantage :
-      Advantage
-          (realExecution experiment adversary.toProbabilisticOracleMachine
-            environment.toProbabilisticOracleMachine)
-          (idealExecution experiment simulator.toProbabilisticOracleMachine
-            environment.toProbabilisticOracleMachine) =
-        fun _ => (0 : Real) := by
-    funext sec
-    simp [Advantage, AcceptProb, hsimulator environment.toProbabilisticOracleMachine sec]
-  unfold Indistinguishable
-  rw [hAdvantage]
-  exact Crypto.Infrastructure.Asymptotic.isNegligible_zero
-
-theorem PerfectControlledUCEmulates.controlledUCEmulates
-    {experiment :
-      Experiment EnvInput EnvSpec
-        AdversaryInput AdversaryOutput AdversarySpec
-        SimulatorInput SimulatorOutput SimulatorSpec}
-    {AllowedEnvironment : Environment EnvInput EnvSpec → Prop}
-    (h : PerfectControlledUCEmulates experiment AllowedEnvironment) :
-    ControlledUCEmulates experiment AllowedEnvironment := by
-  intro adversary
-  obtain ⟨simulator, hsimulator⟩ := h adversary
-  refine ⟨simulator, ?_⟩
-  intro environment hallowed
-  have hAdvantage :
-      Advantage
-          (realExecution experiment adversary.toProbabilisticOracleMachine
-            environment.toProbabilisticOracleMachine)
-          (idealExecution experiment simulator.toProbabilisticOracleMachine
-            environment.toProbabilisticOracleMachine) =
-        fun _ => (0 : Real) := by
-    funext sec
-    simp [Advantage, AcceptProb,
-      hsimulator environment.toProbabilisticOracleMachine hallowed sec]
-  unfold Indistinguishable
-  rw [hAdvantage]
-  exact Crypto.Infrastructure.Asymptotic.isNegligible_zero
-
-end Experiment
+end CertifiedWorldPair
 
 end Crypto.Infrastructure.UC

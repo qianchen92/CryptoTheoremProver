@@ -1,141 +1,129 @@
-import Crypto.Infrastructure.Computation.Cost.Distribution
+import Crypto.Infrastructure.Computation.Cost.Measure
+import Crypto.Infrastructure.Computation.Cost.PathBound
 
 namespace Crypto.Infrastructure.Computation.Cost
 
-universe uCost uValue
+universe uCost uValue uMapped
 
-section NatMeasureDefinition
-
-variable (M : CostModel.{uCost})
-
-local instance : AddMonoid M.Cost := M.instAddMonoid
-local instance : PartialOrder M.Cost := M.instPartialOrder
-
-/--
-An additive, monotone observation of an exact cost model as natural-number
-runtime. This is the explicit boundary between exact resource semantics and
-`Nat`-based complexity.
--/
-structure NatMeasure where
-  toNat : M.Cost →+ Nat
-  monotone_toNat : Monotone toNat
-
-end NatMeasureDefinition
-
-namespace NatMeasure
-
-variable {M : CostModel.{uCost}}
-
-instance : CoeFun (NatMeasure M) (fun _ => M.Cost → Nat) where
-  coe measure := measure.toNat
-
-@[simp] theorem map_zero (measure : NatMeasure M) :
-    measure M.instAddMonoid.zero = 0 :=
-  by
-    letI := M.instAddMonoid
-    exact measure.toNat.map_zero
-
-@[simp] theorem map_add (measure : NatMeasure M) (left right : M.Cost) :
-    measure (M.instAddMonoid.add left right) = measure left + measure right :=
-  by
-    letI := M.instAddMonoid
-    exact measure.toNat.map_add left right
-
-/-- The identity observation for the natural-number cost model. -/
-def nat : NatMeasure CostModel.nat where
-  toNat :=
-    { toFun := id
-      map_zero' := rfl
-      map_add' := by
-        intro _ _
-        rfl }
-  monotone_toNat := monotone_id
-
-end NatMeasure
-
-namespace CostedT
+namespace Costed
 
 /-- Project an exact costed result to the natural-number cost model. -/
 def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (result : CostedT M α) : CostedT CostModel.nat α :=
+    {α : Type uValue} (result : Costed M α) : Costed CostModel.nat α :=
   ⟨result.val, measure result.cost⟩
 
 @[simp] theorem mapCost_val {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (result : CostedT M α) :
+    {α : Type uValue} (result : Costed M α) :
     (mapCost measure result).val = result.val :=
   rfl
 
 @[simp] theorem mapCost_cost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (result : CostedT M α) :
+    {α : Type uValue} (result : Costed M α) :
     (mapCost measure result).cost = measure result.cost :=
+  rfl
+
+/-- Projecting an already natural-number-valued cost through the identity measure is inert. -/
+@[simp] theorem mapCost_nat {α : Type uValue}
+    (result : Costed CostModel.nat α) :
+    mapCost NatMeasure.nat result = result := by
+  cases result
   rfl
 
 @[simp] theorem mapCost_pure {M : CostModel.{uCost}} (measure : NatMeasure M)
     {α : Type uValue} (value : α) :
-    mapCost measure (pure M value) = CostedT.pure CostModel.nat value := by
+    mapCost measure (pure M value) = Costed.pure CostModel.nat value := by
   change
-    (⟨value, measure M.instAddMonoid.zero⟩ : CostedT CostModel.nat α) =
-      (⟨value, 0⟩ : CostedT CostModel.nat α)
+    (⟨value, measure M.instAddMonoid.zero⟩ : Costed CostModel.nat α) =
+      (⟨value, 0⟩ : Costed CostModel.nat α)
   rw [measure.map_zero]
 
+/-- Cost projection commutes with value-only maps. -/
+@[simp] theorem mapCost_map {M : CostModel.{uCost}} (measure : NatMeasure M)
+    {α : Type uValue} {β : Type uMapped}
+    (f : α → β) (result : Costed M α) :
+    mapCost measure (result.map f) = (mapCost measure result).map f := by
+  cases result
+  rfl
+
 @[simp] theorem mapCost_bind {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α β : Type uValue} (result : CostedT M α) (next : α → CostedT M β) :
+    {α : Type uValue} {β : Type uMapped}
+    (result : Costed M α) (next : α → Costed M β) :
     mapCost measure (result.bind next) =
       (mapCost measure result).bind fun value => mapCost measure (next value) := by
   change
     (⟨(next result.val).val,
         measure (M.instAddMonoid.add result.cost (next result.val).cost)⟩ :
-          CostedT CostModel.nat β) =
+          Costed CostModel.nat β) =
       (⟨(next result.val).val,
         measure result.cost + measure (next result.val).cost⟩ :
-          CostedT CostModel.nat β)
+          Costed CostModel.nat β)
   rw [measure.map_add]
 
-end CostedT
+end Costed
 
-namespace RandCostedT
+namespace RandCosted
 
 /-- Project every exact path cost to natural-number runtime. -/
 noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (dist : RandCostedT M α) :
-    RandCostedT CostModel.nat α :=
-  PMF.map (CostedT.mapCost measure) dist
+    {α : Type uValue} (dist : RandCosted M α) :
+    RandCosted CostModel.nat α :=
+  PMF.map (Costed.mapCost measure) dist
+
+/-- Identity cost projection leaves a natural-number randomized writer unchanged. -/
+@[simp] theorem mapCost_nat {α : Type uValue}
+    (dist : RandCosted CostModel.nat α) :
+    mapCost NatMeasure.nat dist = dist := by
+  change PMF.map (Costed.mapCost NatMeasure.nat) dist = dist
+  have mapIdentity :
+      (Costed.mapCost NatMeasure.nat :
+        Costed CostModel.nat α → Costed CostModel.nat α) = id := by
+    funext result
+    exact Costed.mapCost_nat result
+  rw [mapIdentity, PMF.map_id]
+
+/-- Cost projection commutes with lifting an exact writer result. -/
+@[simp] theorem mapCost_liftCosted {M : CostModel.{uCost}}
+    (measure : NatMeasure M) {α : Type uValue} (result : Costed M α) :
+    mapCost measure (liftCosted result) =
+      liftCosted (Costed.mapCost measure result) := by
+  exact PMF.pure_map (f := Costed.mapCost measure) result
 
 /-- Cost projection commutes with randomized pure. -/
 @[simp] theorem mapCost_pure {M : CostModel.{uCost}} (measure : NatMeasure M)
     {α : Type uValue} (value : α) :
     mapCost measure (pure M value) =
-      RandCostedT.pure CostModel.nat value := by
+      RandCosted.pure CostModel.nat value := by
   change
-    PMF.map (CostedT.mapCost measure) (PMF.pure (CostedT.pure M value)) =
-      PMF.pure (CostedT.pure CostModel.nat value)
-  rw [PMF.pure_map, CostedT.mapCost_pure]
+    PMF.map (Costed.mapCost measure) (PMF.pure (Costed.pure M value)) =
+      PMF.pure (Costed.pure CostModel.nat value)
+  rw [PMF.pure_map, Costed.mapCost_pure]
 
 /-- Cost projection commutes with value-only maps. -/
 @[simp] theorem mapCost_map {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α β : Type uValue} (f : α → β) (dist : RandCostedT M α) :
+    {α : Type uValue} {β : Type uMapped}
+    (f : α → β) (dist : RandCosted M α) :
     mapCost measure (map f dist) =
-      RandCostedT.map f (mapCost measure dist) := by
+      RandCosted.map f (mapCost measure dist) := by
   simp only [mapCost, map, PMF.map_comp]
   rfl
 
 /-- Cost projection is a writer-monad morphism for randomized sequencing. -/
 @[simp] theorem mapCost_bind {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α β : Type uValue} (dist : RandCostedT M α)
-    (next : α → RandCostedT M β) :
+    {α : Type uValue} {β : Type uMapped} (dist : RandCosted M α)
+    (next : α → RandCosted M β) :
     mapCost measure (bind dist next) =
-      RandCostedT.bind (mapCost measure dist)
+      RandCosted.bind (mapCost measure dist)
         (fun value => mapCost measure (next value)) := by
   change
-    PMF.map (CostedT.mapCost measure)
+    PMF.map (Costed.mapCost measure)
         (PMF.bind dist fun firstResult =>
           PMF.map
             (fun nextResult => firstResult.bind fun _value => nextResult)
             (next firstResult.val)) =
-      PMF.bind (PMF.map (CostedT.mapCost measure) dist) fun firstResult =>
+      PMF.bind (PMF.map (Costed.mapCost measure) dist) fun firstResult =>
         PMF.map
           (fun nextResult => firstResult.bind fun _value => nextResult)
-          (PMF.map (CostedT.mapCost measure) (next firstResult.val))
+          (PMF.map (Costed.mapCost measure) (next firstResult.val))
   rw [PMF.map_bind, PMF.bind_map]
   apply congrArg (PMF.bind dist)
   funext firstResult
@@ -143,22 +131,48 @@ noncomputable def mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
   rw [PMF.map_comp, PMF.map_comp]
   apply congrArg (fun transform => PMF.map transform (next firstResult.val))
   funext nextResult
-  exact CostedT.mapCost_bind measure firstResult (fun _value => nextResult)
+  exact Costed.mapCost_bind measure firstResult (fun _value => nextResult)
+
+/-- Explicit value-dependent costs are projected pointwise. -/
+@[simp] theorem mapCost_sampleWithCost {M : CostModel.{uCost}}
+    (measure : NatMeasure M) {α : Type uValue}
+    (dist : PMF α) (cost : α → M.Cost) :
+    mapCost measure (sampleWithCost dist cost) =
+      sampleWithCost dist (fun value => measure (cost value)) := by
+  simp only [mapCost, sampleWithCost, PMF.map_comp]
+  rfl
 
 /-- Projecting costs does not alter the ordinary value distribution. -/
 @[simp] theorem valueDist_mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (dist : RandCostedT M α) :
-    RandCostedT.valueDist (mapCost measure dist) = valueDist dist := by
+    {α : Type uValue} (dist : RandCosted M α) :
+    RandCosted.valueDist (mapCost measure dist) = valueDist dist := by
   simp only [mapCost, valueDist, PMF.map_comp]
   rfl
 
 /-- The projected cost distribution is the image under the chosen measure. -/
 @[simp] theorem costDist_mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
-    {α : Type uValue} (dist : RandCostedT M α) :
-    RandCostedT.costDist (mapCost measure dist) = PMF.map measure (costDist dist) := by
+    {α : Type uValue} (dist : RandCosted M α) :
+    RandCosted.costDist (mapCost measure dist) = PMF.map measure (costDist dist) := by
   simp only [mapCost, costDist, PMF.map_comp]
   rfl
 
-end RandCostedT
+namespace CostBound
+
+/-- A monotone natural-number observation preserves every exact path bound. -/
+theorem mapCost {M : CostModel.{uCost}} (measure : NatMeasure M)
+    {α : Type uValue} {dist : RandCosted M α} {budget : M.Cost}
+    (bound : RandCosted.CostBound dist budget) :
+    RandCosted.CostBound
+      (RandCosted.mapCost measure dist) (measure budget) := by
+  intro result hresult
+  simp only [RandCosted.mapCost] at hresult
+  rw [PMF.mem_support_map_iff] at hresult
+  rcases hresult with ⟨exactResult, hexactResult, hresult⟩
+  subst result
+  exact measure.monotone_toNat (bound exactResult hexactResult)
+
+end CostBound
+
+end RandCosted
 
 end Crypto.Infrastructure.Computation.Cost

@@ -1,9 +1,11 @@
-import Crypto.Infrastructure.Complexity.Machine
+import Crypto.Infrastructure.Complexity.Basic
 
 namespace CryptoTest.Infrastructure.Computation.CostedOracle
 
-open Crypto.Infrastructure.Complexity
 open Crypto.Infrastructure.Asymptotic
+open Crypto.Infrastructure.Complexity
+open Crypto.Infrastructure.Computation
+open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 open Crypto.Infrastructure.Computation.Oracle
 
@@ -14,24 +16,36 @@ deriving DecidableEq
 def testOracleSpec : OracleSpec where
   Name := TestOracle
   Query
-    | TestOracle.bit => Bool
+    | .bit => Bool
   Response
-    | TestOracle.bit => Bool
+    | .bit => Bool
 
-/-- Two adaptive calls, each charged once by the machine profile. -/
-def twoQueryProgram : OracleProgram CostModel.nat testOracleSpec (ULift Bool) :=
-  OracleProgram.bind
-      (OracleProgram.query (M := CostModel.nat) (1 : Nat) TestOracle.bit false)
-      fun first =>
-    OracleProgram.query (M := CostModel.nat) (1 : Nat) TestOracle.bit first.down
+/-- Caller-side query issuance has one exact unit of cost. -/
+noncomputable def natIssueAlgebra :
+    CostedAlgebra CostModel.nat (QueryIssue.signature testOracleSpec) :=
+  QueryIssue.costAlgebra CostModel.nat testOracleSpec (fun _name _query => 1)
 
-/-- The implementation negates its query and charges three internal units. -/
+/-- The exact issuance handler, not query syntax, is the cost source. -/
+example :
+    natIssueAlgebra.exec (.issue TestOracle.bit false) =
+      PMF.pure (⟨(), 1⟩ : Costed CostModel.nat Unit) :=
+  rfl
+
+noncomputable def oneQueryProgram : Oracle.Program natIssueAlgebra (ULift Bool) :=
+  Oracle.Program.query TestOracle.bit false
+
+/-- Two adaptive calls; neither query constructor contains a cost annotation. -/
+noncomputable def twoQueryProgram : Oracle.Program natIssueAlgebra (ULift Bool) := do
+  let first ← Oracle.Program.query TestOracle.bit false
+  Oracle.Program.query TestOracle.bit first.down
+
+/-- The implementation negates its query and charges three exact internal units. -/
 noncomputable def costedEnv : CostedOracleEnv CostModel.nat testOracleSpec where
   State := Nat
   init := 0
   query := fun name _sec state query =>
     match name with
-    | TestOracle.bit => PMF.pure ⟨(!query, state + 1), 3⟩
+    | .bit => PMF.pure ⟨(!query, state + 1), 3⟩
 
 theorem costedEnv_queryCostBound :
     costedEnv.QueryCostBound (fun _sec => 3) := by
@@ -39,270 +53,233 @@ theorem costedEnv_queryCostBound :
   cases name
   change Nat at state
   change Bool at query
-  change CostedT CostModel.nat (Bool × Nat) at result
-  simp only [costedEnv] at hresult
-  have hresultEq :
-      result = (⟨(!query, state + 1), 3⟩ : CostedT CostModel.nat (Bool × Nat)) :=
-    (PMF.mem_support_pure_iff
-      (⟨(!query, state + 1), 3⟩ : CostedT CostModel.nat (Bool × Nat)) result).1 hresult
+  change Costed CostModel.nat (Bool × Nat) at result
+  change
+    result ∈
+      (PMF.pure
+        (⟨(!query, state + 1), 3⟩ :
+          Costed CostModel.nat (Bool × Nat))).support at hresult
+  rw [PMF.mem_support_pure_iff] at hresult
   subst result
   exact Nat.le_refl 3
 
-theorem twoQueryProgram_costBound :
-    OracleProgram.CostBound twoQueryProgram 2 := by
-  intro value profile execution
-  unfold twoQueryProgram at execution
-  cases execution with
-  | bind firstExecution secondExecution =>
-      cases firstExecution
-      cases secondExecution
-      exact Nat.le_refl 2
-
-theorem twoQueryProgram_totalQueryBound :
-    OracleProgram.TotalQueryBound twoQueryProgram 2 := by
-  intro value profile execution
-  unfold twoQueryProgram at execution
-  cases execution with
-  | bind firstExecution secondExecution =>
-      cases firstExecution
-      cases secondExecution
-      exact Nat.le_refl 2
-
-/-- A PPT oracle machine exposing the same two-query program. -/
-noncomputable def twoQueryPPTMachine :
-    PPTOracleMachine
-      CostModel.nat NatMeasure.nat
-      (fun _sec => Unit)
-      (fun _sec => Bool)
-      (fun _sec _input => testOracleSpec) where
-  run := fun _sec _input => twoQueryProgram
-  costBound := fun _sec _input => 2
-  runtime := fun _sec => 2
-  queryBound := fun _sec _input _name => 2
-  totalQueryBound := fun _sec => 2
-  costBound_sound := by
-    intro sec input
-    exact twoQueryProgram_costBound
-  costBound_le_runtime := by
-    intro sec input
-    exact Nat.le_refl 2
-  queryBound_sound := by
-    intro sec input value profile execution name
-    change OracleProgram.Execution twoQueryProgram value profile at execution
-    unfold twoQueryProgram at execution
-    cases execution with
-    | bind firstExecution secondExecution =>
-        cases firstExecution
-        cases secondExecution
-        cases name
-        simp [OracleProfile.queryCount, OracleProfile.append]
-  totalQueryBound_sound := by
-    intro sec input
-    exact twoQueryProgram_totalQueryBound
-  runtime_isPoly := IsPolyBounded.const 2
-  totalQueryBound_isPoly := IsPolyBounded.const 2
-
-/-- Two machine calls plus two three-unit oracle executions compose to eight. -/
+/-- Erasing the zero-cost lift recovers the original semantic environment. -/
 example
-    (result : CostedT CostModel.nat (ULift Bool))
-    (hresult :
-      result ∈
-        (OracleProgram.runCostedWithCostedEnv
-          twoQueryProgram 0 costedEnv).support) :
-    result.cost ≤ 8 := by
-  simpa using
-    OracleProgram.runCostedWithCostedEnv_cost_le
-      twoQueryProgram 0 costedEnv 2 2 (fun _sec => 3)
-      (OracleProgram.repeatCost_nat_mono 3)
-      OracleProgram.costExchange_nat
-      twoQueryProgram_costBound twoQueryProgram_totalQueryBound
-      (costedEnv_queryCostBound.at 0) result hresult
+    (env : OracleEnv testOracleSpec) (sec : Crypto.SecPar)
+    (state : env.State) (query : Bool) :
+    (env.zeroCost CostModel.nat).erase.query TestOracle.bit sec state query =
+      env.query TestOracle.bit sec state query := by
+  exact CostedOracleEnv.erase_zeroCost_query env TestOracle.bit sec state query
 
-/-- Cost erasure still produces the ordinary stateful oracle semantics. -/
-example :
-    RandCostedT.valueDist
-        (OracleProgram.runCostedWithCostedEnv twoQueryProgram 0 costedEnv) =
-      OracleProgram.runWithEnv twoQueryProgram 0 costedEnv.erase :=
-  OracleProgram.valueDist_runCostedWithCostedEnv
-    twoQueryProgram 0 costedEnv
+theorem queryProgram_localBound (oracleQuery : Bool) :
+    Oracle.Program.LocalCostBound
+      (Oracle.Program.query TestOracle.bit oracleQuery :
+        Oracle.Program natIssueAlgebra (ULift Bool)) 1 := by
+  intro value cost trace execution
+  cases execution with
+  | query _ _ issueResult issueResult_mem _response =>
+      simp only [natIssueAlgebra, QueryIssue.costAlgebra,
+        RandCosted.liftCosted, PMF.mem_support_pure_iff] at issueResult_mem
+      subst issueResult
+      exact Nat.le_refl 1
 
-/-- The machine-level bridge exposes the same eight-unit composed bound. -/
-example
-    (result : CostedT CostModel.nat Bool)
-    (hresult :
-      result ∈
-        (twoQueryPPTMachine.toProbabilisticOracleMachine
-          |>.runCostedWithCostedEnv 0 () costedEnv).support) :
-    result.cost ≤ 8 := by
-  simpa using
-    twoQueryPPTMachine.toTimedOracleMachine
-      |>.runCostedWithCostedEnv_cost_le_composed
-        0 () costedEnv (fun _sec => 3)
-        (OracleProgram.repeatCost_nat_mono 3)
-        OracleProgram.costExchange_nat
-        (costedEnv_queryCostBound.at 0) result hresult
+theorem oneQueryProgram_localBound :
+    Oracle.Program.LocalCostBound oneQueryProgram 1 := by
+  exact queryProgram_localBound false
 
-/-- The composed machine/oracle runtime remains polynomially bounded. -/
-example :
-    IsPolyBounded
-      (fun sec =>
-        twoQueryPPTMachine.runtime sec +
-          twoQueryPPTMachine.totalQueryBound sec * 3) :=
-  twoQueryPPTMachine.composedRuntime_isPoly
-    (fun _sec => 3) (IsPolyBounded.const 3)
-
-/-- Explicit zero local work still requires an independent query certificate. -/
-def zeroLocalCostQueryProgram :
-    OracleProgram CostModel.nat testOracleSpec (ULift Bool) :=
-  OracleProgram.query
-    (M := CostModel.nat) (0 : Nat) TestOracle.bit false
-
-theorem zeroLocalCostQueryProgram_costBound :
-    OracleProgram.CostBound zeroLocalCostQueryProgram 0 := by
-  intro value profile execution
-  cases execution
-  exact Nat.le_refl 0
-
-theorem zeroLocalCostQueryProgram_totalQueryBound :
-    OracleProgram.TotalQueryBound zeroLocalCostQueryProgram 1 := by
-  intro value profile execution
+theorem queryProgram_totalQueryBound (oracleQuery : Bool) :
+    Oracle.Program.TotalQueryBound
+      (Oracle.Program.query TestOracle.bit oracleQuery :
+        Oracle.Program natIssueAlgebra (ULift Bool)) 1 := by
+  intro value cost trace execution
   cases execution
   exact Nat.le_refl 1
 
-/-- Generic query count, rather than zero local cost, pays for oracle work. -/
-example
-    (result : CostedT CostModel.nat (ULift Bool))
-    (hresult :
-      result ∈
-        (OracleProgram.runCostedWithCostedEnv
-          zeroLocalCostQueryProgram 0 costedEnv).support) :
-    result.cost ≤ 3 := by
-  simpa only [OracleProgram.repeatCost_nat] using
-    OracleProgram.runCostedWithCostedEnv_cost_le
-      zeroLocalCostQueryProgram 0 costedEnv 0 1 (fun _sec => 3)
-      (OracleProgram.repeatCost_nat_mono 3)
-      OracleProgram.costExchange_nat
-      zeroLocalCostQueryProgram_costBound
-      zeroLocalCostQueryProgram_totalQueryBound
-      (CostedOracleEnv.QueryCostBound.at costedEnv_queryCostBound 0)
-      result hresult
+theorem oneQueryProgram_totalQueryBound :
+    Oracle.Program.TotalQueryBound oneQueryProgram 1 := by
+  exact queryProgram_totalQueryBound false
 
-/-! ## Generic multi-resource oracle composition -/
-
-/-- Local steps and oracle work remain separate exact resource coordinates. -/
-abbrev OracleResources := Nat × Nat
-
-abbrev oracleResourcesCostModel : CostModel where
-  Cost := OracleResources
-  instAddMonoid := inferInstance
-  instPartialOrder := inferInstance
-  instAddLeftMono :=
-    ⟨fun fixed _left _right hle =>
-      ⟨Nat.add_le_add_left hle.1 fixed.1,
-        Nat.add_le_add_left hle.2 fixed.2⟩⟩
-  instAddRightMono :=
-    ⟨fun fixed _left _right hle =>
-      ⟨Nat.add_le_add_right hle.1 fixed.1,
-        Nat.add_le_add_right hle.2 fixed.2⟩⟩
-
-/-- Every generic query has an explicit caller-side cost. -/
-def resourceTwoQueryProgram :
-    OracleProgram oracleResourcesCostModel testOracleSpec (ULift Bool) :=
-  OracleProgram.bind
-      (OracleProgram.query (2, 0) TestOracle.bit false) fun first =>
-    OracleProgram.query (3, 0) TestOracle.bit first.down
-
-/-- The implementation charges only the query-resource coordinate. -/
-noncomputable def resourceCostedEnv :
-    CostedOracleEnv oracleResourcesCostModel testOracleSpec where
-  State := Nat
-  init := 0
-  query := fun name _sec state query =>
-    match name with
-    | TestOracle.bit => PMF.pure ⟨(!query, state + 1), (0, 1)⟩
-
-theorem resourceCostedEnv_queryCostBound :
-    resourceCostedEnv.QueryCostBound (fun _sec => (0, 1)) := by
-  intro name sec state query result hresult
-  cases name
-  change Nat at state
-  change Bool at query
-  change CostedT oracleResourcesCostModel (Bool × Nat) at result
-  simp only [resourceCostedEnv] at hresult
-  have hresultEq :
-      result =
-        (⟨(!query, state + 1), (0, 1)⟩ :
-          CostedT oracleResourcesCostModel (Bool × Nat)) :=
-    (PMF.mem_support_pure_iff
-      (⟨(!query, state + 1), (0, 1)⟩ :
-        CostedT oracleResourcesCostModel (Bool × Nat)) result).1 hresult
-  subst result
-  exact le_refl _
-
-theorem resourceTwoQueryProgram_costBound :
-    OracleProgram.CostBound resourceTwoQueryProgram (5, 0) := by
-  intro value profile execution
-  unfold resourceTwoQueryProgram at execution
-  cases execution with
-  | bind firstExecution secondExecution =>
-      cases firstExecution
-      cases secondExecution
-      exact le_refl _
-
-theorem resourceTwoQueryProgram_totalQueryBound :
-    OracleProgram.TotalQueryBound resourceTwoQueryProgram 2 := by
-  intro value profile execution
-  unfold resourceTwoQueryProgram at execution
-  cases execution with
-  | bind firstExecution secondExecution =>
-      cases firstExecution
-      cases secondExecution
-      exact Nat.le_refl 2
-
-theorem oracleResourcesCostExchange :
-    OracleProgram.CostExchange oracleResourcesCostModel := by
-  intro localLeft oracleLeft localRight oracleRight
-  change (localLeft + oracleLeft) + (localRight + oracleRight) ≤
-    (localLeft + localRight) + (oracleLeft + oracleRight)
-  constructor
-  · simp only [Prod.fst_add]
-    omega
-  · simp only [Prod.snd_add]
-    omega
-
-theorem oracleResources_repeatCost_mono :
-    ∀ {left right : Nat}, left ≤ right →
-      oracleResourcesCostModel.instPartialOrder.le
-        (OracleProgram.repeatCost oracleResourcesCostModel left (0, 1))
-        (OracleProgram.repeatCost oracleResourcesCostModel right (0, 1)) := by
-  intro left right hle
-  change (left * 0, left * 1) ≤ (right * 0, right * 1)
-  constructor
-  · exact Nat.le_refl 0
-  · simpa using hle
-
-/-- Generic coarse composition has the requested vector formula. -/
-example
-    (result : CostedT oracleResourcesCostModel (ULift Bool))
-    (hresult :
-      result ∈
-        (OracleProgram.runCostedWithCostedEnv
-          resourceTwoQueryProgram 0 resourceCostedEnv).support) :
-    result.cost ≤ (5, 2) := by
+theorem twoQueryProgram_localBound :
+    Oracle.Program.LocalCostBound twoQueryProgram 2 := by
+  unfold twoQueryProgram
   simpa using
-    OracleProgram.runCostedWithCostedEnv_cost_le
-      resourceTwoQueryProgram 0 resourceCostedEnv (5, 0) 2 (fun _sec => (0, 1))
-      oracleResources_repeatCost_mono oracleResourcesCostExchange
-      resourceTwoQueryProgram_costBound resourceTwoQueryProgram_totalQueryBound
-      (resourceCostedEnv_queryCostBound.at 0) result hresult
+    (Oracle.Program.LocalCostBound.bind
+      (queryProgram_localBound false)
+      (fun first => queryProgram_localBound first.down))
 
-/-- Generic erasure preserves the value distribution exactly. -/
+theorem twoQueryProgram_totalQueryBound :
+    Oracle.Program.TotalQueryBound twoQueryProgram 2 := by
+  unfold twoQueryProgram
+  simpa using
+    (Oracle.Program.TotalQueryBound.bind
+      (queryProgram_totalQueryBound false)
+      (fun first => queryProgram_totalQueryBound first.down))
+
+theorem twoQueryProgram_queryBound :
+    Oracle.Program.QueryBound twoQueryProgram (fun _name => 2) :=
+  Oracle.Program.QueryBound.ofTotal twoQueryProgram_totalQueryBound
+
+/-- Trace and cost projections of the one authoritative exact run. -/
+def expectedTrace : QueryTrace testOracleSpec :=
+  ⟨[TestOracle.bit, TestOracle.bit]⟩
+
+def expectedExactResult :
+    ExactRunResult CostModel.nat testOracleSpec Nat (ULift Bool) :=
+  ⟨ULift.up false, 2, expectedTrace, 2, 6, 8⟩
+
+theorem runExact_eq_expected :
+    Oracle.Program.runExactFromInit twoQueryProgram 0 costedEnv =
+      PMF.pure expectedExactResult := by
+  simp only [Oracle.Program.runExactFromInit, twoQueryProgram,
+    Oracle.Program.runExact, natIssueAlgebra,
+    QueryIssue.costAlgebra, costedEnv, PMF.pure_bind,
+    Bool.not_false, Bool.not_true]
+  change PMF.bind (PMF.pure _) _ = PMF.pure expectedExactResult
+  rw [PMF.pure_bind]
+  rfl
+
+example : expectedTrace.count TestOracle.bit = 2 := by
+  simp [expectedTrace, QueryTrace.count]
+
+example : expectedTrace.total = 2 := by
+  rfl
+
+/-- Exact composition is two caller units plus two three-unit oracle calls. -/
+example
+    (result : Costed CostModel.nat (ULift Bool))
+    (hresult :
+      result ∈
+        (Oracle.Program.runCosted twoQueryProgram 0 costedEnv).support) :
+    result.cost ≤ 8 := by
+  simpa only [Oracle.Program.repeatCost_nat] using
+    Oracle.Program.runCosted_cost_le_composedBudget
+      twoQueryProgram 0 costedEnv 2 2 3
+      (Oracle.Program.repeatCost_nat_mono 3)
+      Oracle.Program.costExchange_nat
+      twoQueryProgram_localBound twoQueryProgram_totalQueryBound
+      (costedEnv_queryCostBound.at 0) result hresult
+
+/-- Cost erasure recovers the semantic environment without a second interpreter. -/
 example :
-    RandCostedT.valueDist
-        (OracleProgram.runCostedWithCostedEnv resourceTwoQueryProgram 0 resourceCostedEnv) =
-      OracleProgram.runWithEnv resourceTwoQueryProgram 0 resourceCostedEnv.erase :=
-  OracleProgram.valueDist_runCostedWithCostedEnv
-    resourceTwoQueryProgram 0 resourceCostedEnv
+    RandCosted.valueDist
+        (Oracle.Program.runCosted twoQueryProgram 0 costedEnv) =
+      Oracle.Program.runWithEnv twoQueryProgram 0 costedEnv.erase :=
+  Oracle.Program.valueDist_runCosted_eq_runWithEnv_erase
+    twoQueryProgram 0 costedEnv
+
+/-! ## Input-dependent machine and implementation certificates -/
+
+noncomputable def inputProgram (twice : Bool) : Oracle.Program natIssueAlgebra (ULift Bool) :=
+  if twice then twoQueryProgram else oneQueryProgram
+
+theorem inputProgram_localBound (twice : Bool) :
+    Oracle.Program.LocalCostBound (inputProgram twice) (if twice then 2 else 1) := by
+  cases twice <;> simp [inputProgram, oneQueryProgram_localBound,
+    twoQueryProgram_localBound]
+
+theorem inputProgram_totalQueryBound (twice : Bool) :
+    Oracle.Program.TotalQueryBound (inputProgram twice) (if twice then 2 else 1) := by
+  cases twice <;> simp [inputProgram, oneQueryProgram_totalQueryBound,
+    twoQueryProgram_totalQueryBound]
+
+/-- Budgets depend on input; runtimes are uniform in input. -/
+noncomputable def inputTimedMachine :
+    TimedOracleMachine CostModel.nat NatMeasure.nat
+      (fun _sec => Bool) (fun _sec _input => Bool)
+      (fun _sec _input => testOracleSpec) where
+  issueAlgebra := fun _sec _input => natIssueAlgebra
+  program := fun _sec input => inputProgram input
+  localBudget := fun _sec input => if input then 2 else 1
+  queryBudget := fun _sec input _name => if input then 2 else 1
+  totalQueryBudget := fun _sec input => if input then 2 else 1
+  localRuntime := fun _sec => 2
+  totalQueryRuntime := fun _sec => 2
+  localBudget_sound := fun _sec input => inputProgram_localBound input
+  queryBudget_sound := fun _sec input =>
+    Oracle.Program.QueryBound.ofTotal (inputProgram_totalQueryBound input)
+  totalQueryBudget_sound := fun _sec input => inputProgram_totalQueryBound input
+  localBudget_le_runtime := by
+    intro sec input
+    cases input <;> decide
+  totalQueryBudget_le_runtime := by
+    intro sec input
+    cases input <;> decide
+
+/--
+Polynomial annotations become a `PPTOracleMachine` only with an independent
+admission for the exact caller program and its two claimed runtimes.
+-/
+noncomputable def inputPPTMachine
+    (admission : PPTOracleAdmissible inputTimedMachine.toOracleMachine
+      inputTimedMachine.localRuntime inputTimedMachine.totalQueryRuntime) :
+    PPTOracleMachine CostModel.nat NatMeasure.nat
+      (fun _sec => Bool) (fun _sec _input => Bool)
+      (fun _sec _input => testOracleSpec) where
+  toTimedOracleMachine := inputTimedMachine
+  localRuntime_isPoly := IsPolyBounded.const 2
+  totalQueryRuntime_isPoly := IsPolyBounded.const 2
+  admission := admission
+
+noncomputable def pptImplementation :
+    PPTOracleImplementation CostModel.nat NatMeasure.nat
+      (fun _sec => Bool) (fun _sec _input => testOracleSpec) where
+  env := fun _sec _input => costedEnv
+  queryBudget := fun _sec _input => 3
+  queryRuntime := fun _sec => 3
+  queryBudget_sound := fun sec input => costedEnv_queryCostBound.at sec
+  queryBudget_le_runtime := by
+    intro sec input
+    exact Nat.le_refl 3
+  repeatBudgetMono := by
+    intro sec input first second hle
+    exact Oracle.Program.repeatCost_nat_mono 3 hle
+  queryRuntime_isPoly := IsPolyBounded.const 3
+
+/-- The exact generic composition theorem is exposed by the machine layer. -/
+example
+    (result : Costed CostModel.nat Bool)
+    (hresult :
+      result ∈
+        (inputTimedMachine.toOracleMachine.runWithImplementation
+          pptImplementation.toOracleImplementation 0 true).support) :
+    result.cost ≤ 8 := by
+  simpa only [Oracle.Program.repeatCost_nat] using
+    inputTimedMachine.runWithImplementation_cost_le
+      pptImplementation.toTimedOracleImplementation
+      Oracle.Program.costExchange_nat 0 true result hresult
+
+/-- `NatMeasure` maps repeated exact query cost additively. -/
+example :
+    NatMeasure.nat
+        (Oracle.Program.repeatCost CostModel.nat 2 3) = 6 := by
+  change NatMeasure.nat (2 • (3 : Nat)) = 6
+  rw [NatMeasure.map_nsmul]
+  rfl
+
+/-- Exact-to-measured composition has the expected uniform runtime. -/
+example
+    (callerAdmission : PPTOracleAdmissible inputTimedMachine.toOracleMachine
+      inputTimedMachine.localRuntime inputTimedMachine.totalQueryRuntime)
+    (closedAdmission : PPTAdmissible
+      ((inputPPTMachine callerAdmission).toTimedOracleMachine.compose
+        pptImplementation.toTimedOracleImplementation
+        Oracle.Program.costExchange_nat).run
+      (fun _sec => 8)) :
+    ((inputPPTMachine callerAdmission).compose pptImplementation
+      Oracle.Program.costExchange_nat closedAdmission).runtime =
+      fun _sec => 8 := by
+  rfl
+
+/-- The composed runtime is certified polynomial through generic add/mul closure. -/
+example
+    (callerAdmission : PPTOracleAdmissible inputTimedMachine.toOracleMachine
+      inputTimedMachine.localRuntime inputTimedMachine.totalQueryRuntime) :
+    IsPolyBounded
+      (fun sec =>
+        (inputPPTMachine callerAdmission).localRuntime sec +
+          (inputPPTMachine callerAdmission).totalQueryRuntime sec *
+            pptImplementation.queryRuntime sec) :=
+  (inputPPTMachine callerAdmission).composedRuntime_isPoly pptImplementation
 
 /-! ## Noncommutative exact-order regression -/
 
@@ -348,7 +325,6 @@ instance : PartialOrder TraceCost where
     intro left middle right leftMiddle middleRight
     change left = middle at leftMiddle
     change middle = right at middleRight
-    change left = right
     exact leftMiddle.trans middleRight
   le_antisymm := by
     intro left right leftRight _rightLeft
@@ -373,13 +349,16 @@ abbrev traceCostModel : CostModel where
 def traceCost (event : TraceEvent) : TraceCost :=
   ⟨[event]⟩
 
-def orderedTwoQueryProgram :
-    OracleProgram traceCostModel testOracleSpec (ULift Bool) :=
-  OracleProgram.bind
-      (OracleProgram.query
-        (traceCost .localFirst) TestOracle.bit false) fun first =>
-    OracleProgram.query
-      (traceCost .localSecond) TestOracle.bit first.down
+noncomputable def traceIssueAlgebra :
+    CostedAlgebra traceCostModel (QueryIssue.signature testOracleSpec) :=
+  QueryIssue.costAlgebra traceCostModel testOracleSpec fun name =>
+    match name with
+    | .bit => fun query : Bool =>
+        traceCost (if query then .localSecond else .localFirst)
+
+noncomputable def orderedTwoQueryProgram : Oracle.Program traceIssueAlgebra (ULift Bool) := do
+  let first ← Oracle.Program.query TestOracle.bit false
+  Oracle.Program.query TestOracle.bit first.down
 
 noncomputable def orderedCostedEnv :
     CostedOracleEnv traceCostModel testOracleSpec where
@@ -387,28 +366,26 @@ noncomputable def orderedCostedEnv :
   init := false
   query := fun name _sec seenSecond query =>
     match name with
-    | TestOracle.bit =>
+    | .bit =>
         PMF.pure
           ⟨(!query, true),
             traceCost (if seenSecond then .oracleSecond else .oracleFirst)⟩
 
-/-- Exact cost follows execution order, not grouped local/oracle order. -/
+/-- Exact total cost records true execution order, never regrouped projections. -/
 example :
-    OracleProgram.runCostedWithCostedEnv
-        orderedTwoQueryProgram 0 orderedCostedEnv =
+    Oracle.Program.runCosted orderedTwoQueryProgram 0 orderedCostedEnv =
       PMF.pure
         ⟨ULift.up false,
           ⟨[.localFirst, .oracleFirst, .localSecond, .oracleSecond]⟩⟩ := by
-  simp only [OracleProgram.runCostedWithCostedEnv,
-    OracleProgram.runProfiledWithCostedEnvFromInit,
-    orderedTwoQueryProgram, orderedCostedEnv, traceCost,
-    OracleProgram.runProfiledWithCostedEnv, PMF.pure_bind,
-    Bool.not_false, Bool.not_true, Bool.false_eq_true, if_false, if_true]
+  simp only [Oracle.Program.runCosted, Oracle.Program.runExactFromInit,
+    orderedTwoQueryProgram, Oracle.Program.runExact, traceIssueAlgebra,
+    QueryIssue.costAlgebra, orderedCostedEnv, traceCost, PMF.pure_bind,
+    Bool.not_false, Bool.not_true, Bool.false_eq_true,
+    if_false, if_true]
   change PMF.map _ (PMF.bind (PMF.pure _) _) = _
   rw [PMF.pure_bind, PMF.pure_map]
   rfl
 
-/-- The forbidden grouped order is observably different. -/
 example :
     (⟨[.localFirst, .oracleFirst, .localSecond, .oracleSecond]⟩ : TraceCost) ≠
       ⟨[.localFirst, .localSecond, .oracleFirst, .oracleSecond]⟩ := by

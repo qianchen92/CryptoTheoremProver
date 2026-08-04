@@ -1,4 +1,4 @@
-import Crypto.Infrastructure.Asymptotic.SecurityParameter
+import Crypto.Infrastructure.SecurityParameter
 import Mathlib.Probability.ProbabilityMassFunction.Basic
 import Mathlib.Probability.ProbabilityMassFunction.Constructions
 

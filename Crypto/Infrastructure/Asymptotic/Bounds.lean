@@ -1,4 +1,4 @@
-import Crypto.Infrastructure.Asymptotic.SecurityParameter
+import Crypto.Infrastructure.SecurityParameter
 import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Data.Real.Basic
 
@@ -10,7 +10,8 @@ def IsPolyBounded (f : Crypto.SecPar → Nat) : Prop :=
 
 /-- A real-valued function negligible in the security parameter. -/
 def IsNegligible (f : Crypto.SecPar → Real) : Prop :=
-  ∀ c : Nat, c > 0 → ∃ N : Crypto.SecPar, ∀ n ≥ N, f n < (1 : Real) / (n ^ c : Real)
+  ∀ c : Nat, c > 0 →
+    ∃ N : Crypto.SecPar, ∀ n ≥ N, |f n| < (1 : Real) / (n ^ c : Real)
 
 namespace IsPolyBounded
 
@@ -67,20 +68,6 @@ theorem max
   intro n
   exact max_le (Nat.le_add_right _ _) (Nat.le_add_left _ _)
 
-/--
-The standard cost of running a machine with an implemented oracle is
-polynomial: local machine work plus one oracle budget for each possible query.
-The total-query budget is independent of the local-work budget.
--/
-theorem composedOracle
-    {machineBudget totalQueryBudget oracleBudget : Crypto.SecPar → Nat}
-    (hmachine : IsPolyBounded machineBudget)
-    (hqueries : IsPolyBounded totalQueryBudget)
-    (horacle : IsPolyBounded oracleBudget) :
-    IsPolyBounded
-      (fun n => machineBudget n + totalQueryBudget n * oracleBudget n) :=
-  add hmachine (mul hqueries horacle)
-
 end IsPolyBounded
 
 /-- The zero function is negligible. -/
@@ -91,6 +78,6 @@ theorem isNegligible_zero : IsNegligible (fun _ : Crypto.SecPar => (0 : Real)) :
   have hnposNat : 0 < n := lt_of_lt_of_le Nat.zero_lt_one hn
   have hnpos : (0 : Real) < (n : Real) := by exact_mod_cast hnposNat
   have hpowpos : (0 : Real) < (n ^ c : Real) := pow_pos hnpos c
-  exact one_div_pos.mpr hpowpos
+  simpa using one_div_pos.mpr hpowpos
 
 end Crypto.Infrastructure.Asymptotic
