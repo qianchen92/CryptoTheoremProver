@@ -1,11 +1,12 @@
 import Crypto.Infrastructure.Complexity.CostBound
+import Crypto.Infrastructure.Complexity.Operational
 
 namespace Crypto.Infrastructure.Complexity
 
 open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Cost
 
-universe uCost uIn uOut uMapped
+universe uCost uIn uOut uMapped uFirstOrder uBase uValue uOp
 
 /--
 A randomized machine over one exact cost model and fully dependent I/O families.
@@ -143,6 +144,36 @@ noncomputable def map
   toProbabilisticMachine := machine.toProbabilisticMachine.map transform
   certificate := machine.certificate.map transform
 
+/--
+Interpret a fixed reified first-order program as a constant-family timed
+machine. This constructor transports an exact first-order path bound only; PPT
+admission still requires `PPTMachine.ofFirstOrderCode` and a structurally valid
+algebra.
+-/
+noncomputable def ofFirstOrderProgram
+    {M : CostModel.{uCost}} (measure : NatMeasure M)
+    {Base : Type uBase} {interpret : Base → Type uValue}
+    {S : FirstOrder.Signature.{uBase, uOp} Base}
+    (A : FirstOrder.CostedAlgebra M interpret S)
+    {FirstOrderInput FirstOrderOutput : FirstOrder.Ty Base}
+    (program : FirstOrder.Program interpret S
+      FirstOrderInput FirstOrderOutput)
+    (budget : FirstOrder.Ty.denote interpret FirstOrderInput → M.Cost)
+    (runtime : Nat)
+    (costBound : FirstOrder.Program.CostBound A program budget)
+    (budget_le_runtime : ∀ input, measure (budget input) ≤ runtime) :
+    TimedMachine M measure
+      (fun _sec => FirstOrder.Ty.denote interpret FirstOrderInput)
+      (fun _sec _input =>
+        FirstOrder.Ty.denote interpret FirstOrderOutput) where
+  toProbabilisticMachine :=
+    { run := fun _sec input => FirstOrder.Program.runCosted A program input }
+  certificate :=
+    { budget := fun _sec input => budget input
+      sound := fun _sec input => costBound input
+      runtime := fun _sec => runtime
+      budget_le_runtime := fun _sec input => budget_le_runtime input }
+
 @[simp] theorem runtime_ofFunction
     (M : CostModel.{uCost}) (measure : NatMeasure M)
     {Input : Crypto.SecPar → Type uIn}
@@ -154,27 +185,57 @@ noncomputable def map
 
 end TimedMachine
 
-/--
-External, host-independent admission of one exact run under one claimed
-runtime as genuinely PPT.
+namespace FirstOrderOperationalCode
 
-The generic cost framework deliberately provides no constructor for this
-predicate.  Exact path annotations and a polynomial bound on their projection
-do not, by themselves, account for Lean host reduction hidden in pure values,
-higher-order continuations, or value maps.  A concrete first-order machine
-model (for example a RAM, circuit, or bytecode semantics) must discharge this
-obligation for these same two indices.
+/--
+Interpret internally certified first-order code as a constant-family timed
+machine. The security parameter indexes the cryptographic interface but does
+not select a different hidden Lean program.
 -/
-opaque PPTAdmissible
+noncomputable def toTimedMachine
+    {M : CostModel.{uFirstOrder}} {measure : NatMeasure M}
+    {Base : Type uFirstOrder} {interpret : Base → Type uFirstOrder}
+    {S : FirstOrder.Signature.{uFirstOrder, uFirstOrder} Base}
+    {A : FirstOrder.CostedAlgebra M interpret S}
+    {FirstOrderInput FirstOrderOutput : FirstOrder.Ty Base}
+    (code : FirstOrderOperationalCode M measure interpret A
+      FirstOrderInput FirstOrderOutput) :
+    TimedMachine M measure
+      (fun _sec => FirstOrder.Ty.denote interpret FirstOrderInput)
+      (fun _sec _input => FirstOrder.Ty.denote interpret FirstOrderOutput) where
+  toProbabilisticMachine :=
+    { run := fun _sec input =>
+        FirstOrder.Program.runCosted A code.program input }
+  certificate :=
+    { budget := fun _sec input => code.budget input
+      sound := fun _sec input => code.costBound input
+      runtime := fun _sec => code.runtime
+      budget_le_runtime := fun _sec input => code.budget_le_runtime input }
+
+end FirstOrderOperationalCode
+
+/--
+An exact run and claimed runtime realized by validated code in an explicit
+host-independent operational model.
+
+Exact path annotations and a polynomial bound on their projection do not, by
+themselves, account for Lean host reduction hidden in pure values, higher-order
+continuations, or value maps. The realization therefore records a model and
+code whose denotation is this exact run and whose operational claim is this
+runtime. Canonical first-order code is validated internally; other backends
+retain an explicit external validation boundary.
+-/
+abbrev PPTAdmissible
     {M : CostModel.{uCost}}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (run : RandomizedComputation M Input Output)
-    (runtime : Crypto.SecPar → Nat) : Prop
+    (runtime : Crypto.SecPar → Nat) : Prop :=
+  OperationalRealization run runtime
 
 /--
-A polynomially bounded annotated machine that is additionally admitted by an
-external host-independent PPT model.
+A polynomially bounded annotated machine that is additionally admitted by a
+host-independent PPT model.
 
 The admission field is the firewall between internal path-cost certificates
 and cryptographic quantification over PPT adversaries.  In particular, no
@@ -215,9 +276,10 @@ theorem runtime_isPoly
   machine.runtime_poly
 
 /--
-Promote an annotated timed machine only after an external operational model has
-admitted that exact machine.  Polynomiality of the measured bound and PPT
-admission are intentionally separate obligations.
+Promote an annotated timed machine only after an operational model has admitted
+that exact machine. Polynomiality of the measured bound and PPT admission are
+intentionally separate obligations. The first-order constructor below derives
+the latter internally.
 -/
 def ofAdmittedTimedMachine
     (machine : TimedMachine M measure Input Output)
@@ -228,6 +290,29 @@ def ofAdmittedTimedMachine
   toTimedMachine := machine
   runtime_poly := runtime_isPoly
   admission := admission
+
+/--
+Build a PPT machine directly from internally validated first-order code.
+
+This constructor needs no external `OperationalModel.ValidCode` assumption:
+the reified syntax, structural primitive-algebra witness, exact path bound, and
+measured runtime are all fields of `code`.
+-/
+noncomputable def ofFirstOrderCode
+    {M : CostModel.{uFirstOrder}} {measure : NatMeasure M}
+    {Base : Type uFirstOrder} {interpret : Base → Type uFirstOrder}
+    {S : FirstOrder.Signature.{uFirstOrder, uFirstOrder} Base}
+    {A : FirstOrder.CostedAlgebra M interpret S}
+    {FirstOrderInput FirstOrderOutput : FirstOrder.Ty Base}
+    (code : FirstOrderOperationalCode M measure interpret A
+      FirstOrderInput FirstOrderOutput) :
+    PPTMachine M measure
+      (fun _sec => FirstOrder.Ty.denote interpret FirstOrderInput)
+      (fun _sec _input => FirstOrder.Ty.denote interpret FirstOrderOutput) where
+  toTimedMachine := code.toTimedMachine
+  runtime_poly :=
+    Crypto.Infrastructure.Asymptotic.IsPolyBounded.const code.runtime
+  admission := OperationalRealization.ofFirstOrderMachineCode code
 
 @[simp] theorem toTimedMachine_run
     (machine : PPTMachine M measure Input Output) :

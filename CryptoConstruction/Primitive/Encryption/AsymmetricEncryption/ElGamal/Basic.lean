@@ -1,2 +1,3 @@
 import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Scheme
+import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Complexity
 import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.Basic

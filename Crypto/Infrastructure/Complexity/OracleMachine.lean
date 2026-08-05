@@ -147,12 +147,13 @@ structure TimedOracleMachine
     totalQueryBudget sec input ≤ totalQueryRuntime sec
 
 /--
-External admission of one exact oracle caller and its claimed local and
-total-query runtimes by a host-independent PPT model.  Structural local-cost
-and query-count bounds do not discharge this obligation because oracle
-programs retain higher-order Lean boundaries.
+Operational realization of one exact oracle caller and its claimed local and
+total-query runtimes.  The realization exposes a host-independent model, its
+code object, and the equations identifying that code with this caller and
+runtime pair.  Structural local-cost and query-count bounds do not validate
+the code because oracle programs retain higher-order Lean boundaries.
 -/
-opaque PPTOracleAdmissible
+abbrev PPTOracleAdmissible
     {M : CostModel.{uCost}}
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
@@ -160,7 +161,8 @@ opaque PPTOracleAdmissible
       (sec : Crypto.SecPar) → Input sec →
         OracleSpec.{uOracle, uQuery, uResponse}}
     (machine : OracleMachine M Input Output Spec)
-    (localRuntime totalQueryRuntime : Crypto.SecPar → Nat) : Prop
+    (localRuntime totalQueryRuntime : Crypto.SecPar → Nat) : Prop :=
+  OperationalRealization machine (localRuntime, totalQueryRuntime)
 
 /--
 Polynomial local and total-query runtimes over the same certified program,

@@ -1,4 +1,5 @@
 import Crypto.Infrastructure.Complexity.CostBound
+import Crypto.Infrastructure.Complexity.Operational
 import Crypto.Infrastructure.Complexity.Machine
 import Crypto.Infrastructure.Complexity.OracleImplementation
 import Crypto.Infrastructure.Complexity.OracleMachine

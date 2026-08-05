@@ -48,6 +48,27 @@ theorem oneStepMachine_not_zeroRuntime :
 
 /-! ## PPT admission boundary regressions -/
 
+/--
+A minimal external operational model fixture.  Its only code denotes the exact
+one-step test machine and carries that machine's claimed runtime.
+-/
+noncomputable def oneStepOperationalModel :
+    OperationalModel
+      (RandomizedComputation CostModel.nat
+        (fun _sec ↦ Unit) (fun _sec _input ↦ Bool))
+      (Crypto.SecPar → Nat) where
+  Code := Unit
+  denote := fun _code ↦ oneStepMachine.run
+  claim := fun _code ↦ oneStepMachine.runtime
+
+/-- An externally validated code object yields the corresponding structured admission. -/
+example
+    (valid : OperationalModel.ExternalValidCode oneStepOperationalModel ()) :
+    PPTAdmissible oneStepMachine.run oneStepMachine.runtime := by
+  exact OperationalRealization.ofValidatedCode
+    oneStepOperationalModel ()
+      (OperationalModel.ValidCode.external valid) rfl rfl
+
 /-- Arbitrary host functions no longer have an automatic PPT constructor. -/
 example : True := by
   fail_if_success

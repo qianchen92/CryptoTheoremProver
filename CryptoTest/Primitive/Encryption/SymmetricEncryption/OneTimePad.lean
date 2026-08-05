@@ -107,11 +107,18 @@ example :
 /-- One exact encryption call carries the algebra's one-unit addition cost. -/
 example
     (key message : testPublicParam.Carrier) :
-    Program.runCosted (encryptProgram testPublicParam) (key, message) =
+    FirstOrder.Program.runCosted (Language.algebra testPublicParam)
+        (encryptProgram testPublicParam) (key, message) =
       RandCosted.liftCosted
         (⟨key + message, 1⟩ :
           Costed CostModel.nat testPublicParam.Carrier) :=
-  rfl
+  by
+    simp only [testPublicParam, testAlgebra, RandCosted.liftCosted,
+      FirstOrder.Program.runCosted, Language.algebra, encryptProgram,
+      FirstOrder.Code.runCosted, RandCosted.bind, FirstOrder.Expr.eval,
+      FirstOrder.Env.get, Costed.bind, RandCosted.pure, Costed.pure,
+      PMF.pure_map, add_zero]
+    exact PMF.pure_bind _ _
 
 /-- The structural encryption certificate bounds every exact execution path. -/
 example
@@ -119,7 +126,7 @@ example
     (result : Costed CostModel.nat testPublicParam.Carrier)
     (hresult :
       result ∈
-        (Program.runCosted
+        (FirstOrder.Program.runCosted (Language.algebra testPublicParam)
           (encryptProgram testPublicParam) (key, message)).support) :
     result.cost ≤ 1 :=
   encryptProgram_costBound testPublicParam testParamEfficiency
@@ -130,9 +137,11 @@ example
     (result : Costed CostModel.nat testPublicParam.Carrier)
     (hresult :
       result ∈
-        (Program.runCosted (keygenProgram testPublicParam) ()).support) :
+        (FirstOrder.Program.runCosted (Language.algebra testPublicParam)
+          (keygenProgram testPublicParam) (ULift.up ())).support) :
     result.cost ≤ 2 :=
-  keygenProgram_costBound testPublicParam testParamEfficiency () result hresult
+  keygenProgram_costBound testPublicParam testParamEfficiency
+    (ULift.up ()) result hresult
 
 /-- The scheme exposes the expected cost-erased encryption distribution. -/
 example
@@ -168,9 +177,38 @@ example
         (⟨-key + ciphertext, 2⟩ :
           Costed CostModel.nat testPublicParam.Carrier) :=
   by
-    simp only [scheme, decryptProgram, Program.runCosted, Program.Code.runCosted,
-      testPublicParam, testAlgebra, RandCosted.bind, RandCosted.liftCosted,
-      Costed.bind, PMF.pure_bind, PMF.pure_map]
+    simp only [testPublicParam, testAlgebra, RandCosted.liftCosted,
+      scheme, setupProgram_runCosted, FirstOrder.Program.runCosted,
+      Language.algebra, decryptProgram, FirstOrder.Code.runCosted,
+      RandCosted.bind, FirstOrder.Expr.eval, FirstOrder.Env.get,
+      Costed.bind, RandCosted.pure, Costed.pure, PMF.pure_map, add_zero]
+    refine (PMF.pure_bind _ _).trans ?_
+    change
+      PMF.map
+          (fun second : Costed CostModel.nat testPublicParam.Carrier =>
+            (⟨second.val, 1 + second.cost⟩ :
+              Costed CostModel.nat testPublicParam.Carrier))
+          ((PMF.pure
+              (⟨-key + ciphertext, 1⟩ :
+                Costed CostModel.nat testPublicParam.Carrier)).bind
+            (fun first => PMF.pure
+              (⟨first.val, first.cost⟩ :
+                Costed CostModel.nat testPublicParam.Carrier))) =
+        PMF.pure
+          (⟨-key + ciphertext, 2⟩ :
+            Costed CostModel.nat testPublicParam.Carrier)
+    have inner :
+        (PMF.pure
+          (⟨-key + ciphertext, 1⟩ :
+            Costed CostModel.nat testPublicParam.Carrier)).bind
+            (fun first => PMF.pure
+              (⟨first.val, first.cost⟩ :
+                Costed CostModel.nat testPublicParam.Carrier)) =
+          PMF.pure
+            (⟨-key + ciphertext, 1⟩ :
+              Costed CostModel.nat testPublicParam.Carrier) :=
+      PMF.pure_bind _ _
+    rw [inner, PMF.pure_map]
     rfl
 
 /-- The exact setup Program satisfies its separate global efficiency certificate. -/

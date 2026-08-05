@@ -22,19 +22,20 @@ variable
   {embed : LocalAddress → Address}
 
 /--
-External operational admission for the exact handlers of one addressed ITM
-under the claimed uniform runtime.
+Operational realization of the exact handlers of one addressed ITM under the
+claimed uniform runtime.
 
-The generic UC cost accounting deliberately provides no constructor for this
-predicate.  Bounds on annotated handler paths cannot account for arbitrary
-Lean computation hidden in handler bodies, leakage functions, or erasure
-functions.  Admission must therefore come from a host-independent operational
-model of the same machine and runtime.
+The realization exposes a host-independent model, its code object, and the
+equations identifying that code with this machine and runtime.  Bounds on
+annotated handler paths cannot validate arbitrary Lean computation hidden in
+handler bodies, leakage functions, or erasure functions, so validation of the
+operational code remains an explicit trust-boundary obligation.
 -/
-opaque PPTAddressedITMAdmissible
+abbrev PPTAddressedITMAdmissible
     (machine : AddressedITM.{uCost, uAddress, uPayload, uPort, uCapability,
       uState, uLeakage, uErasure, uOutput} M schema LocalAddress embed)
-    (runtime : Crypto.SecPar → Nat) : Prop
+    (runtime : Crypto.SecPar → Nat) : Prop :=
+  Crypto.Infrastructure.Complexity.OperationalRealization machine runtime
 
 /--
 Exact handler bounds and one uniform polynomial projection for an addressed

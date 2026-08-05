@@ -25,10 +25,14 @@ example :
 example
     (publicKey message : DDH.testPublicParam.Carrier)
     (result : Costed CostModel.nat
-      (ULift (DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier)))
+      (Language.CarrierValue DDH.testPublicParam ×
+        Language.CarrierValue DDH.testPublicParam))
     (hresult : result ∈
-      (Program.runCosted
-        (encryptProgram DDH.testPublicParam) (publicKey, message)).support) :
+      (FirstOrder.Program.runCosted
+        (Language.algebra DDH.testPublicParam)
+        (encryptProgram DDH.testPublicParam)
+        (Language.liftCarrier DDH.testPublicParam publicKey,
+          Language.liftCarrier DDH.testPublicParam message)).support) :
     result.cost = 29 := by
   rcases encryptProgram_exactCost
       DDH.testPublicParam publicKey message result hresult with
@@ -96,22 +100,69 @@ example
     (secretKey : DDH.testPublicParam.Scalar)
     (ciphertext :
       DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier) :
-    Program.runCosted (decryptProgram DDH.testPublicParam)
-        (secretKey, ciphertext) =
+    FirstOrder.Program.runCosted
+        (Language.algebra DDH.testPublicParam)
+        (decryptProgram DDH.testPublicParam)
+        (Language.liftScalar DDH.testPublicParam secretKey,
+          (Language.liftCarrier DDH.testPublicParam ciphertext.1,
+            Language.liftCarrier DDH.testPublicParam ciphertext.2)) =
       PMF.pure
         (⟨ULift.up (ciphertext.2 - secretKey • ciphertext.1), 17⟩ :
           Costed CostModel.nat (ULift DDH.testPublicParam.Carrier)) := by
   change
-    Program.runCosted (decryptProgram DDH.testPublicParam)
-        (secretKey, ciphertext) =
+    FirstOrder.Program.runCosted
+        (Language.algebra DDH.testPublicParam)
+        (decryptProgram DDH.testPublicParam)
+        (Language.liftScalar DDH.testPublicParam secretKey,
+          (Language.liftCarrier DDH.testPublicParam ciphertext.1,
+            Language.liftCarrier DDH.testPublicParam ciphertext.2)) =
       PMF.pure
         (⟨ULift.up
             (DDH.testMath.addGroup.sub ciphertext.2
               (DDH.testMath.smul.smul secretKey ciphertext.1)), 17⟩ :
           Costed CostModel.nat (ULift DDH.testMath.Carrier))
-  simp [Program.runCosted, decryptProgram, Program.Code.runCosted,
-    DDH.testPublicParam, DDH.testAlgebra, RandCosted.bind,
-    RandCosted.liftCosted, PMF.pure_map, Costed.bind]
+  simp only [DDH.testPublicParam, DDH.testAlgebra,
+    RandCosted.liftCosted, FirstOrder.Program.runCosted,
+    Language.algebra, decryptProgram, FirstOrder.Code.runCosted,
+    RandCosted.bind, FirstOrder.Expr.eval, FirstOrder.Env.get,
+    Costed.bind, RandCosted.pure, Costed.pure, PMF.pure_map, add_zero]
+  refine (PMF.pure_bind _ _).trans ?_
+  change
+    PMF.map
+        (fun second : Costed CostModel.nat
+            (Language.CarrierValue DDH.testPublicParam) =>
+          (⟨second.val, 11 + second.cost⟩ :
+            Costed CostModel.nat
+              (Language.CarrierValue DDH.testPublicParam)))
+        ((PMF.pure
+            (⟨ULift.up
+                (ciphertext.2 - secretKey • ciphertext.1), 6⟩ :
+              Costed CostModel.nat
+                (Language.CarrierValue DDH.testPublicParam))).bind
+          (fun first => PMF.pure
+            (⟨first.val, first.cost⟩ :
+              Costed CostModel.nat
+                (Language.CarrierValue DDH.testPublicParam)))) =
+      PMF.pure
+        (⟨ULift.up (ciphertext.2 - secretKey • ciphertext.1), 17⟩ :
+          Costed CostModel.nat
+            (Language.CarrierValue DDH.testPublicParam))
+  have inner :
+      (PMF.pure
+        (⟨ULift.up (ciphertext.2 - secretKey • ciphertext.1), 6⟩ :
+          Costed CostModel.nat
+            (Language.CarrierValue DDH.testPublicParam))).bind
+          (fun first => PMF.pure
+            (⟨first.val, first.cost⟩ :
+              Costed CostModel.nat
+                (Language.CarrierValue DDH.testPublicParam))) =
+        PMF.pure
+          (⟨ULift.up (ciphertext.2 - secretKey • ciphertext.1), 6⟩ :
+            Costed CostModel.nat
+              (Language.CarrierValue DDH.testPublicParam)) :=
+    PMF.pure_bind _ _
+  rw [inner, PMF.pure_map]
+  rfl
 
 /-- The timed adapter preserves the ordinary ElGamal encryption distribution. -/
 example

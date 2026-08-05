@@ -3,9 +3,8 @@ import Crypto.Infrastructure.Computation.Algebra.Parameter
 import Crypto.Infrastructure.Computation.Algebra.Signature
 import Crypto.Infrastructure.Computation.Algebra.Handler
 import Crypto.Infrastructure.Computation.Algebra.Laws
-import Crypto.Infrastructure.Computation.Algebra.Bounds
+import Crypto.Infrastructure.Computation.FirstOrder.Algebra
 import Crypto.Infrastructure.Probability.Uniform
-import Crypto.Infrastructure.Computation.Program.Basic
 import Crypto.Infrastructure.Computation.Randomized
 
 namespace CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
@@ -73,6 +72,49 @@ scoped[OneTimePadParameter] attribute [instance]
 
 open scoped OneTimePadParameter
 
+/- The object-language carrier used by the reified OTP algorithms. -/
+namespace Language
+
+inductive Base where
+  | carrier
+  deriving DecidableEq
+
+abbrev carrierTy :
+    Crypto.Infrastructure.Computation.FirstOrder.Ty Base :=
+  .base .carrier
+
+/-- Interpret the object-language carrier using one concrete OTP parameter. -/
+abbrev interpret (pp : PublicParam.{uCost, uGroup} M) : Base → Type uGroup
+  | .carrier => pp.Carrier
+
+/-- Exactly the first-order operations used by OTP algorithms. -/
+inductive Operation :
+    Crypto.Infrastructure.Computation.FirstOrder.Ty Base →
+    Crypto.Infrastructure.Computation.FirstOrder.Ty Base → Type where
+  | sampleKey : Operation .unit carrierTy
+  | add : Operation (.prod carrierTy carrierTy) carrierTy
+  | neg : Operation carrierTy carrierTy
+
+def signature :
+    Crypto.Infrastructure.Computation.FirstOrder.Signature Base where
+  Op := Operation
+
+/--
+First-order adapter for the parameter's authoritative exact algebra. The
+adapter only moves runtime arguments out of operation constructors; it does
+not replace or approximate the underlying costed computation.
+-/
+noncomputable def algebra (pp : PublicParam.{uCost, uGroup} M) :
+    Crypto.Infrastructure.Computation.FirstOrder.CostedAlgebra
+      M (interpret pp) signature where
+  exec operation args :=
+    match operation with
+    | .sampleKey => pp.algebra.exec .sampleKey
+    | .add => pp.algebra.exec (.add args.1 args.2)
+    | .neg => pp.algebra.exec (.neg args)
+
+end Language
+
 /-- Standard `AlgebraLaws` package derived from the OTP-specific laws. -/
 noncomputable def algebraLaws (pp : PublicParam M) : AlgebraLaws pp.algebra where
   semantics operation :=
@@ -86,19 +128,6 @@ noncomputable def algebraLaws (pp : PublicParam M) : AlgebraLaws pp.algebra wher
     | sampleKey => exact pp.laws.sampleKey
     | add left right => exact pp.laws.add left right
     | neg value => exact pp.laws.neg value
-
-/-- Uniform operation budgets attached to the exact OTP algebra. -/
-structure ParamEfficiencyCertificate (pp : PublicParam M) where
-  bounds : OperationBounds pp.algebra
-  sampleKeyBudget : M.Cost
-  sampleKeyBudget_sound :
-    M.instPartialOrder.le (bounds.budget Operation.sampleKey) sampleKeyBudget
-  addBudget : M.Cost
-  addBudget_sound : ∀ left right,
-    M.instPartialOrder.le (bounds.budget (Operation.add left right)) addBudget
-  negBudget : M.Cost
-  negBudget_sound : ∀ value,
-    M.instPartialOrder.le (bounds.budget (Operation.neg value)) negBudget
 
 /-- A security-parameter-indexed family of exact OTP parameters. -/
 structure Family (M : CostModel.{uCost}) where
@@ -144,41 +173,5 @@ noncomputable def familyAlgebraLaws (F : Family.{uCost, uGroup} M) :
   exec_spec operation := by
     cases operation
     rfl
-
-/-- OTP setup as a typed family-level program. -/
-def setupProgram (F : Family.{uCost, uGroup} M) :
-    Program (familyAlgebra F) Crypto.SecPar
-      (PublicParam.{uCost, uGroup} M) where
-  body sec := .call (.setup sec)
-
-/-- The family-level setup program delegates to the unique exact setup primitive. -/
-@[simp] theorem setupProgram_runCosted
-    (F : Family.{uCost, uGroup} M) (sec : Crypto.SecPar) :
-    Program.runCosted (setupProgram F) sec = F.setup sec :=
-  rfl
-
-/-- Global setup efficiency for an OTP family. -/
-structure EfficiencyCertificate (F : Family M) where
-  setupBudget : Crypto.SecPar → M.Cost
-  setupCostBound : Program.CostBound (setupProgram F) setupBudget
-
-/-- Exact setup efficiency for a fixed OTP family. -/
-noncomputable def EfficiencyCertificate.ofFixed
-    (pp : PublicParam M) (setupCost : M.Cost) :
-    EfficiencyCertificate (Family.ofFixed pp setupCost) where
-  setupBudget := fun _sec => setupCost
-  setupCostBound := by
-    intro sec result hresult
-    simp only [setupProgram, Program.Code.runCosted, familyAlgebra,
-      Family.ofFixed, RandCosted.liftCosted, PMF.mem_support_pure_iff] at hresult
-    subst result
-    letI := M.instPartialOrder
-    exact le_refl setupCost
-
-/-- The authoritative setup program satisfies the supplied global certificate. -/
-theorem setup_costBound
-    (F : Family M) (certificate : EfficiencyCertificate F) :
-    Program.CostBound (setupProgram F) certificate.setupBudget :=
-  certificate.setupCostBound
 
 end CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad

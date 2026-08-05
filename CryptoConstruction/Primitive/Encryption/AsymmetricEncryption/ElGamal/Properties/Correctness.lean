@@ -1,4 +1,4 @@
-import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Scheme
+import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.Semantics
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Properties.Correctness
 import Crypto.Infrastructure.Probability.Uniform
 

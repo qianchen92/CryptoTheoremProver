@@ -23,6 +23,15 @@
 - Put parameterized algorithms that construct abstract primitives or protocols
   in the separate `CryptoConstruction` library. It may depend on `Crypto` but
   must not depend on a concrete backend instantiation.
+- Within each named construction, keep parameter and algebra definitions in
+  `Construction.lean`, executable algorithm `Program`s and their assembled
+  abstract object in `Scheme.lean`, and budgets, bounded/timed wrappers, exact
+  cost results, and efficiency certificates in `Complexity.lean`.
+- `Scheme.lean` must not import `Complexity.lean`; complexity evidence depends
+  on the algorithm, never the reverse.
+- Put cost-erasure and value-distribution theorems in
+  `Properties/Semantics.lean`. Correctness and security properties should
+  depend on this semantic layer, not on `Complexity.lean`.
 - Reserve a future `CryptoInstantiation` library for fixed representations,
   implementation backends, and their instance-specific cost certificates.
 - `Crypto` must not import `CryptoConstruction` or `CryptoInstantiation`.

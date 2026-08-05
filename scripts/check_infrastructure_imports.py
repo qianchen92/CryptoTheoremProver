@@ -222,6 +222,19 @@ SUBSYSTEM_ORDER = {
         "Bounds": 2,
         "Basic": 99,
     },
+    "Computation.FirstOrder": {
+        "Type": 0,
+        "Signature": 1,
+        "Algebra": 2,
+        "Syntax": 3,
+        "Operation": 3,
+        "Builder": 4,
+        "Semantics": 4,
+        "Validation": 4,
+        "Execution": 5,
+        "Bounds": 5,
+        "Basic": 99,
+    },
     "Computation.Oracle": {
         "Spec": 0,
         "Trace": 1,
@@ -234,10 +247,11 @@ SUBSYSTEM_ORDER = {
     },
     "Complexity": {
         "CostBound": 0,
-        "Machine": 1,
-        "ProgramMachine": 2,
-        "OracleImplementation": 2,
-        "OracleMachine": 3,
+        "Operational": 1,
+        "Machine": 2,
+        "ProgramMachine": 3,
+        "OracleImplementation": 3,
+        "OracleMachine": 4,
         "Basic": 99,
     },
     "GameBased": {
@@ -274,10 +288,14 @@ COMPUTATION_ALLOWED_IMPORTS = {
     "Cost": {"Cost"},
     "Algebra": {"Cost", "Algebra"},
     "Program": {"Cost", "Algebra", "Program"},
+    "FirstOrder": {"Cost", "FirstOrder"},
     "Oracle": {"Cost", "Algebra", "Oracle"},
     "Randomized": {"Cost"},
     "Game": set(),
-    "Basic": {"Cost", "Algebra", "Program", "Oracle", "Randomized", "Game", "Basic"},
+    "Basic": {
+        "Cost", "Algebra", "Program", "FirstOrder", "Oracle",
+        "Randomized", "Game", "Basic",
+    },
 }
 
 
