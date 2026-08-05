@@ -2,7 +2,8 @@
 """Reject unresolved imports and violations of the project import hierarchy.
 
 This check is intentionally independent of Lean's build graph. It enforces the
-Infrastructure hierarchy and the package direction from `Crypto` definitions to
+Infrastructure hierarchy, the trusted `CryptoFirstOrder` core order, and the
+package direction from `Crypto` definitions through first-order adapters to
 `CryptoConstruction` realizations and future `CryptoInstantiation` backends.
 Exact module-name membership additionally catches case mismatches that can pass
 on a case-insensitive macOS checkout but fail on GitHub's Linux runners.
@@ -22,10 +23,25 @@ MODULE_RE = re.compile(r"^[A-Za-z0-9_.'-]+$")
 PREFIX = "Crypto.Infrastructure."
 PROJECT_PACKAGES = (
     "Crypto",
+    "CryptoFirstOrder",
     "CryptoConstruction",
     "CryptoInstantiation",
     "CryptoTest",
 )
+
+PRODUCTION_PACKAGE_LEVEL = {
+    "Crypto": 0,
+    "CryptoFirstOrder": 1,
+    "CryptoConstruction": 2,
+    "CryptoInstantiation": 3,
+}
+
+# The operational-admission layer consumes the trusted first-order core so that
+# internally validated reified code remains a closed constructor of `ValidCode`.
+# It must not import `CryptoFirstOrder.Basic`, algebra adapters, or assumptions.
+ALLOWED_CROSS_PACKAGE_IMPORTS = {
+    ("Crypto.Infrastructure.Complexity.Operational", "CryptoFirstOrder.Core"),
+}
 
 
 def module_name(path: Path) -> str:
@@ -99,21 +115,26 @@ def is_higher_level_project_import(module: str) -> bool:
     return is_project_module(module) and not is_infrastructure
 
 
+def is_allowed_cross_package_import(source: str, target: str) -> bool:
+    return (source, target) in ALLOWED_CROSS_PACKAGE_IMPORTS
+
+
 def project_import_hierarchy_error(source: str, target: str) -> str | None:
-    """Enforce Crypto <- CryptoConstruction <- CryptoInstantiation."""
+    """Enforce package order plus the one core-only operational bridge."""
 
     source_package = project_package(source)
     target_package = project_package(target)
-    if source_package == "Crypto" and target_package in {
-        "CryptoConstruction",
-        "CryptoInstantiation",
-    }:
-        return f"Crypto imports higher package: {source} -> {target}"
+    if is_allowed_cross_package_import(source, target):
+        return None
+    if source_package in PRODUCTION_PACKAGE_LEVEL and target_package == "CryptoTest":
+        return f"production package imports CryptoTest: {source} -> {target}"
     if (
-        source_package == "CryptoConstruction"
-        and target_package == "CryptoInstantiation"
+        source_package in PRODUCTION_PACKAGE_LEVEL
+        and target_package in PRODUCTION_PACKAGE_LEVEL
+        and PRODUCTION_PACKAGE_LEVEL[target_package]
+          > PRODUCTION_PACKAGE_LEVEL[source_package]
     ):
-        return f"CryptoConstruction imports CryptoInstantiation: {source} -> {target}"
+        return f"lower package imports higher package: {source} -> {target}"
     return None
 
 
@@ -124,12 +145,13 @@ def parser_regression_errors() -> list[str]:
 /- import Crypto.Assumption.Hidden
    /- nested import CryptoTest.Hidden -/
 -/
-public import Crypto.Infrastructure.SecurityParameter Crypto.Primitive.Bad CryptoConstruction.Primitive.Bad -- tail
+public import Crypto.Infrastructure.SecurityParameter Crypto.Primitive.Bad CryptoFirstOrder.Algebra.Bad CryptoConstruction.Primitive.Bad -- tail
 import Mathlib.Data.Nat.Basic
 """
     expected = [
         "Crypto.Infrastructure.SecurityParameter",
         "Crypto.Primitive.Bad",
+        "CryptoFirstOrder.Algebra.Bad",
         "CryptoConstruction.Primitive.Bad",
         "Mathlib.Data.Nat.Basic",
     ]
@@ -143,17 +165,36 @@ import Mathlib.Data.Nat.Basic
         errors.append("internal boundary regression: CryptoTest.Bad accepted")
     if not is_higher_level_project_import("CryptoConstruction.Primitive.Bad"):
         errors.append("internal boundary regression: CryptoConstruction accepted")
+    if not is_higher_level_project_import("CryptoFirstOrder.Algebra.Bad"):
+        errors.append("internal boundary regression: CryptoFirstOrder accepted")
     if is_higher_level_project_import("Crypto.Infrastructure.UC.Kernel"):
         errors.append("internal boundary regression: Infrastructure rejected")
     if project_package("CryptoConstruction.Primitive.Basic") != "CryptoConstruction":
         errors.append("internal boundary regression: CryptoConstruction not recognized")
+    if project_package("CryptoFirstOrder.Algebra.Basic") != "CryptoFirstOrder":
+        errors.append("internal boundary regression: CryptoFirstOrder not recognized")
     if project_package("CryptoInstantiation.Backend.Basic") != "CryptoInstantiation":
         errors.append("internal boundary regression: CryptoInstantiation not recognized")
     if project_import_hierarchy_error(
         "Crypto.Primitive.Encryption.Basic",
+        "CryptoFirstOrder.Algebra.Basic",
+    ) is None:
+        errors.append("internal boundary regression: Crypto-to-first-order accepted")
+    if project_import_hierarchy_error(
+        "Crypto.Infrastructure.Complexity.Operational",
+        "CryptoFirstOrder.Core",
+    ) is not None:
+        errors.append("internal boundary regression: operational-to-core rejected")
+    if project_import_hierarchy_error(
+        "Crypto.Infrastructure.Complexity.Machine",
+        "CryptoFirstOrder.Core",
+    ) is None:
+        errors.append("internal boundary regression: broad Crypto-to-core accepted")
+    if project_import_hierarchy_error(
+        "CryptoFirstOrder.Algebra.Basic",
         "CryptoConstruction.Primitive.Encryption.Basic",
     ) is None:
-        errors.append("internal boundary regression: Crypto-to-construction accepted")
+        errors.append("internal boundary regression: first-order-to-construction accepted")
     if project_import_hierarchy_error(
         "Crypto.Infrastructure.Computation.Basic",
         "CryptoConstruction.Primitive.Basic",
@@ -166,9 +207,24 @@ import Mathlib.Data.Nat.Basic
         errors.append("internal boundary regression: construction-to-instantiation accepted")
     if project_import_hierarchy_error(
         "CryptoConstruction.Primitive.Basic",
+        "CryptoFirstOrder.Algebra.Basic",
+    ) is not None:
+        errors.append("internal boundary regression: construction-to-first-order rejected")
+    if project_import_hierarchy_error(
+        "CryptoFirstOrder.Algebra.Basic",
         "Crypto.Primitive.Basic",
     ) is not None:
-        errors.append("internal boundary regression: construction-to-Crypto rejected")
+        errors.append("internal boundary regression: first-order-to-Crypto rejected")
+    if first_order_core_import_error(
+        "CryptoFirstOrder.Type", "CryptoFirstOrder.Signature"
+    ) is None:
+        errors.append("internal boundary regression: first-order upward import accepted")
+    if first_order_core_import_error(
+        "CryptoFirstOrder.Bounds", "CryptoFirstOrder.Type"
+    ) is not None:
+        errors.append("internal boundary regression: first-order downward import rejected")
+    if first_order_core_part("CryptoFirstOrder.Algebra.AdditiveGroup") is not None:
+        errors.append("internal boundary regression: adapter mistaken for core module")
     return errors
 
 
@@ -220,19 +276,6 @@ SUBSYSTEM_ORDER = {
         "Semantics": 1,
         "Execution": 2,
         "Bounds": 2,
-        "Basic": 99,
-    },
-    "Computation.FirstOrder": {
-        "Type": 0,
-        "Signature": 1,
-        "Algebra": 2,
-        "Syntax": 3,
-        "Operation": 3,
-        "Builder": 4,
-        "Semantics": 4,
-        "Validation": 4,
-        "Execution": 5,
-        "Bounds": 5,
         "Basic": 99,
     },
     "Computation.Oracle": {
@@ -288,12 +331,11 @@ COMPUTATION_ALLOWED_IMPORTS = {
     "Cost": {"Cost"},
     "Algebra": {"Cost", "Algebra"},
     "Program": {"Cost", "Algebra", "Program"},
-    "FirstOrder": {"Cost", "FirstOrder"},
     "Oracle": {"Cost", "Algebra", "Oracle"},
     "Randomized": {"Cost"},
     "Game": set(),
     "Basic": {
-        "Cost", "Algebra", "Program", "FirstOrder", "Oracle",
+        "Cost", "Algebra", "Program", "Oracle",
         "Randomized", "Game", "Basic",
     },
 }
@@ -311,6 +353,44 @@ def subsystem_part(module: str, subsystem: str) -> str | None:
     if not module.startswith(prefix):
         return None
     return module.removeprefix(prefix).split(".", 1)[0]
+
+
+FIRST_ORDER_CORE_ORDER = {
+    "Type": 0,
+    "Signature": 1,
+    "Algebra": 2,
+    "Syntax": 3,
+    "Operation": 3,
+    "Builder": 4,
+    "Semantics": 4,
+    "Validation": 4,
+    "Execution": 5,
+    "Bounds": 5,
+    "Core": 99,
+}
+
+
+def first_order_core_part(module: str) -> str | None:
+    prefix = "CryptoFirstOrder."
+    if not module.startswith(prefix):
+        return None
+    suffix = module.removeprefix(prefix)
+    if "." in suffix or suffix not in FIRST_ORDER_CORE_ORDER:
+        return None
+    return suffix
+
+
+def first_order_core_import_error(source: str, target: str) -> str | None:
+    source_core = first_order_core_part(source)
+    target_core = first_order_core_part(target)
+    if source_core is None or target_core is None:
+        return None
+    if (
+        FIRST_ORDER_CORE_ORDER[target_core] > FIRST_ORDER_CORE_ORDER[source_core]
+        and source_core != "Core"
+    ):
+        return f"first-order core upward import: {source} -> {target}"
+    return None
 
 
 def project_source_files() -> list[Path]:
@@ -346,12 +426,18 @@ def main() -> int:
             hierarchy_error = project_import_hierarchy_error(source, target)
             if hierarchy_error is not None:
                 errors.append(hierarchy_error)
+            core_error = first_order_core_import_error(source, target)
+            if core_error is not None:
+                errors.append(core_error)
 
     for source, targets in infrastructure_graph.items():
         source_layer = top_layer(source)
         forbidden = FORBIDDEN_TOP_IMPORTS.get(source_layer, set())
         for target in targets:
-            if is_higher_level_project_import(target):
+            if (
+                is_higher_level_project_import(target)
+                and not is_allowed_cross_package_import(source, target)
+            ):
                 errors.append(f"higher-level project import: {source} -> {target}")
 
             if not target.startswith(PREFIX):

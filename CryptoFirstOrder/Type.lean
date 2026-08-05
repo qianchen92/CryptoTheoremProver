@@ -1,4 +1,4 @@
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 universe uBase uValue
 
@@ -17,7 +17,20 @@ inductive Ty (Base : Type uBase) : Type uBase where
   | prod (left right : Ty Base)
   deriving DecidableEq
 
+/-- Product types in the first-order object language. -/
+scoped infixr:35 " ×ₜ " => Ty.prod
+
 namespace Ty
+
+/--
+Encode a statically known list of logical argument types as one structural
+first-order input. Empty and singleton contexts avoid redundant products;
+larger contexts are right-associated products.
+-/
+@[reducible] def tuple : List (Ty Base) → Ty Base
+  | [] => .unit
+  | [value] => value
+  | value :: next :: rest => .prod value (tuple (next :: rest))
 
 /-- Interpret a first-order type using a family of Lean carrier types. -/
 def denote (interpret : Base → Type uValue) : Ty Base → Type uValue
@@ -54,4 +67,4 @@ def get
 
 end Env
 
-end Crypto.Infrastructure.Computation.FirstOrder
+end CryptoFirstOrder

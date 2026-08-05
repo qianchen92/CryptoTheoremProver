@@ -1,7 +1,7 @@
 import Crypto.Infrastructure.Computation.Cost.Randomized
-import Crypto.Infrastructure.Computation.FirstOrder.Signature
+import CryptoFirstOrder.Signature
 
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 open Crypto.Infrastructure.Computation.Cost
 
@@ -35,4 +35,4 @@ noncomputable def sum
 
 end CostedAlgebra
 
-end Crypto.Infrastructure.Computation.FirstOrder
+end CryptoFirstOrder

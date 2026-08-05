@@ -1,12 +1,12 @@
-import Crypto.Infrastructure.Computation.FirstOrder.Algebra
+import CryptoFirstOrder.Algebra
 import Crypto.Infrastructure.Computation.Cost.PathBound
 import Crypto.Infrastructure.Probability.Uniform
 
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 open Crypto.Infrastructure.Computation.Cost
 
-universe uCost uBase uValue
+universe uCost uBase uValue uOp uSourceOp
 
 /-- A first-order primitive addition operation. -/
 inductive AddOperation {Base : Type uBase} (carrier : Ty Base) :
@@ -289,4 +289,88 @@ theorem costBound_exec
 
 end UniformSampleOperation
 
-end Crypto.Infrastructure.Computation.FirstOrder
+/--
+A distribution/sampler reference for one object-language type.
+
+The operation identifies the chosen distribution inside a signature; its
+actual `PMF` is supplied by the signature's algebra. Thus first-order syntax
+can choose among distributions without storing a host-language `PMF`.
+-/
+structure Sampler
+    {Base : Type uBase} (S : Signature.{uBase, uOp} Base)
+    (sampleTy : Ty Base) where
+  operation : S.Op .unit sampleTy
+
+/- Smart constructors for built-in operations inside a composite signature. -/
+namespace SmartOperation
+
+def unifSamp
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {sample : Ty Base}
+    [Signature.Embedding (UniformSampleOperation.signature sample) S] :
+    S.Op .unit sample :=
+  Signature.inject
+    (source := UniformSampleOperation.signature sample)
+    UniformSampleOperation.sample
+
+/-- Inject a sampler operation once and package its result type with it. -/
+def sampler
+    {Base : Type uBase}
+    {source : Signature.{uBase, uSourceOp} Base}
+    {target : Signature.{uBase, uOp} Base}
+    {sampleTy : Ty Base}
+    (operation : source.Op .unit sampleTy)
+    [Signature.Embedding source target] : Sampler target sampleTy where
+  operation := Signature.inject operation
+
+/-- The built-in uniform distribution over the specified finite carrier. -/
+def uniformSampler
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    (sampleTy : Ty Base)
+    [Signature.Embedding (UniformSampleOperation.signature sampleTy) S] :
+    Sampler S sampleTy where
+  operation := SmartOperation.unifSamp
+
+def add
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {carrier : Ty Base}
+    [Signature.Embedding (AddOperation.signature carrier) S] :
+    S.Op (.prod carrier carrier) carrier :=
+  Signature.inject
+    (source := AddOperation.signature carrier) AddOperation.add
+
+def neg
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {carrier : Ty Base}
+    [Signature.Embedding (NegOperation.signature carrier) S] :
+    S.Op carrier carrier :=
+  Signature.inject
+    (source := NegOperation.signature carrier) NegOperation.neg
+
+def sub
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {carrier : Ty Base}
+    [Signature.Embedding (SubOperation.signature carrier) S] :
+    S.Op (.prod carrier carrier) carrier :=
+  Signature.inject
+    (source := SubOperation.signature carrier) SubOperation.sub
+
+def smul
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {scalar carrier : Ty Base}
+    [Signature.Embedding (SMulOperation.signature scalar carrier) S] :
+    S.Op (.prod scalar carrier) carrier :=
+  Signature.inject
+    (source := SMulOperation.signature scalar carrier) SMulOperation.smul
+
+def mul
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {value : Ty Base}
+    [Signature.Embedding (MulOperation.signature value) S] :
+    S.Op (.prod value value) value :=
+  Signature.inject
+    (source := MulOperation.signature value) MulOperation.mul
+
+end SmartOperation
+
+end CryptoFirstOrder

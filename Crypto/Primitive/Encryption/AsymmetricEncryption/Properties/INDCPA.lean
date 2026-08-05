@@ -4,12 +4,14 @@ import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.AsymmetricEncryption
 
+open Crypto.Infrastructure.Computation.Cost
+
 universe uCost uAdversaryCost uParam uPublicKey uSecretKey uMessage uCiphertext
 
 variable
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
+    {M : CostModel.{uCost}}
+    {adversaryModel : CostModel.{uAdversaryCost}}
+    {measure : NatMeasure adversaryModel}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
@@ -98,13 +100,16 @@ noncomputable def INDCPAAdvantage
   Crypto.Infrastructure.GameBased.Advantage
     (indCPASecurityGame E A false) (indCPASecurityGame E A true)
 
+section
+
+variable (adversaryModel measure)
+
 /-- IND-CPA security against PPT oracle adversaries. -/
 def INDCPASecure
-    (adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
-    (measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel)
     (E : Scheme M Crypto.SecPar Param PublicKey SecretKey Message Ciphertext) : Prop :=
   Crypto.Infrastructure.GameBased.OracleDistinguishing.Hard
     adversaryModel measure (indCPAProblem E)
+
+end
 
 end Crypto.Primitive.Encryption.AsymmetricEncryption

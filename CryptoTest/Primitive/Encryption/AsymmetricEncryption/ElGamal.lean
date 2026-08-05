@@ -28,7 +28,7 @@ example
       (Language.CarrierValue DDH.testPublicParam ×
         Language.CarrierValue DDH.testPublicParam))
     (hresult : result ∈
-      (FirstOrder.Program.runCosted
+      (CryptoFirstOrder.Program.runCosted
         (Language.algebra DDH.testPublicParam)
         (encryptProgram DDH.testPublicParam)
         (Language.liftCarrier DDH.testPublicParam publicKey,
@@ -100,7 +100,7 @@ example
     (secretKey : DDH.testPublicParam.Scalar)
     (ciphertext :
       DDH.testPublicParam.Carrier × DDH.testPublicParam.Carrier) :
-    FirstOrder.Program.runCosted
+    CryptoFirstOrder.Program.runCosted
         (Language.algebra DDH.testPublicParam)
         (decryptProgram DDH.testPublicParam)
         (Language.liftScalar DDH.testPublicParam secretKey,
@@ -110,7 +110,7 @@ example
         (⟨ULift.up (ciphertext.2 - secretKey • ciphertext.1), 17⟩ :
           Costed CostModel.nat (ULift DDH.testPublicParam.Carrier)) := by
   change
-    FirstOrder.Program.runCosted
+    CryptoFirstOrder.Program.runCosted
         (Language.algebra DDH.testPublicParam)
         (decryptProgram DDH.testPublicParam)
         (Language.liftScalar DDH.testPublicParam secretKey,
@@ -122,9 +122,12 @@ example
               (DDH.testMath.smul.smul secretKey ciphertext.1)), 17⟩ :
           Costed CostModel.nat (ULift DDH.testMath.Carrier))
   simp only [DDH.testPublicParam, DDH.testAlgebra,
-    RandCosted.liftCosted, FirstOrder.Program.runCosted,
-    Language.algebra, decryptProgram, FirstOrder.Code.runCosted,
-    RandCosted.bind, FirstOrder.Expr.eval, FirstOrder.Env.get,
+    RandCosted.liftCosted, CryptoFirstOrder.Program.runCosted,
+    Language.algebra, decryptProgram, CryptoFirstOrder.Builder.SmartCode.smul,
+    CryptoFirstOrder.Builder.SmartCode.sub, CryptoFirstOrder.SmartOperation.smul,
+    CryptoFirstOrder.SmartOperation.sub, CryptoFirstOrder.Signature.inject,
+    CryptoFirstOrder.Signature.Embedding.inject, CryptoFirstOrder.Code.runCosted,
+    RandCosted.bind, CryptoFirstOrder.Expr.eval, CryptoFirstOrder.Env.get,
     Costed.bind, RandCosted.pure, Costed.pure, PMF.pure_map, add_zero]
   refine (PMF.pure_bind _ _).trans ?_
   change

@@ -34,11 +34,11 @@ Lake available, build the library and all compile-time proof tests with:
 lake build
 ```
 
-The default targets are `Crypto`, `CryptoConstruction`, and `CryptoTest`. To
-check the layers separately, use `lake build Crypto`,
-`lake build CryptoConstruction`, or `lake build CryptoTest`. The files under
-`CryptoTest/` are theorem-level regression and smoke tests; a successful build
-is the test result.
+The default targets are `Crypto`, `CryptoFirstOrder`, `CryptoConstruction`, and
+`CryptoTest`. To check the layers separately, use `lake build Crypto`,
+`lake build CryptoFirstOrder`, `lake build CryptoConstruction`, or
+`lake build CryptoTest`. The files under `CryptoTest/` are theorem-level
+regression and smoke tests; a successful build is the test result.
 
 ## Organization
 
@@ -112,6 +112,25 @@ Crypto/
         Syntax.lean
         UC.lean
         Properties/
+CryptoFirstOrder/
+  Basic.lean
+  Core.lean
+  Type.lean
+  Signature.lean
+  Algebra.lean
+  Syntax.lean
+  Builder.lean
+  Semantics.lean
+  Execution.lean
+  Operation.lean
+  Validation.lean
+  Bounds.lean
+  Algebra/
+    AdditiveGroup.lean
+    ScalarAction.lean
+  Assumption/
+    DL/
+      DDH.lean
 CryptoConstruction/
   Basic.lean
   Primitive/
@@ -121,6 +140,7 @@ CryptoConstruction/
       SymmetricEncryption/
         OneTimePad/
 CryptoTest/
+  FirstOrder.lean
   Assumption/
   Infrastructure/
   Primitive/
@@ -188,17 +208,6 @@ Reusable semantic infrastructure for cryptographic formalization.
   `runCosted.support`. `BoundedProgram` stores the same `Program` plus an
   input-dependent certificate; sequencing uses ordered addition and a branch
   uses either an explicit common upper bound or `WorstCaseCostModel.sup`.
-- `Computation.FirstOrder` is the minimal operational subset. `Ty` contains
-  base carriers, unit, booleans, and products; `Expr`, `Var`, and `Env` give a
-  typed de Bruijn representation; and `Code` contains only return, pure let,
-  primitive call, and represented branch nodes. Calls pass an argument
-  expression to a first-order signature and bind their result by extending the
-  environment, so code stores neither Lean continuations nor function-valued
-  syntax. Built-in exact algebras cover addition, negation, subtraction,
-  scalar multiplication, multiplication, and finite uniform sampling, and
-  compose by signature sum. `ValidAlgebra` exposes the bottom algebra
-  operations as the primitive boundary while preventing an arbitrary sampler
-  distribution from entering the internal validation path.
 - `Computation.Oracle` follows
   `Spec -> Trace -> Program -> Handler -> Interpreter -> Bounds -> Composition`.
   `Program` contains only syntax: a query constructor carries no cost. Exact
@@ -298,7 +307,7 @@ supplied program family.
 The general `Program` language remains an engineering-level higher-order
 syntax: values passed to `pure`, continuation functions, and branch conditions
 remain Lean terms, so `PPTMachine.ofBoundedProgram` still needs independent
-admission. The separate `Computation.FirstOrder` subset removes those host
+admission. The separate `CryptoFirstOrder` core removes those host
 continuations and derives operational admission internally for a fixed reified
 program. It is deliberately straight-line and has no recursion, loops, RAM, or
 encoded bit-level representation. A concrete interpretation must still justify
@@ -468,14 +477,45 @@ definition remains an `Infrastructure.GameBased.OracleDistinguishing` problem
 over the cost-erased value distributions and keeps the same arbitrary PPT
 adversary domain.
 
+### `CryptoFirstOrder`
+
+The trusted first-order language and its reusable algebra adapters live
+together in the separate `CryptoFirstOrder` library. The core modules are
+`Type`, `Signature`, `Algebra`, `Syntax`, `Builder`, `Semantics`, `Execution`,
+`Operation`, `Validation`, and `Bounds`; `CryptoFirstOrder.Core` aggregates
+exactly those modules. `Ty` contains base carriers, unit, booleans, and
+products; `Expr`, `Var`, and `Env` give a typed de Bruijn representation; and
+`Code` contains only return, pure let, primitive call, and represented branch
+nodes. Code stores neither Lean continuations nor function-valued syntax.
+
+The adapter subtrees own generic object-language bases, interpretations,
+signatures, smart-operation embeddings, host-value lift/projection boundaries,
+and exact handler bridges. Assumption-specific modules such as
+`CryptoFirstOrder.Assumption.DL.DDH` may package reusable cost-erasure facts.
+`ValidAlgebra` exposes the bottom operations as the primitive boundary while
+preventing an arbitrary sampler distribution from entering internal
+validation.
+
+Core modules depend only on lower `Crypto` cost and probability infrastructure;
+adapter modules may additionally depend on the corresponding abstract algebra
+or assumption definitions. The sole direct import in the other direction is
+`Crypto.Infrastructure.Complexity.Operational -> CryptoFirstOrder.Core`, which
+keeps internally validated first-order admission as a closed `ValidCode`
+constructor without importing adapters. `CryptoFirstOrder` contains no
+construction algorithms, assembled schemes, security definitions, complexity
+certificates, or concrete backend choices. Import `CryptoFirstOrder.Core` for
+only the trusted language, `CryptoFirstOrder.Basic` for the core plus all
+current adapters, or a narrow module when defining a construction.
+
 ### `CryptoConstruction`
 
 Parameterized algorithms and protocol constructions live in the separate
-`CryptoConstruction` library. It depends on `Crypto`; `Crypto` never imports it.
-The current constructions include a group-based one-time pad and ElGamal. They
-work over abstract cost-aware parameter families; the production package does
-not yet choose a concrete group representation or implementation backend. A
-future `CryptoInstantiation` library is reserved for such concrete choices.
+`CryptoConstruction` library. It depends on `Crypto` and `CryptoFirstOrder`;
+neither lower library imports it. The current constructions include a
+group-based one-time pad and ElGamal. They work over abstract cost-aware
+parameter families; the production package does not yet choose a concrete
+group representation or implementation backend. A future
+`CryptoInstantiation` library is reserved for such concrete choices.
 The one-time pad exposes the finite nonempty additive group chosen for the
 security parameter, encrypts by addition, and decrypts by negation followed by
 addition.
@@ -486,7 +526,8 @@ public parameters; an IND-CPA-from-DDH reduction remains future work.
 
 Import `CryptoConstruction.Basic` to obtain all current parameterized
 constructions. Importing `Crypto` or `Crypto.Primitive.Basic` exposes only the
-core definitions, assumptions, infrastructure, and generic properties.
+core definitions, assumptions, infrastructure, and generic properties;
+`CryptoFirstOrder.Basic` exposes adapters but no schemes.
 
 Both construction-level `scheme` definitions directly inhabit this generic
 interface. OTP, DLog, DDH, and ElGamal each use one typed algebra as the only
@@ -511,8 +552,10 @@ instantiate that machinery only when they introduce concrete UC definitions.
 
 `Basic.lean` files are aggregation modules for their own library layer. Import
 them when a caller wants that layer; otherwise prefer the narrow file that
-provides the needed definition. In particular, `Crypto.Basic` never aggregates
-`CryptoConstruction`.
+provides the needed definition. `Crypto.Basic` does not aggregate
+`CryptoFirstOrder.Basic` or its adapters; its operational-admission layer
+imports only `CryptoFirstOrder.Core`. `CryptoFirstOrder.Basic` never aggregates
+constructions.
 
 The enforced dependency direction is:
 
@@ -531,13 +574,17 @@ Asymptotic + Computation -> Complexity -> GameBased -> UC
 Probability ---------------------------------------> Assumption / Primitive
 Program / Oracle / GameBased / UC -----------------> Assumption / Primitive
 
-Crypto definitions -> CryptoConstruction -> future CryptoInstantiation
+Crypto Cost / Probability -> CryptoFirstOrder core
+CryptoFirstOrder core -> Crypto Complexity.Operational
+Crypto definitions + CryptoFirstOrder core -> CryptoFirstOrder adapters
+  -> CryptoConstruction -> future CryptoInstantiation
 ```
 
 `SecurityParameter` and `Probability` are independent roots; in particular,
 neither imports asymptotics or computation. `scripts/check_infrastructure_imports.py`
-checks exact project-module resolution, the Infrastructure hierarchy, and the
-`Crypto`/`CryptoConstruction`/`CryptoInstantiation` library boundary; CI runs
+checks exact project-module resolution, the Infrastructure hierarchy, the
+first-order core order, the core-only operational bridge, and the
+`CryptoFirstOrder`/`CryptoConstruction`/`CryptoInstantiation` boundary; CI runs
 it before Lean builds. Infrastructure subsystems additionally enforce their
 file-local orders, including Algebra, Program, Oracle, Complexity, GameBased,
 and the UC kernel stack.
@@ -551,8 +598,8 @@ and the UC kernel stack.
 - Put reusable game, oracle, computation, cost, or algebra semantics in
   the corresponding ordered sublayer of `Infrastructure.Computation`.
 - Put exact/runtime/polynomial certificates, unified dependent machines,
-  program adapters, and oracle implementation/machine certificates in
-  `Infrastructure.Complexity`.
+  program-to-machine adapters, and oracle implementation/machine certificates
+  in `Infrastructure.Complexity`.
 - Put generic advantage, indistinguishability, hybrid, distinguishing, oracle
   distinguishing, and search notions in `Infrastructure.GameBased`.
 - Put reusable typed ITM, corruption, FIFO-kernel, closed-world, UC-security,
@@ -561,6 +608,11 @@ and the UC kernel stack.
 - Put primitive-specific abstract syntax, correctness, and security games in
   `Primitive/<kind>/<primitive>/`, with `Syntax.lean` and `UC.lean` as direct
   files and generic theorems under `Properties/`.
+- Put the trusted first-order AST, interpreter, validation, bounds, Builder
+  surface, reusable bases, signatures, operation embeddings, lift/projection
+  boundaries, and exact-algebra bridges under `CryptoFirstOrder/`. Do not put
+  schemes, security properties, complexity certificates, or concrete backends
+  there.
 - Put algorithms that construct abstract primitives or protocols over
   parameterized mathematical and cost-aware backends under
   `CryptoConstruction/`.
@@ -573,13 +625,165 @@ and the UC kernel stack.
   semantics rather than complexity evidence.
 - Reserve a future `CryptoInstantiation/` library for fixed representations,
   implementation backends, and their instance-specific cost certificates.
-- `Crypto.Basic` aggregates core definitions and generic properties only.
-  Import `CryptoConstruction.Basic` explicitly when parameterized algorithms
-  are wanted.
+- Use `CryptoFirstOrder.Core` when only the trusted language is required and
+  `CryptoFirstOrder.Basic` when all adapters are required. Import
+  `CryptoConstruction.Basic` explicitly for parameterized algorithms.
 
 When adding polymorphic Lean declarations, use descriptive universe names such
 as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,
 `uModule`, and `uGroup`, rather than bare `u`, `v`, or `w`.
+
+## Lean Source Style
+
+The following rules are part of the project interface, not merely formatting
+preferences. They keep construction files readable without hiding the exact
+first-order program whose semantics and cost are proved later.
+
+### Variables and namespace qualification
+
+- Put parameters repeated by several declarations in the nearest namespace- or
+  section-level `variable` block. This applies to cost models, public
+  parameters, construction families, measures, certificates, and genuinely
+  polymorphic input or output types.
+- A shared variable must remain a real parameter. Do not replace a
+  construction-fixed identity, such as an ElGamal public key being a group
+  carrier, with a free type variable merely to shorten a declaration.
+- A cleanup must preserve public binder order, explicitness, universe roles,
+  declaration types, and theorem behavior. Use a small `section` or a new
+  variable declaration when one declaration needs different binder
+  explicitness.
+- Keep imports fully qualified. In `CryptoConstruction` algorithm files, avoid
+  ordinary broad `open` declarations; activate notation and scoped instances
+  with narrow `open scoped` declarations instead. A proof-heavy file may use a
+  narrow ordinary `open` when repeated qualification would obscure the proof.
+  Do not introduce a private namespace alias merely to move the same verbosity
+  elsewhere.
+- When cost-layer names recur in a primitive or proof file, a narrow
+  `open Crypto.Infrastructure.Computation.Cost` permits `CostModel`,
+  `RandCosted`, and `NatMeasure`. In a construction `Scheme.lean`, prefer one
+  fully qualified `CostModel` in the shared `variable` block over a broad
+  namespace opening or repeated fully qualified binders.
+
+### Abbreviations and cryptographic roles
+
+- Avoid chains of one-use `private abbrev` declarations whose only purpose is
+  shortening the current file. Use `abbrev` when it publicly names a stable
+  semantic role or a reusable interface and definitional transparency is
+  intended.
+- A construction's object-language roles belong in its authoritative
+  `Construction.Language` namespace. Use names such as `keyTy`, `publicKeyTy`,
+  `secretKeyTy`, `messageTy`, and `ciphertextTy`, even when several roles are
+  definitionally the same carrier.
+- Keep public and secret keys as distinct roles. ElGamal key generation returns
+  a structural pair, but the interface lists `publicKeyTy` and `secretKeyTy`
+  separately rather than introducing a `keyPairTy` role.
+- Put reusable arity encoding in `CryptoFirstOrder`. New construction
+  declarations use `CryptoFirstOrder.Program.NAry` with a static list of
+  logical input roles, and `CryptoFirstOrder.Program.NAryPair` when the result
+  contains two distinct roles. `Nullary`, `Unary`, `Binary`, `Ternary`, and `NullaryPair`
+  remain compatibility abbreviations over this layer.
+- `Ty.tuple` compiles the static input list to the existing structural input:
+  `[]` becomes `unit`, a singleton remains unchanged, and larger lists become
+  right-associated products. Every instantiated program therefore still has a
+  fixed, fully typed input at the trusted core boundary.
+
+### First-order construction syntax
+
+Construction algorithms use the scoped `CryptoFirstOrder.Builder` surface and
+compile immediately to the trusted `CryptoFirstOrder.Code` syntax. A typical
+declaration has this shape:
+
+```lean
+open scoped CryptoFirstOrder DDHGroup
+
+variable
+  {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+  (pp : PublicParam.{uCost, uScalar, uGroup} M)
+
+def keygenProgram :
+    CryptoFirstOrder.Program.NAryPair
+      (Language.interpret pp) Language.signature
+      []
+      Language.publicKeyTy Language.secretKeyTy where
+  body := first_order () do
+    let sk ← unifSamp Language.scalarTy
+    let pk ← ⦋sk⦌
+    return (pk, sk)
+```
+
+- Match the `NAry` input list with a Builder typed context: use
+  `first_order () do` for no logical inputs, `first_order input do` or
+  `first_order (input) do` for one, and `first_order (x, y, z) do` for several.
+  These names compile to projections from `Ty.tuple`; they do not add variables
+  or a second context representation to the trusted AST.
+- Inside `first_order`, prefer `•`, `+`, binary `-`, unary `-`, and `*`.
+  The named forms `smul`, `add`, `sub`, `neg`, and `mul` remain compatibility
+  forms, not the default style for new construction code.
+- Smart operations may be nested, for example `message + (r • pk)`. Builder
+  A-normalizes nested calls from left to right into fresh internal bindings, so
+  the trusted core and `Complexity.lean` still see ordinary sequential
+  `Code.call` nodes rather than a second expression or algorithm AST.
+- Importing the first-order DDH adapter makes the separate `DDHGroup` scope
+  available. With that scope open, `⦋x⦌` denotes `x • pp.generator`; type
+  `\s[]` (or `\simplex`) in Lean's Unicode input mode to insert the pair. The
+  current DDH parameter is inferred from the program's carrier type. The
+  notation lowers to the existing scalar-action call and adds no core AST node.
+  Open `DDHGroup` only where this notation is used.
+- Use bound names, `unit`, booleans, pairs, `value(...)`, `fst(...)`, and
+  `snd(...)` for expressions. Use `call operation with arguments` only as an
+  escape hatch for a primitive that has no smart surface form.
+- Algorithm bodies must not expose `Signature.inject`, sum injections such as
+  `.inl` or `.inr`, or `ULift` conversions. Signature embeddings and smart
+  constructors lower those details to raw `Code.call`; host-boundary conversion
+  belongs in `Builder.runCosted`, `ValueRepresentation`, and
+  `ValueProjection`.
+- Write object-language products as `A ×ₜ B` in surface type declarations.
+  The trusted structural core remains `Ty.prod`. Do not write a product merely
+  because a `Program` accepts several logical inputs; list their roles in
+  `Program.NAry`. A genuine value product, such as an ElGamal ciphertext, still
+  uses `×ₜ`.
+
+### Sampling syntax
+
+- General sampling has two explicit conceptual inputs and is written
+  `sample sampleTy sampler`: the object-language type being sampled and a
+  `Sampler S sampleTy` selecting the corresponding operation or distribution
+  descriptor in the current signature.
+- Uniform sampling is the convenience form `unifSamp sampleTy`. Its distribution
+  is fixed to uniform, so only the object-language type is written explicitly;
+  the required operation is found through a signature embedding.
+- A sampler descriptor belongs to the typed signature. It does not embed an
+  arbitrary host `PMF` callback in first-order syntax. Distributional meaning
+  is supplied by the selected algebra and its laws.
+
+### Construction and proof boundaries
+
+- `Construction.lean` owns construction-specific mathematical parameters and
+  the authoritative exact algebra. Reusable base types, interpretations,
+  signatures, operation embeddings, lift/projection boundaries, and handler
+  bridges belong in `CryptoFirstOrder`; `Construction.Language` should alias an
+  existing adapter and add only construction-specific semantic role names and
+  bindings. Add a new reusable adapter instead of copying this wiring into a
+  construction.
+- `Scheme.lean` is the single source of each executable algorithm and assembles
+  the abstract primitive or protocol from those programs. It uses the Builder
+  surface, contains no hand-written signature injection or universe lifting,
+  and never imports `Complexity.lean`.
+- `Complexity.lean` proves budgets, bounds, exact costs, timed wrappers, and
+  efficiency certificates for the compiled first-order program, normally its
+  existing `.body`. It must not restate or copy the algorithm.
+- `Properties/Semantics.lean` proves cost erasure and value-distribution facts
+  for the same program. Correctness and security depend on that semantic layer,
+  not on `Complexity.lean`.
+- Scheme-facing host values enter and leave through the shared first-order
+  representation boundary. Do not create a second execution path solely to
+  avoid a representation conversion.
+
+Style refactors must be checked as API-preserving changes: inspect the diff for
+binder and declaration changes, build the smallest affected targets, then run
+the full `lake build` when an interface or cross-library boundary changed.
+`git diff --check` must pass, and committed project code must not introduce
+`sorry` or `admit`.
 
 ## Naming Conventions
 

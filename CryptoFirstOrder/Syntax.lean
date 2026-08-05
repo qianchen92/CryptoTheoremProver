@@ -1,6 +1,6 @@
-import Crypto.Infrastructure.Computation.FirstOrder.Algebra
+import CryptoFirstOrder.Algebra
 
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 universe uBase uValue uOp
 
@@ -77,4 +77,60 @@ structure Program
     (S : Signature.{uBase, uOp} Base) (Input Output : Ty Base) where
   body : Code interpret S [Input] Output
 
-end Crypto.Infrastructure.Computation.FirstOrder
+namespace Program
+
+/--
+A first-order program with a statically known list of logical inputs.
+
+The list is a surface-level typed context. It compiles to the existing single
+structural input through `Ty.tuple`, so the trusted `Program` and `Code` cores
+remain unchanged.
+-/
+abbrev NAry
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (S : Signature.{uBase, uOp} Base)
+    (Inputs : List (Ty Base)) (Output : Ty Base) :=
+  Program interpret S (Ty.tuple Inputs) Output
+
+/-- An `NAry` program returning two logically distinct results. -/
+abbrev NAryPair
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (S : Signature.{uBase, uOp} Base)
+    (Inputs : List (Ty Base)) (Left Right : Ty Base) :=
+  NAry interpret S Inputs (.prod Left Right)
+
+/-- A compatibility name for a first-order program with no logical inputs. -/
+abbrev Nullary
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (S : Signature.{uBase, uOp} Base) (Output : Ty Base) :=
+  NAry interpret S [] Output
+
+/-- A compatibility name for a first-order program with one logical input. -/
+abbrev Unary
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (S : Signature.{uBase, uOp} Base) (Input Output : Ty Base) :=
+  NAry interpret S [Input] Output
+
+/-- A compatibility name for a first-order program with two logical inputs. -/
+abbrev Binary
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (S : Signature.{uBase, uOp} Base)
+    (Left Right Output : Ty Base) :=
+  NAry interpret S [Left, Right] Output
+
+/-- A compatibility name for a first-order program with three logical inputs. -/
+abbrev Ternary
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (S : Signature.{uBase, uOp} Base)
+    (First Second Third Output : Ty Base) :=
+  NAry interpret S [First, Second, Third] Output
+
+/-- A compatibility name for a nullary program returning two distinct results. -/
+abbrev NullaryPair
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (S : Signature.{uBase, uOp} Base) (Left Right : Ty Base) :=
+  NAryPair interpret S [] Left Right
+
+end Program
+
+end CryptoFirstOrder

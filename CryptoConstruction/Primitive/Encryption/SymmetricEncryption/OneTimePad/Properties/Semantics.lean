@@ -4,72 +4,99 @@ import CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.Sc
 namespace CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 open Crypto.Infrastructure.Computation
-open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.SymmetricEncryption
 open scoped OneTimePadParameter
 
 universe uCost uGroup
 
-variable {M : CostModel.{uCost}}
+variable
+    {M : CostModel.{uCost}}
+    (F : Family.{uCost, uGroup} M)
+    (pp : PublicParam.{uCost, uGroup} M)
 
 /-- The family-level setup program delegates to the unique exact setup primitive. -/
 @[simp] theorem setupProgram_runCosted
-    (F : Family.{uCost, uGroup} M) (sec : Crypto.SecPar) :
+    (sec : Crypto.SecPar) :
     Program.runCosted (setupProgram F) sec = F.setup sec :=
   rfl
 
 /-- Cost erasure of key generation is uniform sampling. -/
-@[simp] theorem keygenProgram_valueDist (pp : PublicParam M) :
-    FirstOrder.Program.valueDist
+@[simp] theorem keygenProgram_valueDist :
+    CryptoFirstOrder.Program.valueDist
         (Language.algebra pp) (keygenProgram pp) (ULift.up ()) =
       Crypto.Infrastructure.Probability.uniformPMF pp.Carrier := by
-  simp [FirstOrder.Program.valueDist, FirstOrder.Program.runCosted,
-    keygenProgram, FirstOrder.Code.runCosted, Language.algebra,
-    (algebraLaws pp).exec_spec, algebraLaws,
-    FirstOrder.Expr.eval, FirstOrder.Env.get]
+  simp only [CryptoFirstOrder.Program.valueDist, CryptoFirstOrder.Program.runCosted,
+    keygenProgram, CryptoFirstOrder.Builder.SmartCode.unifSamp,
+    CryptoFirstOrder.SmartOperation.unifSamp, CryptoFirstOrder.Signature.inject,
+    CryptoFirstOrder.Code.runCosted, Language.algebra, Language.handler,
+    CryptoFirstOrder.Algebra.AdditiveGroup.algebra,
+    CryptoFirstOrder.Expr.eval, CryptoFirstOrder.Env.get]
+  rw [RandCosted.bind_pure]
+  exact pp.laws.sampleKey
 
 /-- Cost erasure of encryption is mathematical addition. -/
 @[simp] theorem encryptProgram_valueDist
-    (pp : PublicParam M) (key message : pp.Carrier) :
-    FirstOrder.Program.valueDist
+    (key message : pp.Carrier) :
+    CryptoFirstOrder.Program.valueDist
         (Language.algebra pp) (encryptProgram pp) (key, message) =
       PMF.pure (key + message) := by
-  simp [FirstOrder.Program.valueDist, FirstOrder.Program.runCosted,
-    encryptProgram, FirstOrder.Code.runCosted, Language.algebra,
-    (algebraLaws pp).exec_spec, algebraLaws,
-    FirstOrder.Expr.eval, FirstOrder.Env.get]
+  simp only [CryptoFirstOrder.Program.valueDist, CryptoFirstOrder.Program.runCosted,
+    encryptProgram, CryptoFirstOrder.Builder.SmartCode.add,
+    CryptoFirstOrder.SmartOperation.add, CryptoFirstOrder.Signature.inject,
+    CryptoFirstOrder.Code.runCosted, Language.algebra, Language.handler,
+    CryptoFirstOrder.Algebra.AdditiveGroup.algebra,
+    CryptoFirstOrder.Expr.eval, CryptoFirstOrder.Env.get]
+  rw [RandCosted.bind_pure]
+  exact pp.laws.add key message
 
 /-- Cost erasure of decryption is mathematical negation followed by addition. -/
 @[simp] theorem decryptProgram_valueDist
-    (pp : PublicParam M) (key ciphertext : pp.Carrier) :
-    FirstOrder.Program.valueDist
+    (key ciphertext : pp.Carrier) :
+    CryptoFirstOrder.Program.valueDist
         (Language.algebra pp) (decryptProgram pp) (key, ciphertext) =
       PMF.pure (-key + ciphertext) := by
-  simp only [FirstOrder.Program.valueDist, FirstOrder.Program.runCosted,
-    Language.algebra, decryptProgram, FirstOrder.Code.runCosted,
-    FirstOrder.Expr.eval, FirstOrder.Env.get, RandCosted.bind_pure,
-    RandCosted.valueDist_bind, (algebraLaws pp).exec_spec, algebraLaws]
-  change PMF.bind (PMF.pure (-key))
-    (fun value => PMF.pure (value + ciphertext)) = _
-  rw [PMF.pure_bind]
+  simp only [CryptoFirstOrder.Program.valueDist, CryptoFirstOrder.Program.runCosted,
+    Language.algebra, Language.handler,
+    CryptoFirstOrder.Algebra.AdditiveGroup.algebra,
+    decryptProgram, CryptoFirstOrder.Builder.SmartCode.neg,
+    CryptoFirstOrder.Builder.SmartCode.add, CryptoFirstOrder.Code.runCosted,
+    CryptoFirstOrder.SmartOperation.neg, CryptoFirstOrder.SmartOperation.add,
+    CryptoFirstOrder.Signature.inject,
+    CryptoFirstOrder.Expr.eval, CryptoFirstOrder.Env.get, RandCosted.bind_pure,
+    RandCosted.valueDist_bind]
+  calc
+    _ = PMF.bind (PMF.pure (-key))
+        (fun value =>
+          RandCosted.valueDist
+            (pp.algebra.exec (Operation.add value ciphertext))) := by
+      exact congrArg
+        (fun dist => PMF.bind dist
+          (fun value =>
+            RandCosted.valueDist
+              (pp.algebra.exec (Operation.add value ciphertext))))
+        (pp.laws.neg key)
+    _ = RandCosted.valueDist
+          (pp.algebra.exec (Operation.add (-key) ciphertext)) := by
+      rw [PMF.pure_bind]
+    _ = PMF.pure (-key + ciphertext) := pp.laws.add (-key) ciphertext
 
-@[simp] theorem scheme_setupDist (F : Family M) (sec : Crypto.SecPar) :
+@[simp] theorem scheme_setupDist (sec : Crypto.SecPar) :
     (scheme F).setupDist sec = F.setupDist sec := by
   rfl
 
-@[simp] theorem scheme_keygenDist (F : Family M) (pp : PublicParam M) :
+@[simp] theorem scheme_keygenDist :
     (scheme F).keygenDist pp =
       Crypto.Infrastructure.Probability.uniformPMF pp.Carrier :=
   keygenProgram_valueDist pp
 
 @[simp] theorem scheme_encryptDist
-    (F : Family M) (pp : PublicParam M) (key message : pp.Carrier) :
+    (key message : pp.Carrier) :
     (scheme F).encryptDist pp key message = PMF.pure (key + message) :=
   encryptProgram_valueDist pp key message
 
 @[simp] theorem scheme_decryptDist
-    (F : Family M) (pp : PublicParam M) (key ciphertext : pp.Carrier) :
+    (key ciphertext : pp.Carrier) :
     (scheme F).decryptDist pp key ciphertext = PMF.pure (-key + ciphertext) :=
   decryptProgram_valueDist pp key ciphertext
 

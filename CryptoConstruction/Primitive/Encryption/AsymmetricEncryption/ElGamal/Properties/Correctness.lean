@@ -6,29 +6,29 @@ namespace CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 universe uCost uScalar uGroup
 
-open Crypto.Infrastructure.Computation.Cost
-open Crypto.Primitive.Encryption.AsymmetricEncryption
 open scoped DDHParameter
 
+variable
+    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+    (F : Family.{uCost, uScalar, uGroup} M)
+
 /-- Correctness of ElGamal under the scalar action law carried by public parameters. -/
-theorem correct
-    {M : CostModel.{uCost}}
-    (F : Crypto.Assumption.DL.DDH.Family.{uCost, uScalar, uGroup} M) :
-    Correct (scheme F) := by
-  intro _sec pp publicKey secretKey message _hpp hkey
+theorem correct :
+    Crypto.Primitive.Encryption.AsymmetricEncryption.Correct (scheme F) := by
+  intro _sec pp pk sk message _hpp hkey
   rw [scheme_keygenDist] at hkey
   have hkey' := (PMF.mem_support_bind_iff
     (p := Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
-    (f := fun secretKey => PMF.pure (secretKey • pp.generator, secretKey))
-    (b := (publicKey, secretKey))).mp hkey
-  rcases hkey' with ⟨sampledSecretKey, _hsampled, hkeys⟩
+    (f := fun sk => PMF.pure (sk • pp.generator, sk))
+    (b := (pk, sk))).mp hkey
+  rcases hkey' with ⟨sampledSk, _hsampled, hkeys⟩
   rw [PMF.mem_support_pure_iff] at hkeys
-  injection hkeys with hpublicKey hsecretKey
-  subst publicKey
-  subst secretKey
+  injection hkeys with hpk hsk
+  subst pk
+  subst sk
   rw [scheme_encryptDist]
   simp_rw [scheme_decryptDist]
   rw [PMF.bind_bind]
-  simp [pp.scalarAction_commutes sampledSecretKey]
+  simp [pp.scalarAction_commutes sampledSk]
 
 end CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal

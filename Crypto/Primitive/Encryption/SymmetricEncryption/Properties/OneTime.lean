@@ -4,13 +4,14 @@ import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.SymmetricEncryption
 
+open Crypto.Infrastructure.Computation.Cost
+
 universe uCost uAdversaryCost uParam uKey uMessage uCiphertext
 
 variable
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
-    {adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost}}
-    {measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel}
+    {M : CostModel.{uCost}}
+    {adversaryModel : CostModel.{uAdversaryCost}}
+    {measure : NatMeasure adversaryModel}
     {Param : Type uParam}
     {Key : Param → Type uKey}
     {Message : Param → Type uMessage}
@@ -88,10 +89,12 @@ noncomputable def OneTimeAdvantage
   Crypto.Infrastructure.GameBased.Advantage
     (oneTimeSecurityGame E A false) (oneTimeSecurityGame E A true)
 
+section
+
+variable (adversaryModel measure)
+
 /-- Perfect one-time security against unbounded oracle machines. -/
 def PerfectOneTimeSecure
-    (adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext) : Prop :=
   ∀ A : Crypto.Infrastructure.Complexity.OracleMachine adversaryModel
       (fun _ => Param) (fun _sec _input => Bool)
@@ -100,12 +103,11 @@ def PerfectOneTimeSecure
 
 /-- One-time security against PPT oracle adversaries. -/
 def OneTimeSecure
-    (adversaryModel :
-      Crypto.Infrastructure.Computation.Cost.CostModel.{uAdversaryCost})
-    (measure : Crypto.Infrastructure.Computation.Cost.NatMeasure adversaryModel)
     (E : Scheme M Crypto.SecPar Param Key Message Ciphertext) : Prop :=
   Crypto.Infrastructure.GameBased.OracleDistinguishing.Hard
     adversaryModel measure (oneTimeProblem E)
+
+end
 
 /-- Perfect one-time security implies PPT one-time security. -/
 theorem PerfectOneTimeSecure.toOneTimeSecure :

@@ -3,17 +3,21 @@ import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace Crypto.Primitive.Encryption.AsymmetricEncryption
 
+open Crypto.Infrastructure.Computation.Cost
+
 universe uCost uSecPar uParam uPublicKey uSecretKey uMessage uCiphertext
 
-/-- Perfect correctness for an asymmetric encryption scheme. -/
-def Correct
-    {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+variable
+    {M : CostModel.{uCost}}
     {SecPar : Type uSecPar}
     {Param : Type uParam}
     {PublicKey : Param → Type uPublicKey}
     {SecretKey : Param → Type uSecretKey}
     {Message : Param → Type uMessage}
     {Ciphertext : Param → Type uCiphertext}
+
+/-- Perfect correctness for an asymmetric encryption scheme. -/
+def Correct
     (E : Scheme M SecPar Param PublicKey SecretKey Message Ciphertext) : Prop :=
   ∀ (sec : SecPar)
     (pp : Param)

@@ -12,10 +12,14 @@ open scoped OneTimePadParameter
 
 universe uCost uGroup
 
-variable {M : CostModel.{uCost}}
+variable
+    {M : CostModel.{uCost}}
+    (measure : NatMeasure M)
+    (F : Family.{uCost, uGroup} M)
+    (pp : PublicParam.{uCost, uGroup} M)
 
 /-- Uniform operation budgets attached to the exact OTP algebra. -/
-structure ParamEfficiencyCertificate (pp : PublicParam M) where
+structure ParamEfficiencyCertificate where
   bounds : OperationBounds pp.algebra
   sampleKeyBudget : M.Cost
   sampleKeyBudget_sound :
@@ -27,24 +31,24 @@ structure ParamEfficiencyCertificate (pp : PublicParam M) where
   negBudget_sound : ∀ value,
     M.instPartialOrder.le (bounds.budget (Operation.neg value)) negBudget
 
+variable
+    (certificate : ParamEfficiencyCertificate pp)
+    (setupCost : M.Cost)
+
 /-- Static key-generation budget: one exact key-sampling operation. -/
-def keygenBudget
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) : M.Cost :=
+def keygenBudget : M.Cost :=
   certificate.sampleKeyBudget
 
 /-- Static encryption budget: one exact group addition. -/
-def encryptBudget
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) : M.Cost :=
+def encryptBudget : M.Cost :=
   certificate.addBudget
 
 /-- Static decryption budget: negation followed by addition. -/
-def decryptBudget
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) : M.Cost :=
+def decryptBudget : M.Cost :=
   M.instAddMonoid.add certificate.negBudget certificate.addBudget
 
 private theorem sampleKeyOperationBound
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp)
-    (args : FirstOrder.Ty.denote (Language.interpret pp) .unit) :
+    (args : CryptoFirstOrder.Ty.denote (Language.interpret pp) .unit) :
     RandCosted.CostBound
       ((Language.algebra pp).exec Language.Operation.sampleKey args)
       certificate.sampleKeyBudget := by
@@ -55,8 +59,7 @@ private theorem sampleKeyOperationBound
       certificate.sampleKeyBudget_sound
 
 private theorem addOperationBound
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp)
-    (args : FirstOrder.Ty.denote (Language.interpret pp)
+    (args : CryptoFirstOrder.Ty.denote (Language.interpret pp)
       (.prod Language.carrierTy Language.carrierTy)) :
     RandCosted.CostBound
       ((Language.algebra pp).exec Language.Operation.add args)
@@ -67,8 +70,7 @@ private theorem addOperationBound
       (certificate.addBudget_sound args.1 args.2)
 
 private theorem negOperationBound
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp)
-    (args : FirstOrder.Ty.denote (Language.interpret pp)
+    (args : CryptoFirstOrder.Ty.denote (Language.interpret pp)
       Language.carrierTy) :
     RandCosted.CostBound
       ((Language.algebra pp).exec Language.Operation.neg args)
@@ -80,8 +82,7 @@ private theorem negOperationBound
 
 /-- Statically bounded key generation, indexing the same program body. -/
 def keygenBoundedProgram
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    FirstOrder.Program.Bounded
+    : CryptoFirstOrder.Program.Bounded
       (Input := .unit) (Output := Language.carrierTy)
       (Language.algebra pp)
       (fun _input => keygenBudget pp certificate) where
@@ -89,23 +90,22 @@ def keygenBoundedProgram
   certificate := by
     intro input
     have bound :
-        FirstOrder.Code.CostBound (Language.algebra pp)
+        CryptoFirstOrder.Code.CostBound (Language.algebra pp)
           (keygenProgram pp).body (.cons input .nil)
           (M.instAddMonoid.add certificate.sampleKeyBudget
             M.instAddMonoid.zero) := by
       unfold keygenProgram
-      apply FirstOrder.Code.CostBound.call
+      apply CryptoFirstOrder.Code.CostBound.call
         (operationBound := sampleKeyOperationBound pp certificate _)
       intro key
-      exact FirstOrder.Code.CostBound.ret (.var .here) _
+      exact CryptoFirstOrder.Code.CostBound.ret (.var .here) _
     apply RandCosted.CostBound.weaken bound
     letI := M.instPartialOrder
     exact le_of_eq (M.instAddMonoid.add_zero certificate.sampleKeyBudget)
 
 /-- Statically bounded encryption, indexing the same program body. -/
 def encryptBoundedProgram
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    FirstOrder.Program.Bounded
+    : CryptoFirstOrder.Program.Bounded
       (Input := .prod Language.carrierTy Language.carrierTy)
       (Output := Language.carrierTy) (Language.algebra pp)
       (fun _input => encryptBudget pp certificate) where
@@ -113,23 +113,22 @@ def encryptBoundedProgram
   certificate := by
     intro input
     have bound :
-        FirstOrder.Code.CostBound (Language.algebra pp)
+        CryptoFirstOrder.Code.CostBound (Language.algebra pp)
           (encryptProgram pp).body (.cons input .nil)
           (M.instAddMonoid.add certificate.addBudget
             M.instAddMonoid.zero) := by
       unfold encryptProgram
-      apply FirstOrder.Code.CostBound.call
+      apply CryptoFirstOrder.Code.CostBound.call
         (operationBound := addOperationBound pp certificate _)
       intro ciphertext
-      exact FirstOrder.Code.CostBound.ret (.var .here) _
+      exact CryptoFirstOrder.Code.CostBound.ret (.var .here) _
     apply RandCosted.CostBound.weaken bound
     letI := M.instPartialOrder
     exact le_of_eq (M.instAddMonoid.add_zero certificate.addBudget)
 
 /-- Statically bounded decryption, indexing the same program body. -/
 def decryptBoundedProgram
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    FirstOrder.Program.Bounded
+    : CryptoFirstOrder.Program.Bounded
       (Input := .prod Language.carrierTy Language.carrierTy)
       (Output := Language.carrierTy) (Language.algebra pp)
       (fun _input => decryptBudget pp certificate) where
@@ -137,33 +136,34 @@ def decryptBoundedProgram
   certificate := by
     intro input
     have bound :
-        FirstOrder.Code.CostBound (Language.algebra pp)
+        CryptoFirstOrder.Code.CostBound (Language.algebra pp)
           (decryptProgram pp).body (.cons input .nil)
           (M.instAddMonoid.add certificate.negBudget
             (M.instAddMonoid.add certificate.addBudget
               M.instAddMonoid.zero)) := by
       unfold decryptProgram
-      apply FirstOrder.Code.CostBound.call
+      apply CryptoFirstOrder.Code.CostBound.call
         (operationBound := negOperationBound pp certificate _)
       intro negatedKey
-      apply FirstOrder.Code.CostBound.call
+      apply CryptoFirstOrder.Code.CostBound.call
         (operationBound := addOperationBound pp certificate _)
       intro message
-      exact FirstOrder.Code.CostBound.ret (.var .here) _
+      exact CryptoFirstOrder.Code.CostBound.ret (.var .here) _
     apply RandCosted.CostBound.weaken bound
     letI := M.instPartialOrder
     exact le_of_eq (congrArg (M.instAddMonoid.add certificate.negBudget)
       (M.instAddMonoid.add_zero certificate.addBudget))
 
 /-- Global setup efficiency for an OTP family. -/
-structure EfficiencyCertificate (F : Family M) where
+structure EfficiencyCertificate where
   setupBudget : Crypto.SecPar → M.Cost
   setupCostBound : Program.CostBound (setupProgram F) setupBudget
 
+variable (familyCertificate : EfficiencyCertificate F)
+
 /-- Exact setup efficiency for a fixed OTP family. -/
 noncomputable def EfficiencyCertificate.ofFixed
-    (pp : PublicParam M) (setupCost : M.Cost) :
-    EfficiencyCertificate (Family.ofFixed pp setupCost) where
+    : EfficiencyCertificate (Family.ofFixed pp setupCost) where
   setupBudget := fun _sec => setupCost
   setupCostBound := by
     intro sec result hresult
@@ -175,33 +175,27 @@ noncomputable def EfficiencyCertificate.ofFixed
 
 /-- The authoritative setup program satisfies the supplied global certificate. -/
 theorem setup_costBound
-    (F : Family M) (certificate : EfficiencyCertificate F) :
-    Program.CostBound (setupProgram F) certificate.setupBudget :=
-  certificate.setupCostBound
+    : Program.CostBound (setupProgram F) familyCertificate.setupBudget :=
+  familyCertificate.setupCostBound
 
 theorem keygenProgram_costBound
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    FirstOrder.Program.CostBound (Language.algebra pp) (keygenProgram pp)
+    : CryptoFirstOrder.Program.CostBound (Language.algebra pp) (keygenProgram pp)
       (fun _input => keygenBudget pp certificate) :=
   (keygenBoundedProgram pp certificate).certificate
 
 theorem encryptProgram_costBound
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    FirstOrder.Program.CostBound (Language.algebra pp) (encryptProgram pp)
+    : CryptoFirstOrder.Program.CostBound (Language.algebra pp) (encryptProgram pp)
       (fun _input => encryptBudget pp certificate) :=
   (encryptBoundedProgram pp certificate).certificate
 
 theorem decryptProgram_costBound
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    FirstOrder.Program.CostBound (Language.algebra pp) (decryptProgram pp)
+    : CryptoFirstOrder.Program.CostBound (Language.algebra pp) (decryptProgram pp)
       (fun _input => decryptBudget pp certificate) :=
   (decryptBoundedProgram pp certificate).certificate
 
 /-- Fixed-parameter encryption with an explicit natural-number runtime observation. -/
 noncomputable def encryptTimedMachine
-    (measure : NatMeasure M)
-    (pp : PublicParam M) (certificate : ParamEfficiencyCertificate pp) :
-    TimedMachine M measure
+    : TimedMachine M measure
       (fun _sec => pp.Carrier × pp.Carrier)
       (fun _sec _input => pp.Carrier) :=
   TimedMachine.ofFirstOrderProgram measure
@@ -212,9 +206,6 @@ noncomputable def encryptTimedMachine
     (fun _input => Nat.le_refl _)
 
 @[simp] theorem encryptTimedMachine_runDist
-    (measure : NatMeasure M)
-    (F : Family M) (pp : PublicParam M)
-    (certificate : ParamEfficiencyCertificate pp)
     (sec : Crypto.SecPar) (input : pp.Carrier × pp.Carrier) :
     (encryptTimedMachine measure pp certificate).runDist sec input =
       (scheme F).encryptDist pp input.1 input.2 := by

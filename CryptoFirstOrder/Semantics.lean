@@ -1,7 +1,7 @@
-import Crypto.Infrastructure.Computation.FirstOrder.Syntax
+import CryptoFirstOrder.Syntax
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 open Crypto.Infrastructure.Computation.Cost
 
@@ -120,4 +120,4 @@ noncomputable def valueDist
 
 end Program
 
-end Crypto.Infrastructure.Computation.FirstOrder
+end CryptoFirstOrder

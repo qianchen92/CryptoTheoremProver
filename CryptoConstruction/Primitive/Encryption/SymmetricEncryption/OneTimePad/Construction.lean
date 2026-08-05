@@ -3,15 +3,15 @@ import Crypto.Infrastructure.Computation.Algebra.Parameter
 import Crypto.Infrastructure.Computation.Algebra.Signature
 import Crypto.Infrastructure.Computation.Algebra.Handler
 import Crypto.Infrastructure.Computation.Algebra.Laws
-import Crypto.Infrastructure.Computation.FirstOrder.Algebra
 import Crypto.Infrastructure.Probability.Uniform
 import Crypto.Infrastructure.Computation.Randomized
+import CryptoFirstOrder.Algebra.AdditiveGroup
 
 namespace CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
-open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
+open scoped CryptoFirstOrder
 
 universe uCost uGroup
 
@@ -75,29 +75,37 @@ open scoped OneTimePadParameter
 /- The object-language carrier used by the reified OTP algorithms. -/
 namespace Language
 
-inductive Base where
-  | carrier
-  deriving DecidableEq
+export CryptoFirstOrder.Algebra.AdditiveGroup
+  (Base carrierTy Operation signature)
 
-abbrev carrierTy :
-    Crypto.Infrastructure.Computation.FirstOrder.Ty Base :=
-  .base .carrier
+/-- Object-language type of an OTP key. -/
+abbrev keyTy := carrierTy
+
+/-- Object-language type of an OTP message. -/
+abbrev messageTy := carrierTy
+
+/-- Object-language type of an OTP ciphertext. -/
+abbrev ciphertextTy := carrierTy
 
 /-- Interpret the object-language carrier using one concrete OTP parameter. -/
-abbrev interpret (pp : PublicParam.{uCost, uGroup} M) : Base → Type uGroup
-  | .carrier => pp.Carrier
+abbrev interpret (pp : PublicParam.{uCost, uGroup} M) : Base → Type uGroup :=
+  CryptoFirstOrder.Algebra.AdditiveGroup.interpret pp.Carrier
 
-/-- Exactly the first-order operations used by OTP algorithms. -/
-inductive Operation :
-    Crypto.Infrastructure.Computation.FirstOrder.Ty Base →
-    Crypto.Infrastructure.Computation.FirstOrder.Ty Base → Type where
-  | sampleKey : Operation .unit carrierTy
-  | add : Operation (.prod carrierTy carrierTy) carrierTy
-  | neg : Operation carrierTy carrierTy
+namespace Operation
 
-def signature :
-    Crypto.Infrastructure.Computation.FirstOrder.Signature Base where
-  Op := Operation
+abbrev sampleKey : Operation .unit carrierTy :=
+  CryptoFirstOrder.Algebra.AdditiveGroup.Operation.sample
+
+export CryptoFirstOrder.Algebra.AdditiveGroup.Operation (add neg)
+
+end Operation
+
+/-- Bind the reusable adapter to the OTP parameter's authoritative handler. -/
+noncomputable def handler (pp : PublicParam.{uCost, uGroup} M) :
+    CryptoFirstOrder.Algebra.AdditiveGroup.Handler M pp.Carrier where
+  sample := pp.algebra.exec .sampleKey
+  add := fun left right => pp.algebra.exec (.add left right)
+  neg := fun value => pp.algebra.exec (.neg value)
 
 /--
 First-order adapter for the parameter's authoritative exact algebra. The
@@ -105,13 +113,9 @@ adapter only moves runtime arguments out of operation constructors; it does
 not replace or approximate the underlying costed computation.
 -/
 noncomputable def algebra (pp : PublicParam.{uCost, uGroup} M) :
-    Crypto.Infrastructure.Computation.FirstOrder.CostedAlgebra
-      M (interpret pp) signature where
-  exec operation args :=
-    match operation with
-    | .sampleKey => pp.algebra.exec .sampleKey
-    | .add => pp.algebra.exec (.add args.1 args.2)
-    | .neg => pp.algebra.exec (.neg args)
+    CryptoFirstOrder.CostedAlgebra
+      M (interpret pp) signature :=
+  CryptoFirstOrder.Algebra.AdditiveGroup.algebra (handler pp)
 
 end Language
 

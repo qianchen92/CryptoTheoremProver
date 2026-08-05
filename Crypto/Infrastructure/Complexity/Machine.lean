@@ -153,21 +153,21 @@ algebra.
 noncomputable def ofFirstOrderProgram
     {M : CostModel.{uCost}} (measure : NatMeasure M)
     {Base : Type uBase} {interpret : Base → Type uValue}
-    {S : FirstOrder.Signature.{uBase, uOp} Base}
-    (A : FirstOrder.CostedAlgebra M interpret S)
-    {FirstOrderInput FirstOrderOutput : FirstOrder.Ty Base}
-    (program : FirstOrder.Program interpret S
+    {S : CryptoFirstOrder.Signature.{uBase, uOp} Base}
+    (A : CryptoFirstOrder.CostedAlgebra M interpret S)
+    {FirstOrderInput FirstOrderOutput : CryptoFirstOrder.Ty Base}
+    (program : CryptoFirstOrder.Program interpret S
       FirstOrderInput FirstOrderOutput)
-    (budget : FirstOrder.Ty.denote interpret FirstOrderInput → M.Cost)
+    (budget : CryptoFirstOrder.Ty.denote interpret FirstOrderInput → M.Cost)
     (runtime : Nat)
-    (costBound : FirstOrder.Program.CostBound A program budget)
+    (costBound : CryptoFirstOrder.Program.CostBound A program budget)
     (budget_le_runtime : ∀ input, measure (budget input) ≤ runtime) :
     TimedMachine M measure
-      (fun _sec => FirstOrder.Ty.denote interpret FirstOrderInput)
+      (fun _sec => CryptoFirstOrder.Ty.denote interpret FirstOrderInput)
       (fun _sec _input =>
-        FirstOrder.Ty.denote interpret FirstOrderOutput) where
+        CryptoFirstOrder.Ty.denote interpret FirstOrderOutput) where
   toProbabilisticMachine :=
-    { run := fun _sec input => FirstOrder.Program.runCosted A program input }
+    { run := fun _sec input => CryptoFirstOrder.Program.runCosted A program input }
   certificate :=
     { budget := fun _sec input => budget input
       sound := fun _sec input => costBound input
@@ -195,17 +195,17 @@ not select a different hidden Lean program.
 noncomputable def toTimedMachine
     {M : CostModel.{uFirstOrder}} {measure : NatMeasure M}
     {Base : Type uFirstOrder} {interpret : Base → Type uFirstOrder}
-    {S : FirstOrder.Signature.{uFirstOrder, uFirstOrder} Base}
-    {A : FirstOrder.CostedAlgebra M interpret S}
-    {FirstOrderInput FirstOrderOutput : FirstOrder.Ty Base}
+    {S : CryptoFirstOrder.Signature.{uFirstOrder, uFirstOrder} Base}
+    {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+    {FirstOrderInput FirstOrderOutput : CryptoFirstOrder.Ty Base}
     (code : FirstOrderOperationalCode M measure interpret A
       FirstOrderInput FirstOrderOutput) :
     TimedMachine M measure
-      (fun _sec => FirstOrder.Ty.denote interpret FirstOrderInput)
-      (fun _sec _input => FirstOrder.Ty.denote interpret FirstOrderOutput) where
+      (fun _sec => CryptoFirstOrder.Ty.denote interpret FirstOrderInput)
+      (fun _sec _input => CryptoFirstOrder.Ty.denote interpret FirstOrderOutput) where
   toProbabilisticMachine :=
     { run := fun _sec input =>
-        FirstOrder.Program.runCosted A code.program input }
+        CryptoFirstOrder.Program.runCosted A code.program input }
   certificate :=
     { budget := fun _sec input => code.budget input
       sound := fun _sec input => code.costBound input
@@ -301,14 +301,14 @@ measured runtime are all fields of `code`.
 noncomputable def ofFirstOrderCode
     {M : CostModel.{uFirstOrder}} {measure : NatMeasure M}
     {Base : Type uFirstOrder} {interpret : Base → Type uFirstOrder}
-    {S : FirstOrder.Signature.{uFirstOrder, uFirstOrder} Base}
-    {A : FirstOrder.CostedAlgebra M interpret S}
-    {FirstOrderInput FirstOrderOutput : FirstOrder.Ty Base}
+    {S : CryptoFirstOrder.Signature.{uFirstOrder, uFirstOrder} Base}
+    {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+    {FirstOrderInput FirstOrderOutput : CryptoFirstOrder.Ty Base}
     (code : FirstOrderOperationalCode M measure interpret A
       FirstOrderInput FirstOrderOutput) :
     PPTMachine M measure
-      (fun _sec => FirstOrder.Ty.denote interpret FirstOrderInput)
-      (fun _sec _input => FirstOrder.Ty.denote interpret FirstOrderOutput) where
+      (fun _sec => CryptoFirstOrder.Ty.denote interpret FirstOrderInput)
+      (fun _sec _input => CryptoFirstOrder.Ty.denote interpret FirstOrderOutput) where
   toTimedMachine := code.toTimedMachine
   runtime_poly :=
     Crypto.Infrastructure.Asymptotic.IsPolyBounded.const code.runtime

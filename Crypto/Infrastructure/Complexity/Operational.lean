@@ -1,4 +1,4 @@
-import Crypto.Infrastructure.Computation.FirstOrder.Basic
+import CryptoFirstOrder.Core
 import Crypto.Infrastructure.Computation.Cost.Measure
 import Crypto.Infrastructure.SecurityParameter
 
@@ -44,13 +44,13 @@ format; it contains no higher-order program continuation.
 structure FirstOrderOperationalCode
     (M : CostModel.{uCost}) (measure : NatMeasure M)
     {Base : Type uValue} (interpret : Base → Type uValue)
-    {S : FirstOrder.Signature.{uValue, uValue} Base}
-    (A : FirstOrder.CostedAlgebra M interpret S)
-    (Input Output : FirstOrder.Ty Base) where
-  program : FirstOrder.Program interpret S Input Output
-  algebraValid : FirstOrder.ValidAlgebra M interpret A
-  budget : FirstOrder.Ty.denote interpret Input → M.Cost
-  costBound : FirstOrder.Program.CostBound A program budget
+    {S : CryptoFirstOrder.Signature.{uValue, uValue} Base}
+    (A : CryptoFirstOrder.CostedAlgebra M interpret S)
+    (Input Output : CryptoFirstOrder.Ty Base) where
+  program : CryptoFirstOrder.Program interpret S Input Output
+  algebraValid : CryptoFirstOrder.ValidAlgebra M interpret A
+  budget : CryptoFirstOrder.Ty.denote interpret Input → M.Cost
+  costBound : CryptoFirstOrder.Program.CostBound A program budget
   runtime : Nat
   budget_le_runtime : ∀ input, measure (budget input) ≤ runtime
 
@@ -62,16 +62,16 @@ stored uniform measured runtime.
 noncomputable def firstOrderOperationalModel
     (M : CostModel.{uCost}) (measure : NatMeasure M)
     {Base : Type uValue} (interpret : Base → Type uValue)
-    {S : FirstOrder.Signature.{uValue, uValue} Base}
-    (A : FirstOrder.CostedAlgebra M interpret S)
-    (Input Output : FirstOrder.Ty Base)
+    {S : CryptoFirstOrder.Signature.{uValue, uValue} Base}
+    (A : CryptoFirstOrder.CostedAlgebra M interpret S)
+    (Input Output : CryptoFirstOrder.Ty Base)
     (Claim : Type uClaim) (claimOfRuntime : Nat → Claim) :
     OperationalModel
-      (FirstOrder.Ty.denote interpret Input →
-        RandCosted M (FirstOrder.Ty.denote interpret Output))
+      (CryptoFirstOrder.Ty.denote interpret Input →
+        RandCosted M (CryptoFirstOrder.Ty.denote interpret Output))
       Claim where
   Code := ULift.{uClaim} (FirstOrderOperationalCode M measure interpret A Input Output)
-  denote code := FirstOrder.Program.runCosted A code.down.program
+  denote code := CryptoFirstOrder.Program.runCosted A code.down.program
   claim code := claimOfRuntime code.down.runtime
 
 /--
@@ -82,16 +82,16 @@ used to select hidden Lean code.
 noncomputable def firstOrderMachineOperationalModel
     (M : CostModel.{uCost}) (measure : NatMeasure M)
     {Base : Type uValue} (interpret : Base → Type uValue)
-    {S : FirstOrder.Signature.{uValue, uValue} Base}
-    (A : FirstOrder.CostedAlgebra M interpret S)
-    (Input Output : FirstOrder.Ty Base)
+    {S : CryptoFirstOrder.Signature.{uValue, uValue} Base}
+    (A : CryptoFirstOrder.CostedAlgebra M interpret S)
+    (Input Output : CryptoFirstOrder.Ty Base)
     (Claim : Type uClaim) (claimOfRuntime : Nat → Claim) :
     OperationalModel
-      ((sec : Crypto.SecPar) → FirstOrder.Ty.denote interpret Input →
-        RandCosted M (FirstOrder.Ty.denote interpret Output))
+      ((sec : Crypto.SecPar) → CryptoFirstOrder.Ty.denote interpret Input →
+        RandCosted M (CryptoFirstOrder.Ty.denote interpret Output))
       Claim where
   Code := ULift.{uClaim} (FirstOrderOperationalCode M measure interpret A Input Output)
-  denote code := fun _sec => FirstOrder.Program.runCosted A code.down.program
+  denote code := fun _sec => CryptoFirstOrder.Program.runCosted A code.down.program
   claim code := claimOfRuntime code.down.runtime
 
 namespace OperationalModel
@@ -115,14 +115,14 @@ inductive ValidCode :
   | firstOrder
       {M : CostModel.{uArtifact}} {measure : NatMeasure M}
       {Base : Type uArtifact} {interpret : Base → Type uArtifact}
-      {S : FirstOrder.Signature.{uArtifact, uArtifact} Base}
-      {A : FirstOrder.CostedAlgebra M interpret S}
-      {Input Output : FirstOrder.Ty Base}
+      {S : CryptoFirstOrder.Signature.{uArtifact, uArtifact} Base}
+      {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+      {Input Output : CryptoFirstOrder.Ty Base}
       {Claim : Type uClaim} {claimOfRuntime : Nat → Claim}
       (code : FirstOrderOperationalCode M measure interpret A Input Output) :
       @ValidCode
-        (FirstOrder.Ty.denote interpret Input →
-          RandCosted M (FirstOrder.Ty.denote interpret Output))
+        (CryptoFirstOrder.Ty.denote interpret Input →
+          RandCosted M (CryptoFirstOrder.Ty.denote interpret Output))
         Claim
         (firstOrderOperationalModel M measure interpret A Input Output
           Claim claimOfRuntime)
@@ -130,14 +130,14 @@ inductive ValidCode :
   | firstOrderMachine
       {M : CostModel.{uArtifact}} {measure : NatMeasure M}
       {Base : Type uArtifact} {interpret : Base → Type uArtifact}
-      {S : FirstOrder.Signature.{uArtifact, uArtifact} Base}
-      {A : FirstOrder.CostedAlgebra M interpret S}
-      {Input Output : FirstOrder.Ty Base}
+      {S : CryptoFirstOrder.Signature.{uArtifact, uArtifact} Base}
+      {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+      {Input Output : CryptoFirstOrder.Ty Base}
       {Claim : Type uClaim} {claimOfRuntime : Nat → Claim}
       (code : FirstOrderOperationalCode M measure interpret A Input Output) :
       @ValidCode
-        ((sec : Crypto.SecPar) → FirstOrder.Ty.denote interpret Input →
-          RandCosted M (FirstOrder.Ty.denote interpret Output))
+        ((sec : Crypto.SecPar) → CryptoFirstOrder.Ty.denote interpret Input →
+          RandCosted M (CryptoFirstOrder.Ty.denote interpret Output))
         Claim
         (firstOrderMachineOperationalModel M measure interpret A Input Output
           Claim claimOfRuntime)
@@ -178,12 +178,12 @@ theorem ofValidatedCode
 theorem ofFirstOrderCode
     {M : CostModel.{uValue}} {measure : NatMeasure M}
     {Base : Type uValue} {interpret : Base → Type uValue}
-    {S : FirstOrder.Signature.{uValue, uValue} Base}
-    {A : FirstOrder.CostedAlgebra M interpret S}
-    {Input Output : FirstOrder.Ty Base}
+    {S : CryptoFirstOrder.Signature.{uValue, uValue} Base}
+    {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+    {Input Output : CryptoFirstOrder.Ty Base}
     (code : FirstOrderOperationalCode M measure interpret A Input Output) :
     OperationalRealization
-      (FirstOrder.Program.runCosted A code.program) code.runtime := by
+      (CryptoFirstOrder.Program.runCosted A code.program) code.runtime := by
   exact
     ⟨firstOrderOperationalModel M measure interpret A Input Output Nat id,
       ULift.up code, OperationalModel.ValidCode.firstOrder code, rfl, rfl⟩
@@ -195,13 +195,13 @@ security-parameter-indexed machine and runtime.
 theorem ofFirstOrderMachineCode
     {M : CostModel.{uValue}} {measure : NatMeasure M}
     {Base : Type uValue} {interpret : Base → Type uValue}
-    {S : FirstOrder.Signature.{uValue, uValue} Base}
-    {A : FirstOrder.CostedAlgebra M interpret S}
-    {Input Output : FirstOrder.Ty Base}
+    {S : CryptoFirstOrder.Signature.{uValue, uValue} Base}
+    {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+    {Input Output : CryptoFirstOrder.Ty Base}
     (code : FirstOrderOperationalCode M measure interpret A Input Output) :
     OperationalRealization
       (fun _sec : Crypto.SecPar =>
-        FirstOrder.Program.runCosted A code.program)
+        CryptoFirstOrder.Program.runCosted A code.program)
       (fun _sec : Crypto.SecPar => code.runtime) := by
   exact
     ⟨firstOrderMachineOperationalModel M measure interpret A Input Output

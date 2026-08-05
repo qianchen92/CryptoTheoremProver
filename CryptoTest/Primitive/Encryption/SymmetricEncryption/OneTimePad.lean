@@ -107,16 +107,18 @@ example :
 /-- One exact encryption call carries the algebra's one-unit addition cost. -/
 example
     (key message : testPublicParam.Carrier) :
-    FirstOrder.Program.runCosted (Language.algebra testPublicParam)
+    CryptoFirstOrder.Program.runCosted (Language.algebra testPublicParam)
         (encryptProgram testPublicParam) (key, message) =
       RandCosted.liftCosted
         (⟨key + message, 1⟩ :
           Costed CostModel.nat testPublicParam.Carrier) :=
   by
     simp only [testPublicParam, testAlgebra, RandCosted.liftCosted,
-      FirstOrder.Program.runCosted, Language.algebra, encryptProgram,
-      FirstOrder.Code.runCosted, RandCosted.bind, FirstOrder.Expr.eval,
-      FirstOrder.Env.get, Costed.bind, RandCosted.pure, Costed.pure,
+      CryptoFirstOrder.Program.runCosted, Language.algebra, encryptProgram,
+      CryptoFirstOrder.Builder.SmartCode.add, CryptoFirstOrder.SmartOperation.add,
+      CryptoFirstOrder.Signature.inject, CryptoFirstOrder.Signature.Embedding.inject,
+      CryptoFirstOrder.Code.runCosted, RandCosted.bind, CryptoFirstOrder.Expr.eval,
+      CryptoFirstOrder.Env.get, Costed.bind, RandCosted.pure, Costed.pure,
       PMF.pure_map, add_zero]
     exact PMF.pure_bind _ _
 
@@ -126,7 +128,7 @@ example
     (result : Costed CostModel.nat testPublicParam.Carrier)
     (hresult :
       result ∈
-        (FirstOrder.Program.runCosted (Language.algebra testPublicParam)
+        (CryptoFirstOrder.Program.runCosted (Language.algebra testPublicParam)
           (encryptProgram testPublicParam) (key, message)).support) :
     result.cost ≤ 1 :=
   encryptProgram_costBound testPublicParam testParamEfficiency
@@ -137,7 +139,7 @@ example
     (result : Costed CostModel.nat testPublicParam.Carrier)
     (hresult :
       result ∈
-        (FirstOrder.Program.runCosted (Language.algebra testPublicParam)
+        (CryptoFirstOrder.Program.runCosted (Language.algebra testPublicParam)
           (keygenProgram testPublicParam) (ULift.up ())).support) :
     result.cost ≤ 2 :=
   keygenProgram_costBound testPublicParam testParamEfficiency
@@ -178,9 +180,12 @@ example
           Costed CostModel.nat testPublicParam.Carrier) :=
   by
     simp only [testPublicParam, testAlgebra, RandCosted.liftCosted,
-      scheme, setupProgram_runCosted, FirstOrder.Program.runCosted,
-      Language.algebra, decryptProgram, FirstOrder.Code.runCosted,
-      RandCosted.bind, FirstOrder.Expr.eval, FirstOrder.Env.get,
+      scheme, setupProgram_runCosted, CryptoFirstOrder.Program.runCosted,
+      Language.algebra, decryptProgram, CryptoFirstOrder.Builder.SmartCode.neg,
+      CryptoFirstOrder.Builder.SmartCode.add, CryptoFirstOrder.SmartOperation.neg,
+      CryptoFirstOrder.SmartOperation.add, CryptoFirstOrder.Signature.inject,
+      CryptoFirstOrder.Signature.Embedding.inject, CryptoFirstOrder.Code.runCosted,
+      RandCosted.bind, CryptoFirstOrder.Expr.eval, CryptoFirstOrder.Env.get,
       Costed.bind, RandCosted.pure, Costed.pure, PMF.pure_map, add_zero]
     refine (PMF.pure_bind _ _).trans ?_
     change

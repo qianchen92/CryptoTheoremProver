@@ -1,6 +1,6 @@
-import Crypto.Infrastructure.Computation.FirstOrder.Operation
+import CryptoFirstOrder.Operation
 
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 open Crypto.Infrastructure.Computation.Cost
 
@@ -49,4 +49,4 @@ inductive ValidAlgebra
       ValidAlgebra M interpret
         (CostedAlgebra.sum leftAlgebra rightAlgebra)
 
-end Crypto.Infrastructure.Computation.FirstOrder
+end CryptoFirstOrder

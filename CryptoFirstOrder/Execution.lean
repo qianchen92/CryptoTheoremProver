@@ -1,6 +1,6 @@
-import Crypto.Infrastructure.Computation.FirstOrder.Semantics
+import CryptoFirstOrder.Semantics
 
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 open Crypto.Infrastructure.Computation.Cost
 
@@ -155,4 +155,4 @@ theorem execution_iff_mem_support_runCosted
 
 end Code
 
-end Crypto.Infrastructure.Computation.FirstOrder
+end CryptoFirstOrder

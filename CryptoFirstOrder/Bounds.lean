@@ -1,8 +1,8 @@
 import Crypto.Infrastructure.Computation.Cost.PathBound
-import Crypto.Infrastructure.Computation.FirstOrder.Semantics
-import Crypto.Infrastructure.Computation.FirstOrder.Validation
+import CryptoFirstOrder.Semantics
+import CryptoFirstOrder.Validation
 
-namespace Crypto.Infrastructure.Computation.FirstOrder
+namespace CryptoFirstOrder
 
 open Crypto.Infrastructure.Computation.Cost
 
@@ -118,4 +118,4 @@ structure Bounded
 
 end Program
 
-end Crypto.Infrastructure.Computation.FirstOrder
+end CryptoFirstOrder
