@@ -16,6 +16,21 @@
   should describe the concepts they export, such as `Randomized`, `Oracle`, or
   `Advantage`.
 
+## Library Layer Boundaries
+
+- Keep reusable infrastructure, assumptions, abstract primitive/protocol
+  syntax, generic security definitions, and generic properties in `Crypto`.
+- Put parameterized algorithms that construct abstract primitives or protocols
+  in the separate `CryptoConstruction` library. It may depend on `Crypto` but
+  must not depend on a concrete backend instantiation.
+- Reserve a future `CryptoInstantiation` library for fixed representations,
+  implementation backends, and their instance-specific cost certificates.
+- `Crypto` must not import `CryptoConstruction` or `CryptoInstantiation`.
+  `CryptoConstruction` must not import `CryptoInstantiation`.
+- Each library's `Basic.lean` aggregates only that library. Import
+  `CryptoConstruction.Basic` explicitly when parameterized constructions are
+  required.
+
 ## Lean Universe Names
 
 - Use meaningful universe names that describe the role of the corresponding type parameter.

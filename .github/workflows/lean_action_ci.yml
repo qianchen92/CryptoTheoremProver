@@ -17,11 +17,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - name: Check Infrastructure import hierarchy
+      - name: Check Project import hierarchy
         run: python3 scripts/check_infrastructure_imports.py
       - uses: leanprover/lean-action@v1
       - name: Build library target
         run: lake build Crypto
+      - name: Build construction target
+        run: lake build CryptoConstruction
       - name: Build theorem regression target
         run: lake build CryptoTest
       - name: Build default targets

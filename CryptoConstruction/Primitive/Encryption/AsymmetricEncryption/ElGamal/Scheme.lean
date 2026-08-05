@@ -1,10 +1,9 @@
-import Crypto.Assumption.DL.DDH
 import Crypto.Infrastructure.Complexity.ProgramMachine
 import Crypto.Infrastructure.Probability.Uniform
-import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Construction
+import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Construction
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Syntax
 
-namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
+namespace CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open Crypto.Infrastructure.Complexity
 open Crypto.Infrastructure.Computation
@@ -410,4 +409,4 @@ noncomputable def encryptTimedMachine
       (scheme F).encryptDist pp input.1 input.2 := by
   rfl
 
-end Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
+end CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal

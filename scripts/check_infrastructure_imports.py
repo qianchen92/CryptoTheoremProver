@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Reject unresolved project imports, cycles, and upward Infrastructure imports.
+"""Reject unresolved imports and violations of the project import hierarchy.
 
-This check is intentionally independent of Lean's build graph: Lean rejects
-cycles, while this script also enforces the architectural direction promised by
-the Infrastructure package. Exact module-name membership additionally catches
-case mismatches that can pass on a case-insensitive macOS checkout but fail on
-GitHub's Linux runners.
+This check is intentionally independent of Lean's build graph. It enforces the
+Infrastructure hierarchy and the package direction from `Crypto` definitions to
+`CryptoConstruction` realizations and future `CryptoInstantiation` backends.
+Exact module-name membership additionally catches case mismatches that can pass
+on a case-insensitive macOS checkout but fail on GitHub's Linux runners.
 """
 
 from __future__ import annotations
@@ -20,6 +20,12 @@ INFRA_ROOT = ROOT / "Crypto" / "Infrastructure"
 IMPORT_RE = re.compile(r"^(?:public\s+)?import\s+(.+?)\s*$")
 MODULE_RE = re.compile(r"^[A-Za-z0-9_.'-]+$")
 PREFIX = "Crypto.Infrastructure."
+PROJECT_PACKAGES = (
+    "Crypto",
+    "CryptoConstruction",
+    "CryptoInstantiation",
+    "CryptoTest",
+)
 
 
 def module_name(path: Path) -> str:
@@ -71,15 +77,44 @@ def imports(path: Path) -> list[str]:
     return imports_from_text(path.read_text(encoding="utf-8"))
 
 
-def is_higher_level_project_import(module: str) -> bool:
-    """Infrastructure may only depend on the Infrastructure part of Crypto."""
+def project_package(module: str) -> str | None:
+    """Return the project package owning a module name, including future roots."""
 
-    is_crypto = module == "Crypto" or module.startswith("Crypto.")
+    for package in PROJECT_PACKAGES:
+        if module == package or module.startswith(package + "."):
+            return package
+    return None
+
+
+def is_project_module(module: str) -> bool:
+    return project_package(module) is not None
+
+
+def is_higher_level_project_import(module: str) -> bool:
+    """Infrastructure may depend only on other Crypto.Infrastructure modules."""
+
     is_infrastructure = (
         module == "Crypto.Infrastructure" or module.startswith(PREFIX)
     )
-    is_crypto_test = module == "CryptoTest" or module.startswith("CryptoTest.")
-    return (is_crypto and not is_infrastructure) or is_crypto_test
+    return is_project_module(module) and not is_infrastructure
+
+
+def project_import_hierarchy_error(source: str, target: str) -> str | None:
+    """Enforce Crypto <- CryptoConstruction <- CryptoInstantiation."""
+
+    source_package = project_package(source)
+    target_package = project_package(target)
+    if source_package == "Crypto" and target_package in {
+        "CryptoConstruction",
+        "CryptoInstantiation",
+    }:
+        return f"Crypto imports higher package: {source} -> {target}"
+    if (
+        source_package == "CryptoConstruction"
+        and target_package == "CryptoInstantiation"
+    ):
+        return f"CryptoConstruction imports CryptoInstantiation: {source} -> {target}"
+    return None
 
 
 def parser_regression_errors() -> list[str]:
@@ -89,12 +124,13 @@ def parser_regression_errors() -> list[str]:
 /- import Crypto.Assumption.Hidden
    /- nested import CryptoTest.Hidden -/
 -/
-public import Crypto.Infrastructure.SecurityParameter Crypto.Primitive.Bad -- tail
+public import Crypto.Infrastructure.SecurityParameter Crypto.Primitive.Bad CryptoConstruction.Primitive.Bad -- tail
 import Mathlib.Data.Nat.Basic
 """
     expected = [
         "Crypto.Infrastructure.SecurityParameter",
         "Crypto.Primitive.Bad",
+        "CryptoConstruction.Primitive.Bad",
         "Mathlib.Data.Nat.Basic",
     ]
     errors: list[str] = []
@@ -105,8 +141,34 @@ import Mathlib.Data.Nat.Basic
         errors.append("internal boundary regression: Crypto.Primitive.Bad accepted")
     if not is_higher_level_project_import("CryptoTest.Bad"):
         errors.append("internal boundary regression: CryptoTest.Bad accepted")
+    if not is_higher_level_project_import("CryptoConstruction.Primitive.Bad"):
+        errors.append("internal boundary regression: CryptoConstruction accepted")
     if is_higher_level_project_import("Crypto.Infrastructure.UC.Kernel"):
         errors.append("internal boundary regression: Infrastructure rejected")
+    if project_package("CryptoConstruction.Primitive.Basic") != "CryptoConstruction":
+        errors.append("internal boundary regression: CryptoConstruction not recognized")
+    if project_package("CryptoInstantiation.Backend.Basic") != "CryptoInstantiation":
+        errors.append("internal boundary regression: CryptoInstantiation not recognized")
+    if project_import_hierarchy_error(
+        "Crypto.Primitive.Encryption.Basic",
+        "CryptoConstruction.Primitive.Encryption.Basic",
+    ) is None:
+        errors.append("internal boundary regression: Crypto-to-construction accepted")
+    if project_import_hierarchy_error(
+        "Crypto.Infrastructure.Computation.Basic",
+        "CryptoConstruction.Primitive.Basic",
+    ) is None:
+        errors.append("internal boundary regression: Infrastructure-to-construction accepted")
+    if project_import_hierarchy_error(
+        "CryptoConstruction.Primitive.Basic",
+        "CryptoInstantiation.Backend.Basic",
+    ) is None:
+        errors.append("internal boundary regression: construction-to-instantiation accepted")
+    if project_import_hierarchy_error(
+        "CryptoConstruction.Primitive.Basic",
+        "Crypto.Primitive.Basic",
+    ) is not None:
+        errors.append("internal boundary regression: construction-to-Crypto rejected")
     return errors
 
 
@@ -233,30 +295,41 @@ def subsystem_part(module: str, subsystem: str) -> str | None:
     return module.removeprefix(prefix).split(".", 1)[0]
 
 
+def project_source_files() -> list[Path]:
+    """Collect every currently present project root and package source tree."""
+
+    files: set[Path] = set()
+    for package in PROJECT_PACKAGES:
+        root_module = ROOT / f"{package}.lean"
+        package_root = ROOT / package
+        if root_module.is_file():
+            files.add(root_module)
+        if package_root.is_dir():
+            files.update(package_root.rglob("*.lean"))
+    return sorted(files)
+
+
 def main() -> int:
-    files = sorted(INFRA_ROOT.rglob("*.lean"))
-    graph = {module_name(path): imports(path) for path in files}
+    infrastructure_files = sorted(INFRA_ROOT.rglob("*.lean"))
+    infrastructure_graph = {
+        module_name(path): imports(path) for path in infrastructure_files
+    }
     errors = parser_regression_errors()
 
-    project_files = sorted(
-        [ROOT / "Crypto.lean", ROOT / "CryptoTest.lean"]
-        + list((ROOT / "Crypto").rglob("*.lean"))
-        + list((ROOT / "CryptoTest").rglob("*.lean"))
-    )
+    project_files = project_source_files()
+    project_graph = {module_name(path): imports(path) for path in project_files}
     project_modules = {module_name(path) for path in project_files}
-    for path in project_files:
-        source = module_name(path)
-        for target in imports(path):
-            is_project_module = (
-                target == "Crypto" or target.startswith("Crypto.") or
-                target == "CryptoTest" or target.startswith("CryptoTest.")
-            )
-            if is_project_module and target not in project_modules:
+    for source, targets in project_graph.items():
+        for target in targets:
+            if is_project_module(target) and target not in project_modules:
                 errors.append(
                     f"missing or case-mismatched project import: {source} -> {target}"
                 )
+            hierarchy_error = project_import_hierarchy_error(source, target)
+            if hierarchy_error is not None:
+                errors.append(hierarchy_error)
 
-    for source, targets in graph.items():
+    for source, targets in infrastructure_graph.items():
         source_layer = top_layer(source)
         forbidden = FORBIDDEN_TOP_IMPORTS.get(source_layer, set())
         for target in targets:
@@ -302,14 +375,14 @@ def main() -> int:
             return
         visiting.add(node)
         stack.append(node)
-        for target in graph.get(node, []):
-            if target in graph:
+        for target in project_graph.get(node, []):
+            if target in project_graph:
                 visit(target)
         stack.pop()
         visiting.remove(node)
         visited.add(node)
 
-    for module in graph:
+    for module in project_graph:
         visit(module)
 
     if errors:
@@ -318,8 +391,9 @@ def main() -> int:
         return 1
 
     print(
-        "Project imports resolve exactly; Infrastructure import hierarchy OK "
-        f"({len(graph)} modules)"
+        "Project imports resolve exactly; Project import hierarchy OK "
+        f"({len(infrastructure_graph)} Infrastructure modules, "
+        f"{len(project_modules)} project modules)"
     )
     return 0
 

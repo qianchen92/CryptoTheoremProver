@@ -1,8 +1,8 @@
-import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Scheme
+import CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.Scheme
 import Crypto.Primitive.Encryption.SymmetricEncryption.Properties.OneTime
 import Crypto.Infrastructure.Probability.Uniform
 
-namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+namespace CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 universe uCost uAdversaryCost uGroup
 
@@ -123,4 +123,4 @@ theorem oneTimeSecure
     PerfectOneTimeSecure.toOneTimeSecure
       (perfectOneTimeSecure F adversaryModel)
 
-end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+end CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad

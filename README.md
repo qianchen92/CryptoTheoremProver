@@ -34,8 +34,9 @@ Lake available, build the library and all compile-time proof tests with:
 lake build
 ```
 
-The default targets are `Crypto` and `CryptoTest`. To check them separately,
-use `lake build Crypto` or `lake build CryptoTest`. The files under
+The default targets are `Crypto`, `CryptoConstruction`, and `CryptoTest`. To
+check the layers separately, use `lake build Crypto`,
+`lake build CryptoConstruction`, or `lake build CryptoTest`. The files under
 `CryptoTest/` are theorem-level regression and smoke tests; a successful build
 is the test result.
 
@@ -104,7 +105,21 @@ Crypto/
   Primitive/
     Encryption/
       AsymmetricEncryption/
+        Syntax.lean
+        UC.lean
+        Properties/
       SymmetricEncryption/
+        Syntax.lean
+        UC.lean
+        Properties/
+CryptoConstruction/
+  Basic.lean
+  Primitive/
+    Encryption/
+      AsymmetricEncryption/
+        ElGamal/
+      SymmetricEncryption/
+        OneTimePad/
 CryptoTest/
   Assumption/
   Infrastructure/
@@ -408,7 +423,6 @@ The current encryption hierarchy contains:
 - `Primitive.Encryption.SymmetricEncryption.Syntax`
 - `Primitive.Encryption.SymmetricEncryption.UC`
 - `Primitive.Encryption.SymmetricEncryption.Properties`
-- `Primitive.Encryption.SymmetricEncryption.Instantiations`
 
 The main symmetric-encryption interface is
 `Crypto.Primitive.Encryption.SymmetricEncryption.Scheme M SecPar Param Key Message Ciphertext`.
@@ -429,13 +443,25 @@ definition remains an `Infrastructure.GameBased.OracleDistinguishing` problem
 over the cost-erased value distributions and keeps the same arbitrary PPT
 adversary domain.
 
-The current instantiations include a group-based one-time pad and ElGamal. The
-one-time pad exposes the finite nonempty additive group chosen for the security
-parameter, encrypts by addition, and decrypts by negation followed by addition.
+### `CryptoConstruction`
+
+Parameterized algorithms and protocol constructions live in the separate
+`CryptoConstruction` library. It depends on `Crypto`; `Crypto` never imports it.
+The current constructions include a group-based one-time pad and ElGamal. They
+work over abstract cost-aware parameter families; the production package does
+not yet choose a concrete group representation or implementation backend. A
+future `CryptoInstantiation` library is reserved for such concrete choices.
+The one-time pad exposes the finite nonempty additive group chosen for the
+security parameter, encrypts by addition, and decrypts by negation followed by
+addition.
 The library proves both correctness and perfect one-time security for this
 construction, and derives PPT one-time security from the perfect theorem.
 ElGamal has a correctness proof under the scalar-action laws carried by its
 public parameters; an IND-CPA-from-DDH reduction remains future work.
+
+Import `CryptoConstruction.Basic` to obtain all current parameterized
+constructions. Importing `Crypto` or `Crypto.Primitive.Basic` exposes only the
+core definitions, assumptions, infrastructure, and generic properties.
 
 Both construction-level `scheme` definitions directly inhabit this generic
 interface. OTP, DLog, DDH, and ElGamal each use one typed algebra as the only
@@ -458,9 +484,10 @@ instantiate that machinery only when they introduce concrete UC definitions.
 
 ## Import Policy
 
-`Basic.lean` files are aggregation modules. Import them when a caller wants a
-whole layer; otherwise prefer importing the narrow file that provides the needed
-definition.
+`Basic.lean` files are aggregation modules for their own library layer. Import
+them when a caller wants that layer; otherwise prefer the narrow file that
+provides the needed definition. In particular, `Crypto.Basic` never aggregates
+`CryptoConstruction`.
 
 The enforced dependency direction is:
 
@@ -478,14 +505,17 @@ Asymptotic + Computation -> Complexity -> GameBased -> UC
 
 Probability ---------------------------------------> Assumption / Primitive
 Program / Oracle / GameBased / UC -----------------> Assumption / Primitive
+
+Crypto definitions -> CryptoConstruction -> future CryptoInstantiation
 ```
 
 `SecurityParameter` and `Probability` are independent roots; in particular,
 neither imports asymptotics or computation. `scripts/check_infrastructure_imports.py`
-checks Infrastructure imports for cycles and upward edges, and CI runs it
-before Lean builds. Subsystems additionally enforce their file-local orders,
-including Algebra, Program, Oracle, Complexity, GameBased, and the UC kernel
-stack.
+checks exact project-module resolution, the Infrastructure hierarchy, and the
+`Crypto`/`CryptoConstruction`/`CryptoInstantiation` library boundary; CI runs
+it before Lean builds. Infrastructure subsystems additionally enforce their
+file-local orders, including Algebra, Program, Oracle, Complexity, GameBased,
+and the UC kernel stack.
 
 ## Adding New Material
 
@@ -503,9 +533,17 @@ stack.
 - Put reusable typed ITM, corruption, FIFO-kernel, closed-world, UC-security,
   context-composition, and layered-MPC definitions in `Infrastructure.UC`.
 - Put assumption families in `Assumption/<family>/`.
-- Put primitive-specific syntax, correctness, and security games in
+- Put primitive-specific abstract syntax, correctness, and security games in
   `Primitive/<kind>/<primitive>/`, with `Syntax.lean` and `UC.lean` as direct
-  files and `Properties/` and `Instantiations/` as subdirectories.
+  files and generic theorems under `Properties/`.
+- Put algorithms that construct abstract primitives or protocols over
+  parameterized mathematical and cost-aware backends under
+  `CryptoConstruction/`.
+- Reserve a future `CryptoInstantiation/` library for fixed representations,
+  implementation backends, and their instance-specific cost certificates.
+- `Crypto.Basic` aggregates core definitions and generic properties only.
+  Import `CryptoConstruction.Basic` explicitly when parameterized algorithms
+  are wanted.
 
 When adding polymorphic Lean declarations, use descriptive universe names such
 as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,

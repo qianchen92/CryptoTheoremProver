@@ -1,8 +1,8 @@
-import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Scheme
+import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Scheme
 import Crypto.Primitive.Encryption.AsymmetricEncryption.Properties.Correctness
 import Crypto.Infrastructure.Probability.Uniform
 
-namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
+namespace CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 universe uCost uScalar uGroup
 
@@ -31,4 +31,4 @@ theorem correct
   rw [PMF.bind_bind]
   simp [pp.scalarAction_commutes sampledSecretKey]
 
-end Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
+end CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal

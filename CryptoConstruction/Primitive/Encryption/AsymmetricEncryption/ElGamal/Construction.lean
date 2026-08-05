@@ -1,6 +1,6 @@
 import Crypto.Assumption.DL.DDH
 
-namespace Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
+namespace CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open Crypto.Infrastructure.Computation.Cost
 
@@ -28,4 +28,4 @@ abbrev Message (pp : PublicParam.{uCost, uScalar, uGroup} M) :=
 abbrev Ciphertext (pp : PublicParam.{uCost, uScalar, uGroup} M) :=
   pp.Carrier × pp.Carrier
 
-end Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
+end CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal

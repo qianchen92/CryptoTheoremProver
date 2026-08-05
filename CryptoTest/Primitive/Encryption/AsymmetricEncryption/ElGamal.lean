@@ -1,5 +1,5 @@
 import CryptoTest.Assumption.DL.DDH
-import Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal.Basic
+import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Basic
 import Crypto.Infrastructure.Probability.Uniform
 
 namespace CryptoTest.Primitive.Encryption.AsymmetricEncryption.ElGamal
@@ -7,7 +7,7 @@ namespace CryptoTest.Primitive.Encryption.AsymmetricEncryption.ElGamal
 open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.AsymmetricEncryption
-open Crypto.Primitive.Encryption.AsymmetricEncryption.Instantiations.ElGamal
+open CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal
 open CryptoTest.Assumption.DL
 open scoped DDHParameter
 

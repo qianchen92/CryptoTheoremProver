@@ -1,4 +1,4 @@
-import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Basic
+import CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.Basic
 import Crypto.Infrastructure.Probability.Uniform
 import Mathlib.Data.ZMod.Basic
 
@@ -8,7 +8,7 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.SymmetricEncryption
-open Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+open CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
 open scoped OneTimePadParameter
 
 /-- The finite additive group used by the concrete two-element OTP fixture. -/

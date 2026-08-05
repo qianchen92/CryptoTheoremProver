@@ -8,7 +8,7 @@ import Crypto.Infrastructure.Probability.Uniform
 import Crypto.Infrastructure.Computation.Program.Basic
 import Crypto.Infrastructure.Computation.Randomized
 
-namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+namespace CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Algebra
@@ -67,9 +67,9 @@ abbrev instNonemptyCarrier (pp : PublicParam M) : Nonempty pp.Carrier :=
 end PublicParam
 
 scoped[OneTimePadParameter] attribute [instance]
-  Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.PublicParam.instAddGroup
-  Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.PublicParam.instFintypeCarrier
-  Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.PublicParam.instNonemptyCarrier
+  CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.PublicParam.instAddGroup
+  CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.PublicParam.instFintypeCarrier
+  CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.PublicParam.instNonemptyCarrier
 
 open scoped OneTimePadParameter
 
@@ -181,4 +181,4 @@ theorem setup_costBound
     Program.CostBound (setupProgram F) certificate.setupBudget :=
   certificate.setupCostBound
 
-end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+end CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad

@@ -1,9 +1,9 @@
 import Crypto.Infrastructure.Complexity.ProgramMachine
 import Crypto.Infrastructure.Probability.Uniform
-import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Construction
+import CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.Construction
 import Crypto.Primitive.Encryption.SymmetricEncryption.Syntax
 
-namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+namespace CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 open Crypto.Infrastructure.Complexity
 open Crypto.Infrastructure.Computation
@@ -197,4 +197,4 @@ noncomputable def encryptTimedMachine
       (scheme F).encryptDist pp input.1 input.2 := by
   rfl
 
-end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+end CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad

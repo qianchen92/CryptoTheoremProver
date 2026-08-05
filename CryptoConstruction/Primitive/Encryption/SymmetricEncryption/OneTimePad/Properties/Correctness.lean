@@ -1,7 +1,7 @@
-import Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad.Scheme
+import CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad.Scheme
 import Crypto.Primitive.Encryption.SymmetricEncryption.Properties.Correctness
 
-namespace Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+namespace CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 universe uCost uGroup
 
@@ -16,4 +16,4 @@ theorem correct
   intro _sec _pp message key _hpp _hkey
   simp
 
-end Crypto.Primitive.Encryption.SymmetricEncryption.Instantiations.OneTimePad
+end CryptoConstruction.Primitive.Encryption.SymmetricEncryption.OneTimePad
