@@ -1,6 +1,7 @@
 import Crypto.Infrastructure.Complexity.ProgramMachine
 import Crypto.Infrastructure.Computation.Randomized
 import Crypto.Infrastructure.Computation.Cost.Projection
+import CryptoTest.Infrastructure.Computation.TraceCost
 import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Tactic
 
@@ -12,74 +13,12 @@ open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Complexity
 
 /-- A word resource whose sequential composition records order. -/
-structure WordCost where
-  entries : List Bool
-  deriving DecidableEq, Repr
-
-namespace WordCost
-
-def empty : WordCost :=
-  ⟨[]⟩
-
-def append (left right : WordCost) : WordCost :=
-  ⟨left.entries ++ right.entries⟩
-
-def nsmulWords : Nat → WordCost → WordCost
-  | 0, _cost => empty
-  | count + 1, cost => append (nsmulWords count cost) cost
-
-end WordCost
+abbrev WordCost :=
+  CryptoTest.Infrastructure.Computation.TraceCost Bool
 
 /-- List concatenation gives a genuinely noncommutative sequential monoid. -/
-def wordAddMonoid : AddMonoid WordCost where
-  add := WordCost.append
-  add_assoc := by
-    intro first second third
-    exact congrArg WordCost.mk
-      (List.append_assoc first.entries second.entries third.entries)
-  zero := WordCost.empty
-  zero_add := by
-    intro cost
-    exact congrArg WordCost.mk (List.nil_append cost.entries)
-  add_zero := by
-    intro cost
-    exact congrArg WordCost.mk (List.append_nil cost.entries)
-  nsmul := WordCost.nsmulWords
-  nsmul_zero := by
-    intro cost
-    rfl
-  nsmul_succ := by
-    intro count cost
-    rfl
-
-/-- Equality order is sufficient to test ordered, noncommutative exact paths. -/
-def wordPartialOrder : PartialOrder WordCost where
-  le := Eq
-  le_refl := fun _cost => rfl
-  le_trans := fun _left _middle _right leftEquals middleEquals =>
-    leftEquals.trans middleEquals
-  le_antisymm := fun _left _right leftEquals _rightEquals => leftEquals
-  lt := fun _left _right => False
-  lt_iff_le_not_ge := by
-    intro left right
-    constructor
-    · intro impossible
-      exact impossible.elim
-    · rintro ⟨leftEquals, notRightEquals⟩
-      exact (notRightEquals leftEquals.symm).elim
-
-def wordCostModel : CostModel where
-  Cost := WordCost
-  instAddMonoid := wordAddMonoid
-  instPartialOrder := wordPartialOrder
-  instAddLeftMono := ⟨by
-    intro fixed left right leftEquals
-    subst right
-    rfl⟩
-  instAddRightMono := ⟨by
-    intro fixed left right leftEquals
-    subst right
-    rfl⟩
+abbrev wordCostModel :=
+  CryptoTest.Infrastructure.Computation.TraceCost.costModel Bool
 
 def firstWordStage : Costed wordCostModel Unit :=
   ⟨(), ⟨[false]⟩⟩
@@ -88,10 +27,10 @@ def orderedWordStages : Costed wordCostModel Unit :=
   firstWordStage.bind fun _unit => ⟨(), ⟨[true]⟩⟩
 
 /-- Writer bind retains left-to-right cost order rather than commuting it. -/
-example : orderedWordStages.cost.entries = [false, true] :=
+example : orderedWordStages.cost.events = [false, true] :=
   rfl
 
-example : orderedWordStages.cost.entries ≠ [true, false] := by
+example : orderedWordStages.cost.events ≠ [true, false] := by
   decide
 
 /-- A small resource vector tracking execution steps and oracle queries separately. -/

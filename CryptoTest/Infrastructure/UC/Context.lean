@@ -444,6 +444,7 @@ class ToyExecutionAdmissionModel : Prop where
       {policy : CorruptionPolicy ToyAddress}
       (network : (sec : Crypto.SecPar) → NetworkAdapter family sec),
       Crypto.Infrastructure.Complexity.PPTAdmissible
+        unitCostModel unitNatMeasure
         (Input := fun sec => Configuration family policy sec)
         (Output := fun sec _configuration =>
           Kernel.ExecutionResult family policy sec)

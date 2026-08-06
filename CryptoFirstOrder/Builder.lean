@@ -36,6 +36,15 @@ scoped syntax:max (name := builderFst)
 scoped syntax:max (name := builderSnd)
   "snd(" term ")" : term
 
+scoped syntax:max (name := builderSome)
+  "some(" term ")" : term
+
+scoped syntax:max (name := builderTick)
+  "tick " term:arg : term
+
+scoped syntax:max (name := builderParameterizedAdd)
+  "parameterizedAdd(" term ", " term ", " term ")" : term
+
 scoped syntax:lead (name := builderProgram)
   "first_order " ident " do " doSeq : term
 
@@ -109,6 +118,16 @@ instance (priority := 1100) valueRepresentationTyProd
   represent value :=
     (representValue value.1, representValue value.2)
 
+instance (priority := 1100) valueRepresentationTyOption
+    {Base : Type uSource} {interpret : Base → Type uTarget}
+    {value : Ty Base} {Source : Type*}
+    [ValueRepresentation Source (Ty.denote interpret value)] :
+    ValueRepresentation (Option Source)
+      (Ty.denote interpret (.option value)) where
+  represent
+    | none => none
+    | some source => some (representValue source)
+
 /-- Project a represented value back to the host-facing scheme type. -/
 class ValueProjection (Source : Type uSource) (Target : Type uTarget) where
   project : Source → Target
@@ -154,6 +173,16 @@ instance (priority := 1100) valueProjectionTyProd
   project value :=
     (projectValue value.1, projectValue value.2)
 
+instance (priority := 1100) valueProjectionTyOption
+    {Base : Type uSource} {interpret : Base → Type uTarget}
+    {value : Ty Base} {Target : Type*}
+    [ValueProjection (Ty.denote interpret value) Target] :
+    ValueProjection (Ty.denote interpret (.option value))
+      (Option Target) where
+  project
+    | none => none
+    | some source => some (projectValue source)
+
 universe uCost uBase uValue uOp uHostInput uHostOutput
 
 /--
@@ -184,6 +213,17 @@ the trusted first-order syntax.
 -/
 namespace SmartCode
 
+def charge
+    {Base : Type uBase} {interpret : Base → Type uValue}
+    {S : Signature.{uBase, uOp} Base}
+    {Label : Type uBase}
+    {context : List (Ty Base)} {Result : Ty Base}
+    (label : Label)
+    (next : Code interpret S (.unit :: context) Result)
+    [Signature.Embedding (TickOperation.signature (Base := Base) Label) S] :
+    Code interpret S context Result :=
+  .call (SmartOperation.tick label) .unit next
+
 def sample
     {Base : Type uBase} {interpret : Base → Type uValue}
     {S : Signature.{uBase, uOp} Base}
@@ -212,6 +252,19 @@ def add
     [Signature.Embedding (AddOperation.signature Carrier) S] :
     Code interpret S context Result :=
   .call SmartOperation.add (.pair left right) next
+
+def parameterizedAdd
+    {Base : Type uBase} {interpret : Base → Type uValue}
+    {S : Signature.{uBase, uOp} Base}
+    {context : List (Ty Base)} {Parameter Carrier Result : Ty Base}
+    (parameter : Expr interpret context Parameter)
+    (left right : Expr interpret context Carrier)
+    (next : Code interpret S (Carrier :: context) Result)
+    [Signature.Embedding
+      (ParameterizedAddOperation.signature Parameter Carrier) S] :
+    Code interpret S context Result :=
+  .call SmartOperation.parameterizedAdd
+    (.pair parameter (.pair left right)) next
 
 def neg
     {Base : Type uBase} {interpret : Base → Type uValue}
@@ -322,6 +375,8 @@ private partial def expressionSyntax
       return ← `(.bool true)
     if name == `false then
       return ← `(.bool false)
+    if name == `none then
+      return ← `(.none)
     Macro.throwErrorAt expression
       "unknown first-order value; wrap static Lean values in `value(...)`"
   match expression with
@@ -332,6 +387,9 @@ private partial def expressionSyntax
   | `(snd($product:term)) =>
       let product ← expressionSyntax locals inputs product
       `(.snd $product)
+  | `(some($value:term)) =>
+      let value ← expressionSyntax locals inputs value
+      `(.some $value)
   | `(($left:term, $right:term)) =>
       let left ← expressionSyntax locals inputs left
       let right ← expressionSyntax locals inputs right
@@ -382,6 +440,11 @@ mutual
         let productExpression := product.expression
         let result ← `(snd($productExpression))
         return { bindings := product.bindings, expression := result }
+    | `(some($value:term)) => do
+        let value ← normalizeExpression value
+        let valueExpression := value.expression
+        let result ← `(some($valueExpression))
+        return { bindings := value.bindings, expression := result }
     | `(($left:term, $right:term)) => do
         let left ← normalizeExpression left
         let right ← normalizeExpression right
@@ -401,6 +464,8 @@ mutual
   private partial def normalizeAction?
       (action : Syntax) : MacroM (Option NormalizedAction) := do
     match action with
+    | `(tick $_label:term) =>
+        return some { bindings := [], action := ⟨action⟩ }
     | `(sample $_sampleTy:term $_sampler:term) =>
         return some { bindings := [], action := ⟨action⟩ }
     | `(unifSamp $_sampleTy:term) =>
@@ -433,6 +498,19 @@ mutual
         let result ← `($leftExpression + $rightExpression)
         return some {
           bindings := left.bindings ++ right.bindings
+          action := result
+        }
+    | `(parameterizedAdd($parameter:term, $left:term, $right:term)) => do
+        let parameter ← normalizeExpression parameter
+        let left ← normalizeExpression left
+        let right ← normalizeExpression right
+        let parameterExpression := parameter.expression
+        let leftExpression := left.expression
+        let rightExpression := right.expression
+        let result ←
+          `(parameterizedAdd($parameterExpression, $leftExpression, $rightExpression))
+        return some {
+          bindings := parameter.bindings ++ left.bindings ++ right.bindings
           action := result
         }
     | `(add $left:term $right:term) => do
@@ -540,6 +618,8 @@ private partial def actionSyntax
     (locals : List Name) (inputs : List InputBinding)
     (action : Syntax) (next : TSyntax `term) : MacroM (TSyntax `term) := do
   match action with
+  | `(tick $label:term) =>
+      `(SmartCode.charge $label $next)
   | `(sample $sampleTy:term $sampler:term) =>
       `(SmartCode.sample $sampleTy $sampler $next)
   | `(unifSamp $sampleTy:term) =>
@@ -556,6 +636,11 @@ private partial def actionSyntax
       let left ← expressionSyntax locals inputs left
       let right ← expressionSyntax locals inputs right
       `(SmartCode.add $left $right $next)
+  | `(parameterizedAdd($parameter:term, $left:term, $right:term)) => do
+      let parameter ← expressionSyntax locals inputs parameter
+      let left ← expressionSyntax locals inputs left
+      let right ← expressionSyntax locals inputs right
+      `(SmartCode.parameterizedAdd $parameter $left $right $next)
   | `(add $left:term $right:term) => do
       let left ← expressionSyntax locals inputs left
       let right ← expressionSyntax locals inputs right

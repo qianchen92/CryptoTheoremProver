@@ -5,8 +5,10 @@ namespace Crypto.Infrastructure.Complexity
 
 open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Cost
+open Crypto.Infrastructure.Computation.Oracle
 
 universe uCost uIn uOut uMapped uFirstOrder uBase uValue uOp
+  uClosedInput uCallerInput uOutput uOracle uQuery uResponse
 
 /--
 A randomized machine over one exact cost model and fully dependent I/O families.
@@ -225,13 +227,67 @@ code whose denotation is this exact run and whose operational claim is this
 runtime. Canonical first-order code is validated internally; other backends
 retain an explicit external validation boundary.
 -/
-abbrev PPTAdmissible
-    {M : CostModel.{uCost}}
+private inductive ControlledOracleSeal
+    (M : CostModel.{uCost}) (measure : NatMeasure M)
     {Input : Crypto.SecPar → Type uIn}
     {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
     (run : RandomizedComputation M Input Output)
-    (runtime : Crypto.SecPar → Nat) : Prop :=
-  OperationalRealization run runtime
+    (runtime : Crypto.SecPar → Nat) : Prop where
+  | intro : ControlledOracleSeal M measure run runtime
+
+inductive PPTAdmissible
+    (M : CostModel.{uCost}) (measure : NatMeasure M) :
+    {Input : Crypto.SecPar → Type uIn} →
+    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut} →
+    RandomizedComputation M Input Output →
+    (Crypto.SecPar → Nat) → Prop where
+  | operational
+      {Input : Crypto.SecPar → Type uIn}
+      {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+      {run : RandomizedComputation M Input Output}
+      {runtime : Crypto.SecPar → Nat} :
+      OperationalRealization run runtime →
+        PPTAdmissible M measure run runtime
+  | controlled
+      {Input : Crypto.SecPar → Type uIn}
+      {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
+      {run : RandomizedComputation M Input Output}
+      {runtime : Crypto.SecPar → Nat} :
+      ControlledOracleSeal M measure run runtime →
+        PPTAdmissible M measure run runtime
+
+namespace PPTAdmissible
+
+/--
+The sole public constructor for the controlled admission token.  Its result is
+indexed by the compiler's exact `close` run and runtime expression; callers
+cannot use it to admit a different host wrapper.
+-/
+theorem ofControlledOracleAdapter
+    {M : CostModel.{uCost}} {measure : NatMeasure M}
+    {ClosedInput : Crypto.SecPar → Type uClosedInput}
+    {CallerInput : Crypto.SecPar → Type uCallerInput}
+    {ClosedOutput : Crypto.SecPar → Type uOutput}
+    {Spec : (sec : Crypto.SecPar) → CallerInput sec →
+      OracleSpec.{uOracle, uQuery, uResponse}}
+    {Base : Type uBase} {interpret : Base → Type uValue}
+    {S : CryptoFirstOrder.Signature.{uBase, uBase} Base}
+    {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+    {PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput : CryptoFirstOrder.Ty Base}
+    (caller : OracleMachine M CallerInput
+      (fun sec _input => ClosedOutput sec) Spec)
+    (adapter : FirstOrderOracleAdapter M measure ClosedInput CallerInput
+      ClosedOutput Spec interpret A PrepareInput PrepareOutput RejectInput
+      RejectOutput QueryInput QueryOutput)
+    (localRuntime totalQueryRuntime : Crypto.SecPar → Nat)
+    (_callerAdmission : OperationalRealization caller
+      (localRuntime, totalQueryRuntime)) :
+    PPTAdmissible M measure (adapter.close caller)
+      (adapter.closedRuntime (localRuntime, totalQueryRuntime)) :=
+  .controlled .intro
+
+end PPTAdmissible
 
 /--
 A polynomially bounded annotated machine that is additionally admitted by a
@@ -249,7 +305,8 @@ structure PPTMachine
     extends TimedMachine M measure Input Output where
   runtime_poly :
     Crypto.Infrastructure.Asymptotic.IsPolyBounded toTimedMachine.runtime
-  admission : PPTAdmissible toTimedMachine.run toTimedMachine.runtime
+  admission : PPTAdmissible M measure
+    toTimedMachine.run toTimedMachine.runtime
 
 namespace PPTMachine
 
@@ -285,7 +342,7 @@ def ofAdmittedTimedMachine
     (machine : TimedMachine M measure Input Output)
     (runtime_isPoly :
       Crypto.Infrastructure.Asymptotic.IsPolyBounded machine.runtime)
-    (admission : PPTAdmissible machine.run machine.runtime) :
+    (admission : PPTAdmissible M measure machine.run machine.runtime) :
     PPTMachine M measure Input Output where
   toTimedMachine := machine
   runtime_poly := runtime_isPoly
@@ -312,7 +369,8 @@ noncomputable def ofFirstOrderCode
   toTimedMachine := code.toTimedMachine
   runtime_poly :=
     Crypto.Infrastructure.Asymptotic.IsPolyBounded.const code.runtime
-  admission := OperationalRealization.ofFirstOrderMachineCode code
+  admission := PPTAdmissible.operational
+    (OperationalRealization.ofFirstOrderMachineCode code)
 
 @[simp] theorem toTimedMachine_run
     (machine : PPTMachine M measure Input Output) :

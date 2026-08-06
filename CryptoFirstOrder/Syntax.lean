@@ -22,8 +22,26 @@ inductive Expr
       Expr interpret context (.prod Left Right) → Expr interpret context Left
   | snd {Left Right : Ty Base} :
       Expr interpret context (.prod Left Right) → Expr interpret context Right
+  | none {Value : Ty Base} : Expr interpret context (.option Value)
+  | some {Value : Ty Base} :
+      Expr interpret context Value → Expr interpret context (.option Value)
 
 namespace Expr
+
+/-- Reuse a pure expression after extending its context by one fresh value. -/
+def weaken
+    {Base : Type uBase} {interpret : Base → Type uValue}
+    {context : List (Ty Base)} {Result Other : Ty Base} :
+    Expr interpret context Result → Expr interpret (Other :: context) Result
+  | .var index => .var (.there index)
+  | .unit => .unit
+  | .bool value => .bool value
+  | .constant value => .constant value
+  | .pair left right => .pair left.weaken right.weaken
+  | .fst product => .fst product.weaken
+  | .snd product => .snd product.weaken
+  | .none => .none
+  | .some value => .some value.weaken
 
 /-- Evaluate a pure expression in an explicit typed environment. -/
 def eval
@@ -39,6 +57,8 @@ def eval
       (left.eval environment, right.eval environment)
   | .fst product, environment => (product.eval environment).1
   | .snd product, environment => (product.eval environment).2
+  | .none, _ => Option.none
+  | .some value, environment => Option.some (value.eval environment)
 
 end Expr
 

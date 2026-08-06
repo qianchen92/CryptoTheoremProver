@@ -15,6 +15,7 @@ inductive Ty (Base : Type uBase) : Type uBase where
   | bool
   | base (name : Base)
   | prod (left right : Ty Base)
+  | option (value : Ty Base)
   deriving DecidableEq
 
 /-- Product types in the first-order object language. -/
@@ -38,6 +39,7 @@ def denote (interpret : Base → Type uValue) : Ty Base → Type uValue
   | .bool => ULift.{uValue} Bool
   | .base name => interpret name
   | .prod left right => denote interpret left × denote interpret right
+  | .option value => Option (denote interpret value)
 
 end Ty
 

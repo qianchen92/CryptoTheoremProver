@@ -8,13 +8,15 @@ open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Cost
 open scoped DDHParameter
 
-universe uCost uScalar uGroup
+universe uCost uParameter uScalar uGroup
 
 variable
     {M : CostModel.{uCost}}
+    {Parameter : Type uParameter}
+    {Scalar : Type uScalar}
+    {Carrier : Type uGroup}
     (measure : NatMeasure M)
-    (F : Family.{uCost, uScalar, uGroup} M)
-    (pp : PublicParam.{uCost, uScalar, uGroup} M)
+    (pp : PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
     (certificate : Crypto.Assumption.DL.DDH.ParamEfficiencyCertificate pp)
 
 /-- Static key-generation budget: one scalar sample and one scalar action. -/
@@ -285,9 +287,12 @@ noncomputable def encryptTimedMachine
       budget_le_runtime := fun _sec _input => Nat.le_refl _ }
 
 @[simp] theorem encryptTimedMachine_runDist
-    (sec : Crypto.SecPar) (input : pp.Carrier × pp.Carrier) :
-    (encryptTimedMachine measure pp certificate).runDist sec input =
-      (scheme F).encryptDist pp input.1 input.2 := by
+    (F : Family M Parameter Scalar Carrier) (parameter : Parameter)
+    (certificate : Crypto.Assumption.DL.DDH.ParamEfficiencyCertificate
+      (F.publicParam parameter))
+    (sec : Crypto.SecPar) (input : Carrier × Carrier) :
+    (encryptTimedMachine measure (F.publicParam parameter) certificate).runDist sec input =
+      (scheme F).encryptDist parameter input.1 input.2 := by
   rfl
 
 end CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal

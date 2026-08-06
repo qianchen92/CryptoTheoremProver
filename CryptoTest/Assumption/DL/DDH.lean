@@ -14,9 +14,7 @@ open Crypto.Infrastructure.Computation.Cost
 universe uAdversaryCost
 
 /-- The DDH mathematical parameter contains no costed operations or samplers. -/
-def testMath : MathematicalParam where
-  Scalar := ZMod 2
-  Carrier := ZMod 2
+def testMath : MathematicalParam (ZMod 2) (ZMod 2) where
   addGroup := inferInstance
   fintypeCarrier := inferInstance
   fintypeScalar := inferInstance
@@ -77,7 +75,8 @@ noncomputable def testLaws : ExactLaws testAlgebra where
   sub _left _right := RandCosted.valueDist_liftCosted _
   mul _left _right := RandCosted.valueDist_liftCosted _
 
-noncomputable def testPublicParam : PublicParam CostModel.nat where
+noncomputable def testPublicParam :
+    PublicParam CostModel.nat (ZMod 2) (ZMod 2) where
   toDecisionalCyclicAction := testMath
   algebra := testAlgebra
   laws := testLaws
@@ -142,8 +141,11 @@ noncomputable def testParamEfficiency :
   mulBudget := 13
   mulBudget_sound := by intros; exact Nat.le_refl 13
 
-noncomputable def testFamily : Family CostModel.nat :=
-  Family.ofFixed testPublicParam 3
+noncomputable def testFamily :
+    Family CostModel.nat Crypto.SecPar (ZMod 2) (ZMod 2) :=
+  Family.ofFixed testPublicParam 3 5 (by
+    intro left right
+    rfl)
 
 example : Prop := Assumption CostModel.nat NatMeasure.nat testFamily
 
@@ -153,17 +155,18 @@ example (adversaryModel : CostModel.{uAdversaryCost})
   Assumption adversaryModel measure testFamily
 
 example (sec : Crypto.SecPar) :
-    Program.runCosted (setupProgram testFamily) sec = testFamily.setup sec :=
+    Program.runCosted (setupProgram testFamily) sec =
+      RandCosted.map ULift.up (testFamily.setup sec) :=
   setupProgram_runCosted testFamily sec
 
 /-- Both games are defined directly by erasing their authoritative programs. -/
 example (sec : Crypto.SecPar) :
-    Program.valueDist (realSampleProgram testFamily) sec =
+    PMF.map ULift.down (Program.valueDist (realSampleProgram testFamily) sec) =
       (ddhProblem testFamily).left sec :=
   rfl
 
 example (sec : Crypto.SecPar) :
-    Program.valueDist (randomSampleProgram testFamily) sec =
+    PMF.map ULift.down (Program.valueDist (randomSampleProgram testFamily) sec) =
       (ddhProblem testFamily).right sec :=
   rfl
 

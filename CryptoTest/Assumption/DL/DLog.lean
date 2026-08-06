@@ -15,9 +15,7 @@ open Crypto.Infrastructure.Computation.Cost
 universe uAdversaryCost
 
 /-- The mathematical parameter contains no execution backend or sampler. -/
-def testMath : MathematicalParam where
-  Scalar := ZMod 2
-  Carrier := ZMod 2
+def testMath : MathematicalParam (ZMod 2) (ZMod 2) where
   addGroup := inferInstance
   fintypeCarrier := inferInstance
   fintypeScalar := inferInstance
@@ -50,7 +48,8 @@ noncomputable def testLaws : ExactLaws testAlgebra where
   sampleScalar := RandCosted.valueDist_sampleWithCost _ _
   smul _scalar _value := RandCosted.valueDist_liftCosted _
 
-noncomputable def testPublicParam : PublicParam CostModel.nat where
+noncomputable def testPublicParam :
+    PublicParam CostModel.nat (ZMod 2) (ZMod 2) where
   toCyclicAction := testMath
   algebra := testAlgebra
   laws := testLaws
@@ -82,7 +81,7 @@ noncomputable def testParamEfficiency :
   smulBudget := 11
   smulBudget_sound := by intros; exact Nat.le_refl 11
 
-noncomputable def testFamily : Family CostModel.nat :=
+noncomputable def testFamily : Family CostModel.nat (ZMod 2) (ZMod 2) :=
   Family.ofFixed testPublicParam 3
 
 example : Prop := Assumption CostModel.nat NatMeasure.nat testFamily
@@ -125,11 +124,12 @@ example (secret : testPublicParam.Scalar) :
 
 /-- Choice extracts a mathematically guaranteed logarithm without an algorithm. -/
 noncomputable def chosenLog
-    (challenge : ChallengeInput CostModel.nat) : Witness challenge :=
+    (challenge : ChallengeInput CostModel.nat (ZMod 2) (ZMod 2)) :
+    Witness challenge :=
   Classical.choose (challenge.1.generator_generates challenge.2)
 
 theorem chosenLog_isSolution
-    (challenge : ChallengeInput CostModel.nat) :
+    (challenge : ChallengeInput CostModel.nat (ZMod 2) (ZMod 2)) :
     IsSolution challenge (chosenLog challenge) :=
   Classical.choose_spec (challenge.1.generator_generates challenge.2)
 
@@ -139,7 +139,7 @@ cost; it deliberately does not call the result PPT.
 -/
 noncomputable def chosenLogTimedMachine :
     TimedMachine CostModel.nat NatMeasure.nat
-      (fun _sec => ChallengeInput CostModel.nat)
+      (fun _sec => ChallengeInput CostModel.nat (ZMod 2) (ZMod 2))
       (fun _sec challenge => Witness challenge) :=
   TimedMachine.ofFunction CostModel.nat NatMeasure.nat
     (fun _sec challenge => chosenLog challenge)
@@ -148,10 +148,11 @@ example : chosenLogTimedMachine.runtime = fun _sec => 0 := rfl
 
 /-- The only promotion route exposes the exact external admission obligation. -/
 noncomputable def chosenLogPPTMachine_of_admission
-    (admission : PPTAdmissible chosenLogTimedMachine.run
+    (admission : PPTAdmissible CostModel.nat NatMeasure.nat
+      chosenLogTimedMachine.run
       chosenLogTimedMachine.runtime) :
     PPTMachine CostModel.nat NatMeasure.nat
-      (fun _sec => ChallengeInput CostModel.nat)
+      (fun _sec => ChallengeInput CostModel.nat (ZMod 2) (ZMod 2))
       (fun _sec challenge => Witness challenge) :=
   PPTMachine.ofAdmittedTimedMachine chosenLogTimedMachine
     Crypto.Infrastructure.Asymptotic.IsPolyBounded.zero admission
@@ -161,7 +162,7 @@ example : True := by
   fail_if_success
     have _adversary :
         PPTMachine CostModel.nat NatMeasure.nat
-          (fun _sec => ChallengeInput CostModel.nat)
+          (fun _sec => ChallengeInput CostModel.nat (ZMod 2) (ZMod 2))
           (fun _sec challenge => Witness challenge) :=
       PPTMachine.ofFunction CostModel.nat NatMeasure.nat
         (fun _sec challenge => chosenLog challenge)

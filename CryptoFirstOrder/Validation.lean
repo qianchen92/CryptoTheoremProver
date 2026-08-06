@@ -17,6 +17,15 @@ inductive ValidAlgebra
     {Base : Type uBase} (interpret : Base → Type uValue) :
     {S : Signature.{uBase, uBase} Base} →
     CostedAlgebra M interpret S → Prop where
+  | tick (Label : Type uBase) (cost : Label → M.Cost) :
+      ValidAlgebra M interpret
+        (TickOperation.algebra M interpret Label cost)
+  | parameterizedAdd (parameter carrier : Ty Base)
+      [ParameterizedAdd
+        (Ty.denote interpret parameter) (Ty.denote interpret carrier)]
+      (cost : Ty.denote interpret parameter → M.Cost) :
+      ValidAlgebra M interpret
+        (ParameterizedAddOperation.algebra M interpret parameter carrier cost)
   | add (carrier : Ty Base) [Add (Ty.denote interpret carrier)]
       (cost : M.Cost) :
       ValidAlgebra M interpret (AddOperation.algebra M interpret carrier cost)

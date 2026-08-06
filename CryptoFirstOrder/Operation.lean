@@ -8,6 +8,115 @@ open Crypto.Infrastructure.Computation.Cost
 
 universe uCost uBase uValue uOp uSourceOp
 
+/-- A typed parameter-indexed binary operation at the primitive boundary. -/
+class ParameterizedAdd (Parameter : Type uBase) (Carrier : Type uValue) where
+  add : Parameter → Carrier → Carrier → Carrier
+
+/-- A first-order structural charge selected by a static operation label. -/
+inductive TickOperation
+    {Base : Type uBase} (Label : Type uBase) :
+    Ty Base → Ty Base → Type uBase where
+  | tick (label : Label) : TickOperation Label .unit .unit
+
+namespace TickOperation
+
+def signature {Base : Type uBase} (Label : Type uBase) : Signature Base where
+  Op := TickOperation Label
+
+noncomputable def algebra
+    (M : CostModel.{uCost})
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (Label : Type uBase) (cost : Label → M.Cost) :
+    CostedAlgebra M interpret (signature (Base := Base) Label) where
+  exec operation _args :=
+    match operation with
+    | .tick label =>
+        RandCosted.liftCosted
+          (⟨ULift.up (), cost label⟩ :
+            Costed M (Ty.denote interpret (.unit : Ty Base)))
+
+theorem costBound_exec
+    (M : CostModel.{uCost})
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (Label : Type uBase) (cost : Label → M.Cost)
+    {Args Result : Ty Base}
+    (operation : (signature (Base := Base) Label).Op Args Result)
+    (args : Ty.denote interpret Args) :
+    RandCosted.CostBound
+      ((algebra M interpret Label cost).exec operation args)
+      (match operation with | .tick label => cost label) := by
+  letI := M.instPartialOrder
+  cases operation
+  intro result hresult
+  simp only [algebra, RandCosted.liftCosted] at hresult
+  rw [PMF.mem_support_pure_iff] at hresult
+  subst result
+  exact le_refl _
+
+end TickOperation
+
+/-- A first-order addition whose operation is selected by a runtime parameter. -/
+inductive ParameterizedAddOperation
+    {Base : Type uBase} (parameter carrier : Ty Base) :
+    Ty Base → Ty Base → Type uBase where
+  | add : ParameterizedAddOperation parameter carrier
+      (.prod parameter (.prod carrier carrier)) carrier
+
+namespace ParameterizedAddOperation
+
+def signature
+    {Base : Type uBase} (parameter carrier : Ty Base) : Signature Base where
+  Op := ParameterizedAddOperation parameter carrier
+
+noncomputable def algebra
+    (M : CostModel.{uCost})
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (parameter carrier : Ty Base)
+    [ParameterizedAdd
+      (Ty.denote interpret parameter) (Ty.denote interpret carrier)]
+    (cost : Ty.denote interpret parameter → M.Cost) :
+    CostedAlgebra M interpret (signature parameter carrier) where
+  exec operation args :=
+    match operation with
+    | .add =>
+        RandCosted.liftCosted
+          (⟨ParameterizedAdd.add args.1 args.2.1 args.2.2,
+              cost args.1⟩ : Costed M (Ty.denote interpret carrier))
+
+def operationCost
+    {M : CostModel.{uCost}}
+    {Base : Type uBase} {interpret : Base → Type uValue}
+    (parameter carrier : Ty Base)
+    {Args Result : Ty Base}
+    (operation : (signature parameter carrier).Op Args Result)
+    (cost : Ty.denote interpret parameter → M.Cost)
+    (args : Ty.denote interpret Args) : M.Cost :=
+  match operation with
+  | .add => cost args.1
+
+theorem costBound_exec
+    (M : CostModel.{uCost})
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    (parameter carrier : Ty Base)
+    [ParameterizedAdd
+      (Ty.denote interpret parameter) (Ty.denote interpret carrier)]
+    (cost : Ty.denote interpret parameter → M.Cost)
+    {Args Result : Ty Base}
+    (operation : (signature parameter carrier).Op Args Result)
+    (args : Ty.denote interpret Args) :
+    RandCosted.CostBound
+      ((algebra M interpret parameter carrier cost).exec operation args)
+      (operationCost parameter carrier operation cost args) := by
+  letI := M.instPartialOrder
+  cases operation
+  intro result hresult
+  simp only [algebra, RandCosted.liftCosted] at hresult
+  rw [PMF.mem_support_pure_iff] at hresult
+  subst result
+  exact le_refl _
+
+end ParameterizedAddOperation
+
 /-- A first-order primitive addition operation. -/
 inductive AddOperation {Base : Type uBase} (carrier : Ty Base) :
     Ty Base → Ty Base → Type uBase where
@@ -304,6 +413,15 @@ structure Sampler
 /- Smart constructors for built-in operations inside a composite signature. -/
 namespace SmartOperation
 
+def tick
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {Label : Type uBase}
+    [Signature.Embedding (TickOperation.signature (Base := Base) Label) S]
+    (label : Label) : S.Op .unit .unit :=
+  Signature.inject
+    (source := TickOperation.signature (Base := Base) Label)
+    (TickOperation.tick label)
+
 def unifSamp
     {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
     {sample : Ty Base}
@@ -338,6 +456,16 @@ def add
     S.Op (.prod carrier carrier) carrier :=
   Signature.inject
     (source := AddOperation.signature carrier) AddOperation.add
+
+def parameterizedAdd
+    {Base : Type uBase} {S : Signature.{uBase, uOp} Base}
+    {parameter carrier : Ty Base}
+    [Signature.Embedding
+      (ParameterizedAddOperation.signature parameter carrier) S] :
+    S.Op (.prod parameter (.prod carrier carrier)) carrier :=
+  Signature.inject
+    (source := ParameterizedAddOperation.signature parameter carrier)
+    ParameterizedAddOperation.add
 
 def neg
     {Base : Type uBase} {S : Signature.{uBase, uOp} Base}

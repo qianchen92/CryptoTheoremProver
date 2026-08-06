@@ -24,9 +24,9 @@ This is the mathematical layer only.  Executable primitive handlers,
 distributional laws, and resource bounds belong to the assumption-specific
 `PublicParam` records built over this structure.
 -/
-structure CyclicAction extends
-    Crypto.Infrastructure.Computation.Algebra.Parameter.AdditiveGroupParam.{uGroup} where
-  Scalar : Type uScalar
+structure CyclicAction (Scalar : Type uScalar) (Carrier : Type uGroup) where
+  addGroup : AddGroup Carrier
+  fintypeCarrier : Fintype Carrier
   fintypeScalar : Fintype Scalar
   smul : SMul Scalar Carrier
   generator : Carrier
@@ -35,19 +35,42 @@ structure CyclicAction extends
 
 namespace CyclicAction
 
+/-- The fixed scalar representation selected by this parameter. -/
+abbrev Scalar
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (_pp : CyclicAction Scalar Carrier) := Scalar
+
+/-- The fixed group representation selected by this parameter. -/
+abbrev Carrier
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (_pp : CyclicAction Scalar Carrier) := Carrier
+
+/-- Compatibility projection to the generic finite additive-group parameter. -/
+def toAdditiveGroupParam
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (pp : CyclicAction Scalar Carrier) :
+    Crypto.Infrastructure.Computation.Algebra.Parameter.AdditiveGroupParam where
+  Carrier := Carrier
+  addGroup := pp.addGroup
+  fintypeCarrier := pp.fintypeCarrier
+
 /-- Scoped additive-group projection inherited from the finite additive base. -/
-abbrev instAddGroup (pp : CyclicAction.{uScalar, uGroup}) : AddGroup pp.Carrier :=
-  pp.toAdditiveGroupParam.addGroup
+abbrev instAddGroup
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (pp : CyclicAction Scalar Carrier) : AddGroup Carrier :=
+  pp.addGroup
 
 /-- Scoped carrier-finiteness projection inherited from the finite additive base. -/
-abbrev instFintypeCarrier (pp : CyclicAction.{uScalar, uGroup}) :
-    Fintype pp.Carrier :=
-  pp.toAdditiveGroupParam.fintypeCarrier
+abbrev instFintypeCarrier
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (pp : CyclicAction Scalar Carrier) : Fintype Carrier :=
+  pp.fintypeCarrier
 
 /-- Scoped carrier-nonemptiness projection inherited from the finite additive base. -/
-abbrev instNonemptyCarrier (pp : CyclicAction.{uScalar, uGroup}) :
-    Nonempty pp.Carrier :=
-  ⟨pp.toAdditiveGroupParam.addGroup.zero⟩
+abbrev instNonemptyCarrier
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (pp : CyclicAction Scalar Carrier) : Nonempty Carrier :=
+  ⟨pp.addGroup.zero⟩
 
 end CyclicAction
 
@@ -59,7 +82,9 @@ The action laws are stored against the inherited `smul`, and `mulAction` below
 is derived from that same operation. This makes the two projected instances
 definitionally coherent rather than introducing a typeclass diamond.
 -/
-structure DecisionalCyclicAction extends CyclicAction.{uScalar, uGroup} where
+structure DecisionalCyclicAction
+    (Scalar : Type uScalar) (Carrier : Type uGroup)
+    extends CyclicAction Scalar Carrier where
   commMonoidScalar : CommMonoid Scalar
   one_smul : ∀ value : Carrier,
     smul.smul commMonoidScalar.one value = value
@@ -67,12 +92,25 @@ structure DecisionalCyclicAction extends CyclicAction.{uScalar, uGroup} where
     smul.smul (commMonoidScalar.mul left right) value =
       smul.smul left (smul.smul right value)
 
+namespace DecisionalCyclicAction
+
+abbrev Scalar
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (_pp : DecisionalCyclicAction Scalar Carrier) := Scalar
+
+abbrev Carrier
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (_pp : DecisionalCyclicAction Scalar Carrier) := Carrier
+
+end DecisionalCyclicAction
+
 /-- The stronger parameter's multiplicative action uses the inherited action. -/
 @[instance_reducible] def DecisionalCyclicAction.mulAction
-    (pp : DecisionalCyclicAction.{uScalar, uGroup}) :
-    @MulAction pp.Scalar pp.Carrier pp.commMonoidScalar.toMonoid := by
-  letI : CommMonoid pp.Scalar := pp.commMonoidScalar
-  letI : SMul pp.Scalar pp.Carrier := pp.smul
+    {Scalar : Type uScalar} {Carrier : Type uGroup}
+    (pp : DecisionalCyclicAction Scalar Carrier) :
+    @MulAction Scalar Carrier pp.commMonoidScalar.toMonoid := by
+  letI : CommMonoid Scalar := pp.commMonoidScalar
+  letI : SMul Scalar Carrier := pp.smul
   exact {
     one_smul := pp.one_smul
     mul_smul := pp.mul_smul

@@ -64,10 +64,12 @@ noncomputable def oneStepOperationalModel :
 /-- An externally validated code object yields the corresponding structured admission. -/
 example
     (valid : OperationalModel.ExternalValidCode oneStepOperationalModel ()) :
-    PPTAdmissible oneStepMachine.run oneStepMachine.runtime := by
-  exact OperationalRealization.ofValidatedCode
-    oneStepOperationalModel ()
-      (OperationalModel.ValidCode.external valid) rfl rfl
+    PPTAdmissible CostModel.nat NatMeasure.nat
+      oneStepMachine.run oneStepMachine.runtime := by
+  exact PPTAdmissible.operational
+    (OperationalRealization.ofValidatedCode
+      oneStepOperationalModel ()
+        (OperationalModel.ValidCode.external valid) rfl rfl)
 
 /-- Arbitrary host functions no longer have an automatic PPT constructor. -/
 example : True := by

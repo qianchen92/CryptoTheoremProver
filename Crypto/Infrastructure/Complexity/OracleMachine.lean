@@ -1,5 +1,5 @@
 import Crypto.Infrastructure.Complexity.Machine
-import Crypto.Infrastructure.Complexity.OracleImplementation
+import Crypto.Infrastructure.Complexity.OracleMachineCore
 
 namespace Crypto.Infrastructure.Complexity
 
@@ -10,107 +10,6 @@ open Crypto.Infrastructure.Computation.Cost
 open Crypto.Infrastructure.Computation.Oracle
 
 universe uCost uIn uOut uOracle uQuery uResponse uState
-
-/--
-An adaptive oracle machine over one exact caller-side cost model.
-
-The machine stores a typed query-issuance algebra and one program.  Exact cost,
-ordinary probability, final-state, and trace semantics are all projections of
-`Oracle.Program.runExact`.
--/
-structure OracleMachine
-    (M : CostModel.{uCost})
-    (Input : Crypto.SecPar → Type uIn)
-    (Output : (sec : Crypto.SecPar) → Input sec → Type uOut)
-    (Spec :
-      (sec : Crypto.SecPar) → Input sec →
-        OracleSpec.{uOracle, uQuery, uResponse}) where
-  issueAlgebra :
-    (sec : Crypto.SecPar) → (input : Input sec) →
-      CostedAlgebra M (QueryIssue.signature (Spec sec input))
-  program :
-    (sec : Crypto.SecPar) → (input : Input sec) →
-      Oracle.Program (issueAlgebra sec input)
-        (ULift.{uResponse} (Output sec input))
-
-namespace OracleMachine
-
-variable
-    {M : CostModel.{uCost}}
-    {Input : Crypto.SecPar → Type uIn}
-    {Output : (sec : Crypto.SecPar) → Input sec → Type uOut}
-    {Spec :
-      (sec : Crypto.SecPar) → Input sec →
-        OracleSpec.{uOracle, uQuery, uResponse}}
-
-/-- Run the machine through the sole exact oracle interpreter. -/
-noncomputable def runExact
-    (machine : OracleMachine M Input Output Spec)
-    (sec : Crypto.SecPar) (input : Input sec)
-    (env :
-      CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState}
-        M (Spec sec input)) :
-    PMF
-      (ExactRunResult M (Spec sec input) env.State
-        (ULift.{uResponse} (Output sec input))) :=
-  Oracle.Program.runExactFromInit (machine.program sec input) sec env
-
-/-- Retain the returned value and exact ordered composition cost. -/
-noncomputable def runCosted
-    (machine : OracleMachine M Input Output Spec)
-    (sec : Crypto.SecPar) (input : Input sec)
-    (env :
-      CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState}
-        M (Spec sec input)) :
-    RandCosted M (Output sec input) :=
-  RandCosted.map ULift.down
-    (Oracle.Program.runCosted (machine.program sec input) sec env)
-
-/-- Ordinary value semantics against a cost-erased environment. -/
-noncomputable def runWithEnv
-    (machine : OracleMachine M Input Output Spec)
-    (sec : Crypto.SecPar) (input : Input sec)
-    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} (Spec sec input)) :
-    PMF (Output sec input) :=
-  PMF.map ULift.down
-    (Oracle.Program.runWithEnv (machine.program sec input) sec env)
-
-/-- Exact composition with the authoritative implementation environment. -/
-noncomputable def runWithImplementation
-    (machine : OracleMachine M Input Output Spec)
-    (implementation :
-      OracleImplementation.{uCost, uIn, uOracle, uQuery, uResponse, uState}
-        M Input Spec)
-    (sec : Crypto.SecPar) (input : Input sec) :
-    RandCosted M (Output sec input) :=
-  machine.runCosted sec input (implementation.env sec input)
-
-/-- Exact composition erases to the ordinary semantics of the same environment. -/
-@[simp] theorem valueDist_runCosted
-    (machine : OracleMachine M Input Output Spec)
-    (sec : Crypto.SecPar) (input : Input sec)
-    (env :
-      CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState}
-        M (Spec sec input)) :
-    RandCosted.valueDist (machine.runCosted sec input env) =
-      machine.runWithEnv sec input env.erase := by
-  simp only [runCosted, runWithEnv, RandCosted.valueDist_map]
-  rw [Oracle.Program.valueDist_runCosted_eq_runWithEnv_erase]
-
-/-- The implementation wrapper introduces no new probability semantics. -/
-@[simp] theorem valueDist_runWithImplementation
-    (machine : OracleMachine M Input Output Spec)
-    (implementation :
-      OracleImplementation.{uCost, uIn, uOracle, uQuery, uResponse, uState}
-        M Input Spec)
-    (sec : Crypto.SecPar) (input : Input sec) :
-    RandCosted.valueDist
-        (machine.runWithImplementation implementation sec input) =
-      machine.runWithEnv sec input
-        (implementation.env sec input).erase := by
-  exact machine.valueDist_runCosted sec input (implementation.env sec input)
-
-end OracleMachine
 
 /--
 An oracle machine with input-dependent path bounds and uniform measured local
@@ -189,6 +88,45 @@ variable
     {Spec :
       (sec : Crypto.SecPar) → Input sec →
         OracleSpec.{uOracle, uQuery, uResponse}}
+
+/--
+Compose one certified caller with a fixed exact environment at a single input.
+This is the pointwise core used by both uniform implementations and closed
+reduction adapters.
+-/
+theorem runCosted_cost_le
+    (machine : TimedOracleMachine M measure Input Output Spec)
+    (sec : Crypto.SecPar) (input : Input sec)
+    (env :
+      CostedOracleEnv.{uCost, uOracle, uQuery, uResponse, uState}
+        M (Spec sec input))
+    (envBudget : M.Cost)
+    (repeatBudgetMono : ∀ {first second : Nat}, first ≤ second →
+      M.instPartialOrder.le
+        (Oracle.Program.repeatCost M first envBudget)
+        (Oracle.Program.repeatCost M second envBudget))
+    (exchange : Oracle.Program.CostExchange M)
+    (envBound : env.QueryCostBoundAt sec envBudget)
+    (result : Costed M (Output sec input))
+    (hresult : result ∈ (machine.toOracleMachine.runCosted sec input env).support) :
+    M.instPartialOrder.le result.cost
+      (M.instAddMonoid.add
+        (machine.localBudget sec input)
+        (Oracle.Program.repeatCost M
+          (machine.totalQueryBudget sec input) envBudget)) := by
+  simp only [OracleMachine.runCosted, RandCosted.map] at hresult
+  rw [PMF.mem_support_map_iff] at hresult
+  rcases hresult with ⟨liftedResult, hliftedResult, hresult⟩
+  subst result
+  exact
+    Oracle.Program.runCosted_cost_le_composedBudget
+      (machine.program sec input) sec env
+      (machine.localBudget sec input)
+      (machine.totalQueryBudget sec input) envBudget
+      repeatBudgetMono exchange
+      (machine.localBudget_sound sec input)
+      (machine.totalQueryBudget_sound sec input)
+      envBound liftedResult hliftedResult
 
 /-- A supported exact run respects the certified caller-local budget. -/
 theorem localCost_le_budget
@@ -441,7 +379,7 @@ noncomputable def compose
       PPTOracleImplementation.{uCost, uIn, uOracle, uQuery, uResponse, uState}
         M measure Input Spec)
     (exchange : Oracle.Program.CostExchange M)
-    (admission : PPTAdmissible
+    (admission : PPTAdmissible M measure
       (machine.toTimedOracleMachine.compose
         implementation.toTimedOracleImplementation exchange).run
       (fun sec =>
@@ -462,7 +400,7 @@ noncomputable def compose
       PPTOracleImplementation.{uCost, uIn, uOracle, uQuery, uResponse, uState}
         M measure Input Spec)
     (exchange : Oracle.Program.CostExchange M)
-    (admission : PPTAdmissible
+    (admission : PPTAdmissible M measure
       (machine.toTimedOracleMachine.compose
         implementation.toTimedOracleImplementation exchange).run
       (fun sec =>
@@ -481,7 +419,7 @@ noncomputable def compose
       PPTOracleImplementation.{uCost, uIn, uOracle, uQuery, uResponse, uState}
         M measure Input Spec)
     (exchange : Oracle.Program.CostExchange M)
-    (admission : PPTAdmissible
+    (admission : PPTAdmissible M measure
       (machine.toTimedOracleMachine.compose
         implementation.toTimedOracleImplementation exchange).run
       (fun sec =>

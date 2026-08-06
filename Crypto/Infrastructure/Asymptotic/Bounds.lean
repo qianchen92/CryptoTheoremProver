@@ -78,4 +78,71 @@ theorem isNegligible_zero : IsNegligible (fun _ : Crypto.SecPar => (0 : Real)) :
   have hpowpos : (0 : Real) < (n ^ c : Real) := pow_pos hnpos c
   simpa using one_div_pos.mpr hpowpos
 
+namespace IsNegligible
+
+variable {f g : Crypto.SecPar → Real}
+
+/-- A pointwise smaller absolute value inherits negligibility. -/
+theorem mono
+    (hg : IsNegligible g)
+    (hfg : ∀ n, |f n| ≤ |g n|) :
+    IsNegligible f := by
+  intro c hc
+  obtain ⟨threshold, hthreshold⟩ := hg c hc
+  refine ⟨threshold, ?_⟩
+  intro n hn
+  exact (hfg n).trans_lt (hthreshold n hn)
+
+/-- Pointwise sums of negligible real-valued functions remain negligible. -/
+theorem add
+    (hf : IsNegligible f) (hg : IsNegligible g) :
+    IsNegligible (fun n => f n + g n) := by
+  intro c hc
+  obtain ⟨leftThreshold, hleft⟩ := hf (c + 1) (Nat.zero_lt_succ c)
+  obtain ⟨rightThreshold, hright⟩ := hg (c + 1) (Nat.zero_lt_succ c)
+  refine ⟨max 2 (max leftThreshold rightThreshold), ?_⟩
+  intro n hn
+  have hnTwo : 2 ≤ n := (le_max_left 2 _).trans hn
+  have hnLeft : leftThreshold ≤ n :=
+    (le_max_of_le_right (le_max_left leftThreshold rightThreshold)).trans hn
+  have hnRight : rightThreshold ≤ n :=
+    (le_max_of_le_right (le_max_right leftThreshold rightThreshold)).trans hn
+  have hnPosNat : 0 < n := Nat.zero_lt_two.trans_le hnTwo
+  have hnPos : (0 : Real) < n := by exact_mod_cast hnPosNat
+  have hnTwoReal : (2 : Real) ≤ n := by exact_mod_cast hnTwo
+  have hpowPos : (0 : Real) < (n : Real) ^ c := pow_pos hnPos c
+  have hsuccPowPos : (0 : Real) < (n : Real) ^ (c + 1) := pow_pos hnPos (c + 1)
+  calc
+    |f n + g n| ≤ |f n| + |g n| := abs_add_le _ _
+    _ < (1 : Real) / (n : Real) ^ (c + 1) +
+        (1 : Real) / (n : Real) ^ (c + 1) :=
+      add_lt_add (hleft n hnLeft) (hright n hnRight)
+    _ = (2 : Real) / (n : Real) ^ (c + 1) := by ring
+    _ ≤ (1 : Real) / (n : Real) ^ c := by
+      apply (div_le_div_iff₀ hsuccPowPos hpowPos).2
+      rw [pow_succ]
+      simpa [mul_comm] using
+        mul_le_mul_of_nonneg_left hnTwoReal hpowPos.le
+
+/-- A finite pointwise sum of negligible functions is negligible. -/
+theorem finset_sum
+    {Index : Type} (indices : Finset Index)
+    (functions : Index → Crypto.SecPar → Real)
+    (hfunctions : ∀ index ∈ indices, IsNegligible (functions index)) :
+    IsNegligible (fun n => ∑ index ∈ indices, functions index n) := by
+  classical
+  induction indices using Finset.induction_on with
+  | empty =>
+      simpa using isNegligible_zero
+  | @insert index indices hnotMem ih =>
+      have hindex : IsNegligible (functions index) :=
+        hfunctions index (Finset.mem_insert_self index indices)
+      have hindices :
+          IsNegligible (fun n => ∑ remaining ∈ indices, functions remaining n) :=
+        ih (fun remaining hremaining =>
+          hfunctions remaining (Finset.mem_insert_of_mem hremaining))
+      simpa [Finset.sum_insert hnotMem] using hindex.add hindices
+
+end IsNegligible
+
 end Crypto.Infrastructure.Asymptotic

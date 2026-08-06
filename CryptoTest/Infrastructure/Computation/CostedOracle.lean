@@ -1,4 +1,5 @@
 import Crypto.Infrastructure.Complexity.Basic
+import CryptoTest.Infrastructure.Computation.TraceCost
 
 namespace CryptoTest.Infrastructure.Computation.CostedOracle
 
@@ -260,7 +261,7 @@ example :
 example
     (callerAdmission : PPTOracleAdmissible inputTimedMachine.toOracleMachine
       inputTimedMachine.localRuntime inputTimedMachine.totalQueryRuntime)
-    (closedAdmission : PPTAdmissible
+    (closedAdmission : PPTAdmissible CostModel.nat NatMeasure.nat
       ((inputPPTMachine callerAdmission).toTimedOracleMachine.compose
         pptImplementation.toTimedOracleImplementation
         Oracle.Program.costExchange_nat).run
@@ -290,64 +291,14 @@ inductive TraceEvent where
   | oracleSecond
 deriving DecidableEq, Repr
 
-structure TraceCost where
-  events : List TraceEvent
-deriving DecidableEq, Repr
+abbrev TraceCost :=
+  CryptoTest.Infrastructure.Computation.TraceCost TraceEvent
 
-instance : Zero TraceCost := ⟨⟨[]⟩⟩
-
-instance : Add TraceCost :=
-  ⟨fun left right => ⟨left.events ++ right.events⟩⟩
-
-instance : AddMonoid TraceCost where
-  add_assoc left middle right := by
-    cases left with | mk leftEvents =>
-      cases middle with | mk middleEvents =>
-        cases right with | mk rightEvents =>
-          exact congrArg TraceCost.mk
-            (List.append_assoc leftEvents middleEvents rightEvents)
-  zero_add cost := by
-    cases cost
-    rfl
-  add_zero cost := by
-    cases cost with | mk events =>
-      exact congrArg TraceCost.mk (List.append_nil events)
-  nsmul := nsmulRec
-  nsmul_zero _cost := rfl
-  nsmul_succ _count _cost := rfl
-
-instance : LE TraceCost where
-  le left right := left = right
-
-instance : PartialOrder TraceCost where
-  le_refl := fun _ => rfl
-  le_trans := by
-    intro left middle right leftMiddle middleRight
-    change left = middle at leftMiddle
-    change middle = right at middleRight
-    exact leftMiddle.trans middleRight
-  le_antisymm := by
-    intro left right leftRight _rightLeft
-    change left = right at leftRight
-    exact leftRight
-
-instance : AddLeftMono TraceCost where
-  elim := fun fixed _left _right leftRight =>
-    congrArg (fun value => fixed + value) leftRight
-
-instance : AddRightMono TraceCost where
-  elim := fun fixed _left _right leftRight =>
-    congrArg (fun value => value + fixed) leftRight
-
-abbrev traceCostModel : CostModel where
-  Cost := TraceCost
-  instAddMonoid := inferInstance
-  instPartialOrder := inferInstance
-  instAddLeftMono := inferInstance
-  instAddRightMono := inferInstance
+abbrev traceCostModel :=
+  CryptoTest.Infrastructure.Computation.TraceCost.costModel TraceEvent
 
 def traceCost (event : TraceEvent) : TraceCost :=
-  ⟨[event]⟩
+  CryptoTest.Infrastructure.Computation.TraceCost.singleton event
 
 noncomputable def traceIssueAlgebra :
     CostedAlgebra traceCostModel (QueryIssue.signature testOracleSpec) :=

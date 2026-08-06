@@ -8,22 +8,41 @@ open Crypto.Infrastructure.Computation.Cost
 open Crypto.Primitive.Encryption.AsymmetricEncryption
 open scoped DDHParameter
 
-universe uCost uScalar uGroup
+universe uCost uParameter uScalar uGroup
 
 variable
     {M : CostModel.{uCost}}
-    (F : Family.{uCost, uScalar, uGroup} M)
-    (pp : PublicParam.{uCost, uScalar, uGroup} M)
+    {Parameter : Type uParameter}
+    {Scalar : Type uScalar}
+    {Carrier : Type uGroup}
+    (F : Family M Parameter Scalar Carrier)
+    (pp : PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
 
 @[simp] theorem setupProgram_runCosted
     (sec : Crypto.SecPar) :
-    Program.runCosted (setupProgram F) sec = F.setup sec :=
+    Program.runCosted (setupProgram F) sec = RandCosted.map ULift.up (F.setup sec) :=
   rfl
 
 @[simp] theorem scheme_setup_eq_family_setup
     (sec : Crypto.SecPar) :
     (scheme F).setup sec = F.setup sec :=
-  rfl
+  by
+    change RandCosted.map ULift.down
+      (Program.runCosted (setupProgram F) sec) = F.setup sec
+    rw [setupProgram_runCosted]
+    change PMF.map (Costed.map ULift.down)
+      (PMF.map (Costed.map ULift.up) (F.setup sec)) = F.setup sec
+    rw [PMF.map_comp]
+    have mapIdentity :
+        (Costed.map (M := M)
+            (ULift.down : ULift.{max uScalar uGroup} Parameter → Parameter)) ∘
+          (Costed.map (M := M)
+            (ULift.up : Parameter → ULift.{max uScalar uGroup} Parameter)) =
+          (id : Costed M Parameter → Costed M Parameter) := by
+      funext result
+      cases result
+      rfl
+    rw [mapIdentity, PMF.map_id]
 
 /-- Erasing key-generation costs recovers ordinary ElGamal key generation. -/
 @[simp] theorem keygenProgram_valueDist
@@ -138,34 +157,51 @@ variable
 @[simp] theorem scheme_setupDist
     (sec : Crypto.SecPar) :
     (scheme F).setupDist sec = F.setupDist sec :=
-  rfl
+  by
+    unfold Scheme.setupDist
+    rw [scheme_setup_eq_family_setup]
+    rfl
 
 @[simp] theorem scheme_keygenDist
-    : (scheme F).keygenDist pp =
+    (parameter : Parameter) :
+    (scheme F).keygenDist parameter =
       PMF.bind
-        (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
-        (fun sk => PMF.pure (sk • pp.generator, sk)) := by
+        (@Crypto.Infrastructure.Probability.uniformPMF
+          Scalar (F.publicParam parameter).fintypeScalar
+          ⟨(F.publicParam parameter).commMonoidScalar.one⟩)
+        (fun sk =>
+          PMF.pure
+            ((F.publicParam parameter).smul.smul sk
+              (F.publicParam parameter).generator, sk)) := by
   unfold Scheme.keygenDist scheme CryptoFirstOrder.Builder.runCosted
   rw [RandCosted.valueDist_map]
-  exact keygenProgram_valueDist pp
+  exact keygenProgram_valueDist (F.publicParam parameter)
 
 @[simp] theorem scheme_encryptDist
-    (pk message : pp.Carrier) :
-    (scheme F).encryptDist pp pk message =
+    (parameter : Parameter) (pk message : Carrier) :
+    (scheme F).encryptDist parameter pk message =
       PMF.bind
-        (Crypto.Infrastructure.Probability.uniformPMF pp.Scalar)
+        (@Crypto.Infrastructure.Probability.uniformPMF
+          Scalar (F.publicParam parameter).fintypeScalar
+          ⟨(F.publicParam parameter).commMonoidScalar.one⟩)
         (fun r =>
-          PMF.pure (r • pp.generator, message + r • pk)) := by
+          PMF.pure
+            ((F.publicParam parameter).smul.smul r
+                (F.publicParam parameter).generator,
+              (F.publicParam parameter).addGroup.add message
+                ((F.publicParam parameter).smul.smul r pk))) := by
   unfold Scheme.encryptDist scheme CryptoFirstOrder.Builder.runCosted
   rw [RandCosted.valueDist_map]
-  exact encryptProgram_valueDist pp pk message
+  exact encryptProgram_valueDist (F.publicParam parameter) pk message
 
 @[simp] theorem scheme_decryptDist
-    (sk : pp.Scalar) (ciphertext : pp.Carrier × pp.Carrier) :
-    (scheme F).decryptDist pp sk ciphertext =
-      PMF.pure (ciphertext.2 - sk • ciphertext.1) := by
+    (parameter : Parameter) (sk : Scalar) (ciphertext : Carrier × Carrier) :
+    (scheme F).decryptDist parameter sk ciphertext =
+      PMF.pure
+        ((F.publicParam parameter).addGroup.sub ciphertext.2
+          ((F.publicParam parameter).smul.smul sk ciphertext.1)) := by
   unfold Scheme.decryptDist scheme CryptoFirstOrder.Builder.runCosted
   rw [RandCosted.valueDist_map]
-  exact decryptProgram_valueDist pp sk ciphertext
+  exact decryptProgram_valueDist (F.publicParam parameter) sk ciphertext
 
 end CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal

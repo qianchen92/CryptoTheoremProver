@@ -43,6 +43,15 @@ abbrev bind
       (fun second : Costed M β => first.bind fun _ => second)
       (next first.val)
 
+/-- Sequencing two deterministic writer points preserves their exact order. -/
+@[simp] theorem liftCosted_bind_liftCosted
+    (first : Costed M α) (next : α → Costed M β) :
+    bind (liftCosted first) (fun value => liftCosted (next value)) =
+      liftCosted (first.bind next) := by
+  simp only [bind, liftCosted, PMF.pure_bind, PMF.pure_map]
+  apply congrArg PMF.pure
+  rfl
+
 noncomputable instance (M : CostModel.{uCost}) : Monad (RandCosted M) where
   pure := fun value => RandCosted.pure M value
   bind := fun dist next => RandCosted.bind dist next
@@ -151,9 +160,14 @@ theorem bind_pure_comp
         (PMF.pure ∘ Costed.map f) := by
     funext firstResult
     apply congrArg PMF.pure
-    letI := M.instAddMonoid
-    cases firstResult
-    simp [Costed.bind, Costed.pure, Costed.map]
+    cases firstResult with
+    | mk value cost =>
+        change
+          Costed.mk (f value)
+              (M.instAddMonoid.add cost M.instAddMonoid.zero) =
+            Costed.mk (f value) cost
+        exact congrArg (fun total => Costed.mk (f value) total)
+          (M.instAddMonoid.add_zero cost)
   rw [handlerEquality]
   exact PMF.bind_pure_comp (Costed.map f) dist
 

@@ -97,7 +97,7 @@ noncomputable def ofBoundedProgram
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec)
     (runtime_isPoly : IsPolyBounded runtime)
-    (admission : PPTAdmissible
+    (admission : PPTAdmissible M measure
       (TimedMachine.ofBoundedProgram
         measure A bounds budget runtime program budget_le_runtime).run
       runtime) :
@@ -122,7 +122,7 @@ noncomputable def ofBoundedProgram
     (budget_le_runtime :
       ∀ sec input, measure (budget sec input) ≤ runtime sec)
     (runtime_isPoly : IsPolyBounded runtime)
-    (admission : PPTAdmissible
+    (admission : PPTAdmissible M measure
       (TimedMachine.ofBoundedProgram
         measure A bounds budget runtime program budget_le_runtime).run
       runtime)

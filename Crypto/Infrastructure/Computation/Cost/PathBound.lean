@@ -20,6 +20,24 @@ def CostBound (dist : RandCosted M α) (budget : M.Cost) : Prop :=
 
 namespace CostBound
 
+/-- A deterministic first step needs a continuation bound only at its value. -/
+theorem bind_liftCosted
+    (first : Costed M α) (next : α → RandCosted M β)
+    {nextBudget : M.Cost}
+    (nextBound : CostBound (next first.val) nextBudget) :
+    CostBound (RandCosted.bind (RandCosted.liftCosted first) next)
+      (M.instAddMonoid.add first.cost nextBudget) := by
+  letI := M.instPartialOrder
+  letI := M.instAddMonoid
+  letI := M.instAddLeftMono
+  letI := M.instAddRightMono
+  intro result hresult
+  simp only [RandCosted.bind, RandCosted.liftCosted, PMF.pure_bind] at hresult
+  rw [PMF.mem_support_map_iff] at hresult
+  rcases hresult with ⟨nextResult, hnextResult, hresult⟩
+  subst result
+  exact add_le_add_right (nextBound nextResult hnextResult) first.cost
+
 /-- A zero-cost pure computation is bounded by the sequential identity. -/
 theorem pure (value : α) :
     CostBound (RandCosted.pure M value) M.instAddMonoid.zero := by

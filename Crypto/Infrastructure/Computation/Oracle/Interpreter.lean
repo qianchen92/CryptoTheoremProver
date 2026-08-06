@@ -8,7 +8,7 @@ namespace Crypto.Infrastructure.Computation.Oracle
 open Crypto.Infrastructure.Computation.Algebra
 open Crypto.Infrastructure.Computation.Cost
 
-universe uCost uOracle uQuery uResponse uState uValue uObserved
+universe uCost uOracle uQuery uResponse uState uStateLeft uStateRight uValue uObserved
 
 /--
 The result of the sole structural oracle-program interpreter.
@@ -110,6 +110,35 @@ noncomputable def runWithEnv
     (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec) : PMF α :=
   runWithCostedEnv program sec (env.zeroCost M)
 
+/-- Retain the returned value and final semantic-environment state while
+erasing costs and traces. This is a projection of `runExact`, not a second
+interpreter. -/
+noncomputable def runValueState
+    (program : Program issueAlgebra α)
+    (sec : Crypto.SecPar)
+    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
+    (state : env.State) : PMF (α × env.State) :=
+  PMF.map (fun result => (result.value, result.state))
+    (runExact program sec (env.zeroCost M) state)
+
+/-- Ordinary value semantics started from an explicit semantic-environment
+state. -/
+noncomputable def runWithEnvFromState
+    (program : Program issueAlgebra α)
+    (sec : Crypto.SecPar)
+    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
+    (state : env.State) : PMF α :=
+  PMF.map Prod.fst (runValueState program sec env state)
+
+@[simp] theorem runWithEnvFromState_init
+    (program : Program issueAlgebra α)
+    (sec : Crypto.SecPar)
+    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec) :
+    runWithEnvFromState program sec env env.init = runWithEnv program sec env := by
+  simp only [runWithEnvFromState, runValueState, runWithEnv, runWithCostedEnv,
+    runExactFromInit, PMF.map_comp]
+  rfl
+
 /-- Retain returned values and query traces while erasing all costs. -/
 noncomputable def runTraceWithCostedEnv
     (program : Program issueAlgebra α)
@@ -148,6 +177,175 @@ private theorem bind_value_only
       PMF.bind (RandCosted.valueDist dist) continuation := by
   simpa only [Function.comp_apply] using
     (PMF.bind_map dist Costed.val continuation).symm
+
+@[simp] theorem runValueState_pure
+    {α : Type (max uValue uResponse)}
+    (value : α) (sec : Crypto.SecPar)
+    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
+    (state : env.State) :
+    runValueState (.pure value : Program issueAlgebra α) sec env state =
+      PMF.pure (value, state) := by
+  simp only [runValueState, runExact]
+  rw [PMF.pure_map]
+
+@[simp] theorem runValueState_bind
+    {α β : Type (max uValue uResponse)}
+    (first : Program issueAlgebra α)
+    (next : α → Program issueAlgebra β)
+    (sec : Crypto.SecPar)
+    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
+    (state : env.State) :
+    runValueState (.bind first next) sec env state =
+      PMF.bind (runValueState first sec env state) fun firstResult =>
+        runValueState (next firstResult.1) sec env firstResult.2 := by
+  simp only [runValueState, runExact]
+  rw [PMF.map_bind, PMF.bind_map]
+  congr 1
+  funext firstResult
+  simp only [Function.comp_apply]
+  rw [PMF.map_bind]
+  congr 1
+  funext nextResult
+  rw [PMF.pure_map]
+  rfl
+
+@[simp] theorem runValueState_liftCosted
+    {α : Type (max uValue uResponse)}
+    (dist : RandCosted M α)
+    (sec : Crypto.SecPar)
+    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
+    (state : env.State) :
+    runValueState (.liftCosted dist : Program issueAlgebra α) sec env state =
+      PMF.bind (RandCosted.valueDist dist) fun value =>
+        PMF.pure (value, state) := by
+  simp only [runValueState, runExact, RandCosted.valueDist]
+  rw [PMF.map_bind, PMF.bind_map]
+  congr 1
+  funext result
+  simp only [Function.comp_apply]
+  rw [PMF.pure_map]
+
+@[simp] theorem runValueState_query
+    (name : Spec.Name) (query : Spec.Query name)
+    (sec : Crypto.SecPar)
+    (env : OracleEnv.{uOracle, uQuery, uResponse, uState} Spec)
+    (state : env.State) :
+    runValueState (.query name query : Program issueAlgebra
+        (ULift.{uValue} (Spec.Response name))) sec env state =
+      PMF.bind (env.query name sec state query) fun result =>
+        PMF.pure (ULift.up result.1, result.2) := by
+  simp only [runValueState, runExact, PMF.map_bind, PMF.pure_map]
+  let continuation : Spec.Response name × env.State →
+      PMF (ULift.{uValue} (Spec.Response name) × env.State) :=
+    fun result => PMF.pure (ULift.up result.1, result.2)
+  calc
+    PMF.bind (issueAlgebra.exec (.issue name query)) (fun _issueResult =>
+        PMF.bind ((env.zeroCost M).query name sec state query)
+          (fun oracleResult => continuation oracleResult.val)) =
+      PMF.bind (issueAlgebra.exec (.issue name query)) (fun _issueResult =>
+        PMF.bind
+          (RandCosted.valueDist
+            ((env.zeroCost M).query name sec state query)) continuation) := by
+            congr 1
+            funext issueResult
+            exact bind_value_only
+              ((env.zeroCost M).query name sec state query) continuation
+    _ = PMF.bind (issueAlgebra.exec (.issue name query)) (fun _issueResult =>
+        PMF.bind (env.query name sec state query) continuation) := by
+          simp only [OracleEnv.zeroCost]
+          rw [RandCosted.valueDist_sampleZeroCost]
+    _ = PMF.bind (env.query name sec state query) continuation :=
+      PMF.bind_const _ _
+
+/-- A probabilistic relation between environment states is preserved by every
+oracle program when every query preserves that relation. -/
+theorem runValueState_eq_of_stateSimulation
+    (left : OracleEnv.{uOracle, uQuery, uResponse, uStateLeft} Spec)
+    (right : OracleEnv.{uOracle, uQuery, uResponse, uStateRight} Spec)
+    (stateSimulation : left.State → PMF right.State)
+    (querySimulation : ∀ (name : Spec.Name) (querySec : Crypto.SecPar)
+        (state : left.State) (query : Spec.Query name),
+      (PMF.bind (left.query name querySec state query) fun result =>
+          PMF.bind (stateSimulation result.2) fun simulatedState =>
+            PMF.pure (result.1, simulatedState)) =
+        PMF.bind (stateSimulation state) fun simulatedState =>
+          right.query name querySec simulatedState query)
+    {α : Type (max uValue uResponse)}
+    (program : Program issueAlgebra α)
+    (sec : Crypto.SecPar) (state : left.State) :
+    (PMF.bind (runValueState program sec left state) fun result =>
+        PMF.bind (stateSimulation result.2) fun simulatedState =>
+          PMF.pure (result.1, simulatedState)) =
+      PMF.bind (stateSimulation state) fun simulatedState =>
+        runValueState program sec right simulatedState := by
+  induction program generalizing state with
+  | pure value =>
+      simp only [runValueState_pure, PMF.pure_bind]
+  | bind first next ihFirst ihNext =>
+      simp only [runValueState_bind, PMF.bind_bind]
+      calc
+        PMF.bind (runValueState first sec left state) (fun firstResult =>
+            PMF.bind (runValueState (next firstResult.1) sec left firstResult.2)
+              (fun nextResult =>
+                PMF.bind (stateSimulation nextResult.2) fun simulatedState =>
+                  PMF.pure (nextResult.1, simulatedState))) =
+          PMF.bind (runValueState first sec left state) (fun firstResult =>
+            PMF.bind (stateSimulation firstResult.2) fun simulatedState =>
+              runValueState (next firstResult.1) sec right simulatedState) := by
+                congr 1
+                funext firstResult
+                exact ihNext firstResult.1 firstResult.2
+        _ = PMF.bind
+            (PMF.bind (runValueState first sec left state) fun firstResult =>
+              PMF.bind (stateSimulation firstResult.2) fun simulatedState =>
+                PMF.pure (firstResult.1, simulatedState))
+            (fun firstResult =>
+              runValueState (next firstResult.1) sec right firstResult.2) := by
+                simp only [PMF.bind_bind, PMF.pure_bind]
+        _ = PMF.bind
+            (PMF.bind (stateSimulation state) fun simulatedState =>
+              runValueState first sec right simulatedState)
+            (fun firstResult =>
+              runValueState (next firstResult.1) sec right firstResult.2) := by
+                rw [ihFirst state]
+        _ = PMF.bind (stateSimulation state) fun simulatedState =>
+            PMF.bind (runValueState first sec right simulatedState) fun firstResult =>
+              runValueState (next firstResult.1) sec right firstResult.2 := by
+                rw [PMF.bind_bind]
+  | liftCosted dist =>
+      simp only [runValueState_liftCosted, PMF.bind_bind, PMF.pure_bind]
+      exact PMF.bind_comm _ _ _
+  | query name query =>
+      simp only [runValueState_query, PMF.bind_bind, PMF.pure_bind]
+      have hquery := querySimulation name sec state query
+      have hmapped := congrArg
+        (PMF.map (fun result => (ULift.up result.1, result.2))) hquery
+      simpa only [PMF.map_bind, PMF.pure_map] using hmapped
+
+/-- State simulation yields equality of ordinary value semantics from every
+source state. -/
+theorem runWithEnvFromState_eq_of_stateSimulation
+    (left : OracleEnv.{uOracle, uQuery, uResponse, uStateLeft} Spec)
+    (right : OracleEnv.{uOracle, uQuery, uResponse, uStateRight} Spec)
+    (stateSimulation : left.State → PMF right.State)
+    (querySimulation : ∀ (name : Spec.Name) (querySec : Crypto.SecPar)
+        (state : left.State) (query : Spec.Query name),
+      (PMF.bind (left.query name querySec state query) fun result =>
+          PMF.bind (stateSimulation result.2) fun simulatedState =>
+            PMF.pure (result.1, simulatedState)) =
+        PMF.bind (stateSimulation state) fun simulatedState =>
+          right.query name querySec simulatedState query)
+    {α : Type (max uValue uResponse)}
+    (program : Program issueAlgebra α)
+    (sec : Crypto.SecPar) (state : left.State) :
+    runWithEnvFromState program sec left state =
+      PMF.bind (stateSimulation state) fun simulatedState =>
+        runWithEnvFromState program sec right simulatedState := by
+  have hsimulation := runValueState_eq_of_stateSimulation left right
+    stateSimulation querySimulation program sec state
+  have hmapped := congrArg (PMF.map Prod.fst) hsimulation
+  simpa only [runWithEnvFromState, PMF.map_bind, PMF.pure_map,
+    PMF.bind_const] using hmapped
 
 variable {α : Type (max uValue uResponse)}
 

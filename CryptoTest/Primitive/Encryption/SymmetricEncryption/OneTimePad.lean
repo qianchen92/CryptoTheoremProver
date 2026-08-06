@@ -119,7 +119,7 @@ example
       CryptoFirstOrder.Signature.inject, CryptoFirstOrder.Signature.Embedding.inject,
       CryptoFirstOrder.Code.runCosted, RandCosted.bind, CryptoFirstOrder.Expr.eval,
       CryptoFirstOrder.Env.get, Costed.bind, RandCosted.pure, Costed.pure,
-      PMF.pure_map, add_zero]
+      PMF.pure_map]
     exact PMF.pure_bind _ _
 
 /-- The structural encryption certificate bounds every exact execution path. -/
@@ -186,7 +186,7 @@ example
       CryptoFirstOrder.SmartOperation.add, CryptoFirstOrder.Signature.inject,
       CryptoFirstOrder.Signature.Embedding.inject, CryptoFirstOrder.Code.runCosted,
       RandCosted.bind, CryptoFirstOrder.Expr.eval, CryptoFirstOrder.Env.get,
-      Costed.bind, RandCosted.pure, Costed.pure, PMF.pure_map, add_zero]
+      Costed.bind, RandCosted.pure, Costed.pure, PMF.pure_map]
     refine (PMF.pure_bind _ _).trans ?_
     change
       PMF.map

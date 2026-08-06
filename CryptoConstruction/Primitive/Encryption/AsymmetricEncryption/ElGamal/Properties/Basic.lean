@@ -1,2 +1,3 @@
 import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.Semantics
 import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.Correctness
+import CryptoConstruction.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.INDCPA

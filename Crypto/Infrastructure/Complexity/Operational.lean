@@ -1,13 +1,17 @@
 import CryptoFirstOrder.Core
 import Crypto.Infrastructure.Computation.Cost.Measure
+import Crypto.Infrastructure.Computation.Randomized
+import Crypto.Infrastructure.Complexity.OracleMachineCore
 import Crypto.Infrastructure.SecurityParameter
 
 namespace Crypto.Infrastructure.Complexity
 
 open Crypto.Infrastructure.Computation
 open Crypto.Infrastructure.Computation.Cost
+open Crypto.Infrastructure.Computation.Oracle
 
-universe uArtifact uClaim uCost uValue
+universe uArtifact uClaim uCost uValue uBase uOp uClosedInput uCallerInput uOutput
+  uOracle uQuery uResponse
 
 /--
 A host-independent operational model for executable artifacts and the resource
@@ -53,6 +57,153 @@ structure FirstOrderOperationalCode
   costBound : CryptoFirstOrder.Program.CostBound A program budget
   runtime : Nat
   budget_le_runtime : ∀ input, measure (budget input) ≤ runtime
+
+/--
+A closed oracle adapter whose executable pieces are all programs in one
+structurally validated first-order algebra.
+
+The host-facing functions below are representation boundaries only: they
+encode inputs and decode results.  Preparation, rejection, and every oracle
+query are executed by the stored `Program`s.  Consequently this object cannot
+be manufactured from an arbitrary `OracleEnv` or value-only host map.
+-/
+structure FirstOrderOracleAdapter
+    (M : CostModel.{uCost}) (measure : NatMeasure M)
+    (ClosedInput : Crypto.SecPar → Type uClosedInput)
+    (CallerInput : Crypto.SecPar → Type uCallerInput)
+    (Output : Crypto.SecPar → Type uOutput)
+    (Spec : (sec : Crypto.SecPar) → CallerInput sec →
+      OracleSpec.{uOracle, uQuery, uResponse})
+    {Base : Type uBase} (interpret : Base → Type uValue)
+    {S : CryptoFirstOrder.Signature.{uBase, uBase} Base}
+    (A : CryptoFirstOrder.CostedAlgebra M interpret S)
+    (PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput : CryptoFirstOrder.Ty Base) where
+  algebraValid : CryptoFirstOrder.ValidAlgebra M interpret A
+  accepted : (sec : Crypto.SecPar) → ClosedInput sec → Prop
+  acceptedDecidable : ∀ sec input, Decidable (accepted sec input)
+  prepareProgram : CryptoFirstOrder.Program interpret S PrepareInput PrepareOutput
+  rejectProgram : CryptoFirstOrder.Program interpret S RejectInput RejectOutput
+  queryProgram : CryptoFirstOrder.Program interpret S QueryInput QueryOutput
+  prepareBudget : CryptoFirstOrder.Ty.denote interpret PrepareInput → M.Cost
+  rejectBudget : CryptoFirstOrder.Ty.denote interpret RejectInput → M.Cost
+  queryBudget : CryptoFirstOrder.Ty.denote interpret QueryInput → M.Cost
+  prepareCostBound : CryptoFirstOrder.Program.CostBound
+    A prepareProgram prepareBudget
+  rejectCostBound : CryptoFirstOrder.Program.CostBound
+    A rejectProgram rejectBudget
+  queryCostBound : CryptoFirstOrder.Program.CostBound
+    A queryProgram queryBudget
+  prepareInput : ∀ sec, ClosedInput sec →
+    CryptoFirstOrder.Ty.denote interpret PrepareInput
+  prepareOutput : ∀ sec, ClosedInput sec →
+    CryptoFirstOrder.Ty.denote interpret PrepareOutput → CallerInput sec
+  rejectInput : ∀ sec, ClosedInput sec →
+    CryptoFirstOrder.Ty.denote interpret RejectInput
+  rejectOutput : ∀ sec, ClosedInput sec →
+    CryptoFirstOrder.Ty.denote interpret RejectOutput → Output sec
+  State : Type
+  init : ∀ sec, (input : ClosedInput sec) → CallerInput sec → State
+  queryInput : ∀ sec, (input : ClosedInput sec) →
+    (callerInput : CallerInput sec) →
+    (name : (Spec sec callerInput).Name) → Crypto.SecPar → State →
+    (Spec sec callerInput).Query name →
+      CryptoFirstOrder.Ty.denote interpret QueryInput
+  queryOutput : ∀ sec, (input : ClosedInput sec) →
+    (callerInput : CallerInput sec) →
+    (name : (Spec sec callerInput).Name) →
+    CryptoFirstOrder.Ty.denote interpret QueryOutput →
+      (Spec sec callerInput).Response name × State
+  prepareRuntime : Crypto.SecPar → Nat
+  rejectRuntime : Crypto.SecPar → Nat
+  queryRuntime : Crypto.SecPar → Nat
+  prepareBudget_le_runtime : ∀ sec input,
+    measure (prepareBudget (prepareInput sec input)) ≤ prepareRuntime sec
+  rejectBudget_le_runtime : ∀ sec input,
+    measure (rejectBudget (rejectInput sec input)) ≤ rejectRuntime sec
+  queryBudget_le_runtime : ∀ sec input callerInput name querySec state query,
+    accepted sec input →
+    measure (queryBudget
+      (queryInput sec input callerInput name querySec state query)) ≤
+      queryRuntime sec
+
+namespace FirstOrderOracleAdapter
+
+variable
+    {M : CostModel.{uCost}} {measure : NatMeasure M}
+    {ClosedInput : Crypto.SecPar → Type uClosedInput}
+    {CallerInput : Crypto.SecPar → Type uCallerInput}
+    {Output : Crypto.SecPar → Type uOutput}
+    {Spec : (sec : Crypto.SecPar) → CallerInput sec →
+      OracleSpec.{uOracle, uQuery, uResponse}}
+    {Base : Type uBase} {interpret : Base → Type uValue}
+    {S : CryptoFirstOrder.Signature.{uBase, uBase} Base}
+    {A : CryptoFirstOrder.CostedAlgebra M interpret S}
+    {PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput : CryptoFirstOrder.Ty Base}
+
+noncomputable def runPrepare
+    (adapter : FirstOrderOracleAdapter M measure ClosedInput CallerInput Output
+      Spec interpret A PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput)
+    (sec : Crypto.SecPar) (input : ClosedInput sec) :
+    RandCosted M (CallerInput sec) :=
+  RandCosted.map (adapter.prepareOutput sec input)
+    (CryptoFirstOrder.Program.runCosted A adapter.prepareProgram
+      (adapter.prepareInput sec input))
+
+noncomputable def runReject
+    (adapter : FirstOrderOracleAdapter M measure ClosedInput CallerInput Output
+      Spec interpret A PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput)
+    (sec : Crypto.SecPar) (input : ClosedInput sec) :
+    RandCosted M (Output sec) :=
+  RandCosted.map (adapter.rejectOutput sec input)
+    (CryptoFirstOrder.Program.runCosted A adapter.rejectProgram
+      (adapter.rejectInput sec input))
+
+noncomputable def oracleEnv
+    (adapter : FirstOrderOracleAdapter M measure ClosedInput CallerInput Output
+      Spec interpret A PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput)
+    (sec : Crypto.SecPar) (input : ClosedInput sec)
+    (callerInput : CallerInput sec) :
+    CostedOracleEnv M (Spec sec callerInput) where
+  State := adapter.State
+  init := adapter.init sec input callerInput
+  query := fun name querySec state query =>
+    RandCosted.map (adapter.queryOutput sec input callerInput name)
+      (CryptoFirstOrder.Program.runCosted A adapter.queryProgram
+        (adapter.queryInput sec input callerInput name querySec state query))
+
+/-- The only closed-run semantics admitted by the controlled adapter compiler. -/
+noncomputable def close
+    (adapter : FirstOrderOracleAdapter M measure ClosedInput CallerInput Output
+      Spec interpret A PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput)
+    (caller : OracleMachine M CallerInput (fun sec _input => Output sec) Spec) :
+    RandomizedComputation M ClosedInput (fun sec _input => Output sec) :=
+  fun sec input =>
+    letI := adapter.acceptedDecidable sec input
+    if adapter.accepted sec input then
+      RandCosted.bind (adapter.runPrepare sec input) fun callerInput =>
+        caller.runCosted sec callerInput
+          (adapter.oracleEnv sec input callerInput)
+    else
+      adapter.runReject sec input
+
+/-- Runtime expression fixed by the controlled compiler. -/
+def closedRuntime
+    (adapter : FirstOrderOracleAdapter M measure ClosedInput CallerInput Output
+      Spec interpret A PrepareInput PrepareOutput RejectInput RejectOutput
+      QueryInput QueryOutput)
+    (callerRuntime : (Crypto.SecPar → Nat) × (Crypto.SecPar → Nat)) :
+    Crypto.SecPar → Nat :=
+  fun sec => max (adapter.rejectRuntime sec)
+    (adapter.prepareRuntime sec +
+      (callerRuntime.1 sec + callerRuntime.2 sec * adapter.queryRuntime sec))
+
+end FirstOrderOracleAdapter
 
 /--
 The canonical operational model for one fixed first-order signature and exact
@@ -142,7 +293,6 @@ inductive ValidCode :
         (firstOrderMachineOperationalModel M measure interpret A Input Output
           Claim claimOfRuntime)
         (ULift.up code)
-
 end OperationalModel
 
 /--

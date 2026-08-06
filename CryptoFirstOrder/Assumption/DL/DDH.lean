@@ -9,6 +9,10 @@ open scoped DDHParameter
 
 universe uCost uScalar uGroup
 
+variable
+    {Scalar : Type uScalar}
+    {Carrier : Type uGroup}
+
 export CryptoFirstOrder.Algebra.ScalarAction
   (Base scalarTy carrierTy Operation signature)
 
@@ -20,49 +24,49 @@ export CryptoFirstOrder.Algebra.ScalarAction.Operation
 end Operation
 
 abbrev interpret
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :=
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :=
   CryptoFirstOrder.Algebra.ScalarAction.interpret pp.Scalar pp.Carrier
 
 abbrev ScalarValue
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :=
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :=
   CryptoFirstOrder.Algebra.ScalarAction.ScalarValue pp.Scalar pp.Carrier
 
 abbrev CarrierValue
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :=
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :=
   CryptoFirstOrder.Algebra.ScalarAction.CarrierValue pp.Scalar pp.Carrier
 
 abbrev liftScalar
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :
     pp.Scalar → ScalarValue pp :=
   CryptoFirstOrder.Algebra.ScalarAction.liftScalar pp.Scalar pp.Carrier
 
 abbrev liftCarrier
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :
     pp.Carrier → CarrierValue pp :=
   CryptoFirstOrder.Algebra.ScalarAction.liftCarrier pp.Scalar pp.Carrier
 
 /-- The distinguished DDH generator at the first-order carrier boundary. -/
 abbrev generatorValue
     {M : CostModel.{uCost}}
-    {pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M} :
+    {pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier} :
     CarrierValue pp :=
   liftCarrier pp pp.generator
 
 abbrev carrierScalarPairDown
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :
     CarrierValue pp × ScalarValue pp → pp.Carrier × pp.Scalar :=
   CryptoFirstOrder.Algebra.ScalarAction.carrierScalarPairDown
     pp.Scalar pp.Carrier
 
 abbrev carrierPairDown
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :
     CarrierValue pp × CarrierValue pp → pp.Carrier × pp.Carrier :=
   CryptoFirstOrder.Algebra.ScalarAction.carrierPairDown pp.Scalar pp.Carrier
 
 /-- Adapt the authoritative exact DDH handler without changing its computations. -/
 noncomputable def handler
     {M : CostModel.{uCost}}
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :
     CryptoFirstOrder.Algebra.ScalarAction.Handler
       M pp.Scalar pp.Carrier where
   sampleScalar := pp.algebra.exec .sampleScalar
@@ -73,13 +77,13 @@ noncomputable def handler
 /-- The reusable first-order view of a DDH parameter's exact algebra. -/
 noncomputable def algebra
     {M : CostModel.{uCost}}
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M) :
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier) :
     CostedAlgebra M (interpret pp) signature :=
   CryptoFirstOrder.Algebra.ScalarAction.algebra (handler pp)
 
 @[simp] theorem valueDist_exec_sampleScalar
     {M : CostModel.{uCost}}
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M)
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
     (args : Ty.denote (interpret pp) .unit) :
     RandCosted.valueDist ((algebra pp).exec Operation.sampleScalar args) =
       PMF.map ULift.up
@@ -90,7 +94,7 @@ noncomputable def algebra
 
 @[simp] theorem valueDist_exec_smul
     {M : CostModel.{uCost}}
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M)
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
     (args : Ty.denote (interpret pp) (scalarTy ×ₜ carrierTy)) :
     RandCosted.valueDist ((algebra pp).exec Operation.smul args) =
       PMF.pure (ULift.up (args.1.down • args.2.down)) := by
@@ -100,7 +104,7 @@ noncomputable def algebra
 
 @[simp] theorem valueDist_exec_add
     {M : CostModel.{uCost}}
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M)
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
     (args : Ty.denote (interpret pp) (carrierTy ×ₜ carrierTy)) :
     RandCosted.valueDist ((algebra pp).exec Operation.add args) =
       PMF.pure (ULift.up (args.1.down + args.2.down)) := by
@@ -110,7 +114,7 @@ noncomputable def algebra
 
 @[simp] theorem valueDist_exec_sub
     {M : CostModel.{uCost}}
-    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M)
+    (pp : Crypto.Assumption.DL.DDH.PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
     (args : Ty.denote (interpret pp) (carrierTy ×ₜ carrierTy)) :
     RandCosted.valueDist ((algebra pp).exec Operation.sub args) =
       PMF.pure (ULift.up (args.1.down - args.2.down)) := by

@@ -681,7 +681,7 @@ structure PPTExecutionCertificate
     measure (step.budget sec) ≤ stepRuntime sec
   activationLimit_isPoly : IsPolyBounded activationLimit
   stepRuntime_isPoly : IsPolyBounded stepRuntime
-  admission : PPTAdmissible
+  admission : PPTAdmissible M measure
     (Input := fun sec => Configuration family policy sec)
     (Output := fun sec _configuration =>
       Kernel.ExecutionResult family policy sec)

@@ -211,14 +211,15 @@ theorem deniedCorruption_chargesReadState :
       RandCosted.liftCosted
         (⟨expectedDeniedCorruption, 2⟩ :
           Costed CostModel.nat (Configuration toyFamily deniedPolicy 0)) := by
-  simp [Kernel.processCorruption,
-    KernelAlgebra.withCharge, KernelAlgebra.charge, chargedKernelAlgebra,
-    Pure.pure, PMF.pure_bind, PMF.pure_map,
-    RandCosted.liftCosted, RandCosted.pure,
-    Costed.bind, Costed.pure,
-    deniedPolicy, CorruptionPolicy.incorruptible,
-    deniedCorruptionConfiguration, expectedDeniedCorruption,
-    Configuration.record]
+  simp only [deniedPolicy, CorruptionPolicy.incorruptible,
+    Kernel.processCorruption, KernelAlgebra.withCharge,
+    KernelAlgebra.charge, chargedKernelAlgebra,
+    RandCosted.liftCosted, Configuration.record,
+    deniedCorruptionConfiguration, List.nil_append, ↓reduceDIte,
+    pure, RandCosted.pure, Costed.pure, PMF.pure_bind,
+    Costed.bind, PMF.pure_map, expectedDeniedCorruption]
+  apply congrArg PMF.pure
+  congr 1
 
 example :
     Kernel.runCosted (KernelAlgebra.zero CostModel.nat Bool)
@@ -272,12 +273,14 @@ theorem sendAsBeforeCorruption_rejected :
         (toyNetwork 0) beforeSendAsConfiguration true (by simp [beforeSendAsConfiguration])
         7 forgedAction =
       RandCosted.pure CostModel.nat rejectedSendAsConfiguration := by
-  simp [Kernel.processAction, Kernel.routeEmissionAs,
+  simp only [Kernel.processAction, forgedAction, Kernel.routeEmissionAs,
     KernelAlgebra.withCharge, KernelAlgebra.charge, KernelAlgebra.zero,
-    Pure.pure, PMF.pure_bind, PMF.pure_map,
-    RandCosted.liftCosted, RandCosted.pure, Costed.bind, Costed.pure,
-    forgedAction, beforeSendAsConfiguration, rejectedSendAsConfiguration,
-    Configuration.record]
+    RandCosted.pure, RandCosted.liftCosted, Costed.pure,
+    beforeSendAsConfiguration, Finset.notMem_empty, ↓reduceIte, pure,
+    Configuration.record, List.nil_append, PMF.pure_bind, Costed.bind,
+    PMF.pure_map, rejectedSendAsConfiguration]
+  apply congrArg PMF.pure
+  congr 1
 
 def afterCorruptionConfiguration : Configuration toyFamily toyPolicy 0 where
   state := LocalStore.remove (fun _address => some 7) false
