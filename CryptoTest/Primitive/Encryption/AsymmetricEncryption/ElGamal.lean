@@ -103,6 +103,36 @@ noncomputable def noQueryAdversary :
         sec input)
   program := fun _sec _input => pure (ULift.up false)
 
+/-- The ElGamal security proof uses four games and therefore three hops. -/
+example : (gameSequence DDH.testFamily noQueryAdversary).length = 3 :=
+  rfl
+
+/-- `G₀` is definitionally the real IND-CPA game. -/
+example :
+    G₀ DDH.testFamily noQueryAdversary =
+      indCPASecurityGame (scheme DDH.testFamily) noQueryAdversary false :=
+  rfl
+
+/-- `G₁` is definitionally the random IND-CPA game. -/
+example :
+    G₁ DDH.testFamily noQueryAdversary =
+      indCPASecurityGame (scheme DDH.testFamily) noQueryAdversary true :=
+  rfl
+
+/-- The first intermediate game is `G₀`. -/
+example :
+    (gameSequence DDH.testFamily noQueryAdversary).securityGame
+        (1 : Fin 4) =
+      G₀ DDH.testFamily noQueryAdversary :=
+  rfl
+
+/-- The second intermediate game is `G₁`. -/
+example :
+    (gameSequence DDH.testFamily noQueryAdversary).securityGame
+        (2 : Fin 4) =
+      G₁ DDH.testFamily noQueryAdversary :=
+  rfl
+
 @[simp] theorem noQueryAdversary_runCosted
     (sec : Crypto.SecPar)
     (input : PublicInput Crypto.SecPar (PublicKey (Carrier := ZMod 2)) sec)
@@ -311,6 +341,23 @@ example :
       ReductionTraceCost) ≠
       ⟨[.prepare, .queryPrefix, .groupAdd, .querySuffix, .adversaryLocal]⟩ := by
   decide
+
+/-- The public efficiency lemma exposes polynomial runtime closure. -/
+example
+    (adversary : PPTOracleMachine CostModel.nat NatMeasure.nat
+      (PublicInput Crypto.SecPar (PublicKey (Carrier := ZMod 2)))
+      (fun _sec _input => Bool)
+      (indCPAOracleSpec
+        (Message (Carrier := ZMod 2)) (Ciphertext (Carrier := ZMod 2)))) :
+    IsPolyBounded
+      (concreteReductionRuntime testReductionEfficiency
+        adversary.toTimedOracleMachine) := by
+  exact concreteReductionRuntime_isPoly DDH.testFamily
+    testReductionEfficiency adversary
+
+/-- The public closure lemma is obtained from explicit efficiency data. -/
+example : DDHReductionPPTClosed NatMeasure.nat DDH.testFamily := by
+  exact ddhReductionPPTClosed DDH.testFamily testReductionEfficiency
 
 /-- The controlled compiler supplies closed PPT admission without a new premise. -/
 example

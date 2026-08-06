@@ -4,6 +4,7 @@ import CryptoTest.Infrastructure.Computation.CostComposition
 import CryptoTest.Infrastructure.Computation.CostedOracle
 import CryptoTest.Infrastructure.Computation.GenericCost
 import CryptoTest.Infrastructure.Computation.Program
+import CryptoTest.Infrastructure.GameBased.Hybrid
 import CryptoTest.FirstOrder
 import CryptoTest.Infrastructure.UC.Context
 import CryptoTest.Infrastructure.UC.Kernel

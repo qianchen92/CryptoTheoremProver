@@ -217,6 +217,21 @@
 - In `Properties/Semantics.lean`, prove cost erasure and value-distribution
   theorems for the same program. Correctness and security properties depend on
   this semantic layer rather than on complexity evidence.
+- Split a large security development under `Properties/<Notion>/` into narrow
+  `Definition`, `Lemma`, `Proof`, and `Main` layers when that materially
+  improves navigation. Definition modules contain reusable objects and games;
+  Lemma modules contain reusable local equations and bounds; Proof modules
+  compose reductions, game hops, and closure arguments; Main modules expose
+  final security theorems. Keep `Properties/<Notion>.lean` as the aggregation
+  and compatibility import rather than duplicating declarations there.
+- When a game-hop or efficiency statement and its implementation are
+  intentionally separated, put the implementation in `Proof` under the public
+  lemma name plus a `_proof` suffix. The `Lemma` declaration should call that
+  implementation directly with `exact`; operational constructors and final
+  theorems should consume the public lemmas. Game-sequence conclusions should
+  additionally use the generic `GameBased.Hybrid` composition lemmas. Do not
+  introduce an axiom or a separate proof-certificate structure solely to split
+  these files.
 - Pass host-facing scheme values through the shared first-order representation
   boundary. Do not add an alternate execution path merely to avoid
   `ValueRepresentation` or `ValueProjection`.

@@ -137,6 +137,40 @@ CryptoConstruction/
     Encryption/
       AsymmetricEncryption/
         ElGamal/
+          Construction.lean
+          Scheme.lean
+          Complexity.lean
+          Properties/
+            Semantics.lean
+            Correctness.lean
+            INDCPA.lean
+            INDCPA/
+              Definition/
+                Efficiency.lean
+                Reduction.lean
+                Cost.lean
+                ReductionGame.lean
+                Game.lean
+                RealGame.lean
+                RandomGame.lean
+              Lemma/
+                Reduction.lean
+                RealGame.lean
+                RandomGame.lean
+                Efficiency.lean
+                ReductionClosure.lean
+                GameHop.lean
+              Proof/
+                OperationalMachine.lean
+                Efficiency.lean
+                OperationalClosure.lean
+                ReductionGame.lean
+                ReductionClosure.lean
+                Reduction.lean
+                GameHop.lean
+                GameSequence.lean
+              Main/
+                Security.lean
       SymmetricEncryption/
         OneTimePad/
 CryptoTest/
@@ -329,7 +363,9 @@ Generic security notions that are not tied to one primitive.
   machines rather than only program-derived adversaries.
 - `Search` uses the same explicit adversary model and the unified dependent
   machine core, so witness types may depend on the sampled instance.
-- `Hybrid` records finite hybrid sequences.
+- `Hybrid` records arbitrary fixed-length hybrid sequences, builds them from a
+  first game followed by any fixed list of remaining games, and factors generic
+  adjacent-step and endpoint reasoning away from primitive-specific proofs.
 
 Primitive-specific games live under the corresponding primitive. This layer
 contains only shared, semantically meaningful game boundaries.
@@ -522,7 +558,20 @@ addition.
 The library proves both correctness and perfect one-time security for this
 construction, and derives PPT one-time security from the perfect theorem.
 ElGamal has a correctness proof under the scalar-action laws carried by its
-public parameters; an IND-CPA-from-DDH reduction remains future work.
+public parameters and an executable IND-CPA-from-DDH reduction. Its security
+development is split into `Definition`, `Lemma`, `Proof`, and `Main` layers;
+`Game.lean` defines only `G₀` and `G₁`, the three adjacent-hop proofs live in
+`Proof/GameHop.lean` with `_proof` suffixes, and `Lemma/GameHop.lean` exposes
+the corresponding public lemmas. Here `G₀` is definitionally `RealGame` and
+`G₁` is definitionally `RandomGame`; the outer proofs are reflexive and the
+complete DDH reduction is concentrated in the middle `G₀ → G₁` hop. The final
+theorem composes `RealGame → G₀ → G₁ → RandomGame` through the generic
+`Hybrid` endpoint lemma.
+Efficiency follows the same organization: its certificate is in
+`Definition/Efficiency.lean`, implementations are in `Proof/Efficiency.lean`,
+and `Lemma/Efficiency.lean` exposes direct `exact` wrappers consumed by PPT
+closure. The original `Properties/INDCPA.lean` path remains the aggregate
+entry point.
 
 Import `CryptoConstruction.Basic` to obtain all current parameterized
 constructions. Importing `Crypto` or `Crypto.Primitive.Basic` exposes only the
@@ -829,4 +878,4 @@ alternate fixed-natural-cost API. The minimal first-order operational model now
 covers straight-line algebraic code and finite uniform sampling. The next
 useful refinements are iteration and representation-level machine costs,
 concrete protocol instantiations of the UC kernel and context interface, and an
-ElGamal IND-CPA proof from DDH.
+end-to-end representation-level cost backend for existing constructions.
