@@ -2,9 +2,9 @@
 """Reject unresolved imports and violations of the project import hierarchy.
 
 This check is intentionally independent of Lean's build graph. It enforces the
-Infrastructure hierarchy, the trusted `CryptoFirstOrder` core order, and the
-package direction from `Crypto` definitions through first-order adapters to
-`CryptoConstruction` realizations and future `CryptoInstantiation` backends.
+Infrastructure hierarchy, the trusted `CryptoLib.Program` core order, and the
+package direction from `CryptoLib.Core` definitions through first-order adapters to
+`CryptoLib.Instantiation` realizations and future `CryptoLib.Backend` backends.
 Exact module-name membership additionally catches case mismatches that can pass
 on a case-insensitive macOS checkout but fail on GitHub's Linux runners.
 """
@@ -17,30 +17,30 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INFRA_ROOT = ROOT / "Crypto" / "Infrastructure"
+INFRA_ROOT = ROOT / "CryptoLib" / "Core" / "Infrastructure"
 IMPORT_RE = re.compile(r"^(?:public\s+)?import\s+(.+?)\s*$")
 MODULE_RE = re.compile(r"^[A-Za-z0-9_.'-]+$")
-PREFIX = "Crypto.Infrastructure."
+PREFIX = "CryptoLib.Core.Infrastructure."
 PROJECT_PACKAGES = (
-    "Crypto",
-    "CryptoFirstOrder",
-    "CryptoConstruction",
-    "CryptoInstantiation",
-    "CryptoTest",
+    "CryptoLib.Core",
+    "CryptoLib.Program",
+    "CryptoLib.Instantiation",
+    "CryptoLib.Backend",
+    "CryptoLib.Test",
 )
 
 PRODUCTION_PACKAGE_LEVEL = {
-    "Crypto": 0,
-    "CryptoFirstOrder": 1,
-    "CryptoConstruction": 2,
-    "CryptoInstantiation": 3,
+    "CryptoLib.Core": 0,
+    "CryptoLib.Program": 1,
+    "CryptoLib.Instantiation": 2,
+    "CryptoLib.Backend": 3,
 }
 
 # The operational-admission layer consumes the trusted first-order core so that
 # internally validated reified code remains a closed constructor of `ValidCode`.
-# It must not import `CryptoFirstOrder.Basic`, algebra adapters, or assumptions.
+# It must not import `CryptoLib.Program.Basic`, algebra adapters, or assumptions.
 ALLOWED_CROSS_PACKAGE_IMPORTS = {
-    ("Crypto.Infrastructure.Complexity.Operational", "CryptoFirstOrder.Core"),
+    ("CryptoLib.Core.Infrastructure.Complexity.Operational", "CryptoLib.Program.Core"),
 }
 
 
@@ -107,10 +107,10 @@ def is_project_module(module: str) -> bool:
 
 
 def is_higher_level_project_import(module: str) -> bool:
-    """Infrastructure may depend only on other Crypto.Infrastructure modules."""
+    """Infrastructure may depend only on other CryptoLib.Core.Infrastructure modules."""
 
     is_infrastructure = (
-        module == "Crypto.Infrastructure" or module.startswith(PREFIX)
+        module == "CryptoLib.Core.Infrastructure" or module.startswith(PREFIX)
     )
     return is_project_module(module) and not is_infrastructure
 
@@ -126,8 +126,8 @@ def project_import_hierarchy_error(source: str, target: str) -> str | None:
     target_package = project_package(target)
     if is_allowed_cross_package_import(source, target):
         return None
-    if source_package in PRODUCTION_PACKAGE_LEVEL and target_package == "CryptoTest":
-        return f"production package imports CryptoTest: {source} -> {target}"
+    if source_package in PRODUCTION_PACKAGE_LEVEL and target_package == "CryptoLib.Test":
+        return f"production package imports CryptoLib.Test: {source} -> {target}"
     if (
         source_package in PRODUCTION_PACKAGE_LEVEL
         and target_package in PRODUCTION_PACKAGE_LEVEL
@@ -142,88 +142,88 @@ def parser_regression_errors() -> list[str]:
     """Keep the accepted Lean import forms and project boundary under test."""
 
     fixture = """\
-/- import Crypto.Assumption.Hidden
-   /- nested import CryptoTest.Hidden -/
+/- import CryptoLib.Core.Assumption.Hidden
+   /- nested import CryptoLib.Test.Hidden -/
 -/
-public import Crypto.Infrastructure.SecurityParameter Crypto.Primitive.Bad CryptoFirstOrder.Algebra.Bad CryptoConstruction.Primitive.Bad -- tail
+public import CryptoLib.Core.Infrastructure.SecurityParameter CryptoLib.Core.Primitive.Bad CryptoLib.Program.Algebra.Bad CryptoLib.Instantiation.Primitive.Bad -- tail
 import Mathlib.Data.Nat.Basic
 """
     expected = [
-        "Crypto.Infrastructure.SecurityParameter",
-        "Crypto.Primitive.Bad",
-        "CryptoFirstOrder.Algebra.Bad",
-        "CryptoConstruction.Primitive.Bad",
+        "CryptoLib.Core.Infrastructure.SecurityParameter",
+        "CryptoLib.Core.Primitive.Bad",
+        "CryptoLib.Program.Algebra.Bad",
+        "CryptoLib.Instantiation.Primitive.Bad",
         "Mathlib.Data.Nat.Basic",
     ]
     errors: list[str] = []
     parsed = imports_from_text(fixture)
     if parsed != expected:
         errors.append(f"internal import-parser regression: {parsed!r}")
-    if not is_higher_level_project_import("Crypto.Primitive.Bad"):
-        errors.append("internal boundary regression: Crypto.Primitive.Bad accepted")
-    if not is_higher_level_project_import("CryptoTest.Bad"):
-        errors.append("internal boundary regression: CryptoTest.Bad accepted")
-    if not is_higher_level_project_import("CryptoConstruction.Primitive.Bad"):
-        errors.append("internal boundary regression: CryptoConstruction accepted")
-    if not is_higher_level_project_import("CryptoFirstOrder.Algebra.Bad"):
-        errors.append("internal boundary regression: CryptoFirstOrder accepted")
-    if is_higher_level_project_import("Crypto.Infrastructure.UC.Kernel"):
+    if not is_higher_level_project_import("CryptoLib.Core.Primitive.Bad"):
+        errors.append("internal boundary regression: CryptoLib.Core.Primitive.Bad accepted")
+    if not is_higher_level_project_import("CryptoLib.Test.Bad"):
+        errors.append("internal boundary regression: CryptoLib.Test.Bad accepted")
+    if not is_higher_level_project_import("CryptoLib.Instantiation.Primitive.Bad"):
+        errors.append("internal boundary regression: CryptoLib.Instantiation accepted")
+    if not is_higher_level_project_import("CryptoLib.Program.Algebra.Bad"):
+        errors.append("internal boundary regression: CryptoLib.Program accepted")
+    if is_higher_level_project_import("CryptoLib.Core.Infrastructure.UC.Kernel"):
         errors.append("internal boundary regression: Infrastructure rejected")
-    if project_package("CryptoConstruction.Primitive.Basic") != "CryptoConstruction":
-        errors.append("internal boundary regression: CryptoConstruction not recognized")
-    if project_package("CryptoFirstOrder.Algebra.Basic") != "CryptoFirstOrder":
-        errors.append("internal boundary regression: CryptoFirstOrder not recognized")
-    if project_package("CryptoInstantiation.Backend.Basic") != "CryptoInstantiation":
-        errors.append("internal boundary regression: CryptoInstantiation not recognized")
+    if project_package("CryptoLib.Instantiation.Primitive.Basic") != "CryptoLib.Instantiation":
+        errors.append("internal boundary regression: CryptoLib.Instantiation not recognized")
+    if project_package("CryptoLib.Program.Algebra.Basic") != "CryptoLib.Program":
+        errors.append("internal boundary regression: CryptoLib.Program not recognized")
+    if project_package("CryptoLib.Backend.Basic") != "CryptoLib.Backend":
+        errors.append("internal boundary regression: CryptoLib.Backend not recognized")
     if project_import_hierarchy_error(
-        "Crypto.Primitive.Encryption.Basic",
-        "CryptoFirstOrder.Algebra.Basic",
+        "CryptoLib.Core.Primitive.Encryption.Basic",
+        "CryptoLib.Program.Algebra.Basic",
     ) is None:
-        errors.append("internal boundary regression: Crypto-to-first-order accepted")
+        errors.append("internal boundary regression: core-to-program accepted")
     if project_import_hierarchy_error(
-        "Crypto.Infrastructure.Complexity.Operational",
-        "CryptoFirstOrder.Core",
+        "CryptoLib.Core.Infrastructure.Complexity.Operational",
+        "CryptoLib.Program.Core",
     ) is not None:
         errors.append("internal boundary regression: operational-to-core rejected")
     if project_import_hierarchy_error(
-        "Crypto.Infrastructure.Complexity.Machine",
-        "CryptoFirstOrder.Core",
+        "CryptoLib.Core.Infrastructure.Complexity.Machine",
+        "CryptoLib.Program.Core",
     ) is None:
-        errors.append("internal boundary regression: broad Crypto-to-core accepted")
+        errors.append("internal boundary regression: broad core-to-program-core accepted")
     if project_import_hierarchy_error(
-        "CryptoFirstOrder.Algebra.Basic",
-        "CryptoConstruction.Primitive.Encryption.Basic",
+        "CryptoLib.Program.Algebra.Basic",
+        "CryptoLib.Instantiation.Primitive.Encryption.Basic",
     ) is None:
-        errors.append("internal boundary regression: first-order-to-construction accepted")
+        errors.append("internal boundary regression: program-to-instantiation accepted")
     if project_import_hierarchy_error(
-        "Crypto.Infrastructure.Computation.Basic",
-        "CryptoConstruction.Primitive.Basic",
+        "CryptoLib.Core.Infrastructure.Computation.Basic",
+        "CryptoLib.Instantiation.Primitive.Basic",
     ) is None:
-        errors.append("internal boundary regression: Infrastructure-to-construction accepted")
+        errors.append("internal boundary regression: Infrastructure-to-instantiation accepted")
     if project_import_hierarchy_error(
-        "CryptoConstruction.Primitive.Basic",
-        "CryptoInstantiation.Backend.Basic",
+        "CryptoLib.Instantiation.Primitive.Basic",
+        "CryptoLib.Backend.Basic",
     ) is None:
-        errors.append("internal boundary regression: construction-to-instantiation accepted")
+        errors.append("internal boundary regression: instantiation-to-backend accepted")
     if project_import_hierarchy_error(
-        "CryptoConstruction.Primitive.Basic",
-        "CryptoFirstOrder.Algebra.Basic",
+        "CryptoLib.Instantiation.Primitive.Basic",
+        "CryptoLib.Program.Algebra.Basic",
     ) is not None:
-        errors.append("internal boundary regression: construction-to-first-order rejected")
+        errors.append("internal boundary regression: instantiation-to-program rejected")
     if project_import_hierarchy_error(
-        "CryptoFirstOrder.Algebra.Basic",
-        "Crypto.Primitive.Basic",
+        "CryptoLib.Program.Algebra.Basic",
+        "CryptoLib.Core.Primitive.Basic",
     ) is not None:
-        errors.append("internal boundary regression: first-order-to-Crypto rejected")
+        errors.append("internal boundary regression: program-to-core rejected")
     if first_order_core_import_error(
-        "CryptoFirstOrder.Type", "CryptoFirstOrder.Signature"
+        "CryptoLib.Program.Type", "CryptoLib.Program.Signature"
     ) is None:
         errors.append("internal boundary regression: first-order upward import accepted")
     if first_order_core_import_error(
-        "CryptoFirstOrder.Bounds", "CryptoFirstOrder.Type"
+        "CryptoLib.Program.Bounds", "CryptoLib.Program.Type"
     ) is not None:
         errors.append("internal boundary regression: first-order downward import rejected")
-    if first_order_core_part("CryptoFirstOrder.Algebra.AdditiveGroup") is not None:
+    if first_order_core_part("CryptoLib.Program.Algebra.AdditiveGroup") is not None:
         errors.append("internal boundary regression: adapter mistaken for core module")
     return errors
 
@@ -371,7 +371,7 @@ FIRST_ORDER_CORE_ORDER = {
 
 
 def first_order_core_part(module: str) -> str | None:
-    prefix = "CryptoFirstOrder."
+    prefix = "CryptoLib.Program."
     if not module.startswith(prefix):
         return None
     suffix = module.removeprefix(prefix)
@@ -396,15 +396,8 @@ def first_order_core_import_error(source: str, target: str) -> str | None:
 def project_source_files() -> list[Path]:
     """Collect every currently present project root and package source tree."""
 
-    files: set[Path] = set()
-    for package in PROJECT_PACKAGES:
-        root_module = ROOT / f"{package}.lean"
-        package_root = ROOT / package
-        if root_module.is_file():
-            files.add(root_module)
-        if package_root.is_dir():
-            files.update(package_root.rglob("*.lean"))
-    return sorted(files)
+    source_root = ROOT / "CryptoLib"
+    return sorted(source_root.rglob("*.lean"))
 
 
 def main() -> int:

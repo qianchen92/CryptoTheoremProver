@@ -1,7 +1,8 @@
-name = "Crypto"
+name = "CryptoLib"
 version = "0.1.0"
 keywords = ["cryptography", "formal-verification", "lean"]
-defaultTargets = ["Crypto", "CryptoFirstOrder", "CryptoConstruction", "CryptoTest"]
+defaultTargets = ["CryptoLib.Core", "CryptoLib.Program",
+  "CryptoLib.Instantiation", "CryptoLib.Test"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -16,13 +17,13 @@ scope = "leanprover-community"
 rev = "v4.29.0-rc1"
 
 [[lean_lib]]
-name = "Crypto"
+name = "CryptoLib.Core"
 
 [[lean_lib]]
-name = "CryptoFirstOrder"
+name = "CryptoLib.Program"
 
 [[lean_lib]]
-name = "CryptoConstruction"
+name = "CryptoLib.Instantiation"
 
 [[lean_lib]]
-name = "CryptoTest"
+name = "CryptoLib.Test"

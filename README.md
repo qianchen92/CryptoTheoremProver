@@ -1,6 +1,6 @@
-# Crypto
+# CryptoLib
 
-`Crypto` is an experimental Lean library for building reusable, machine-checked
+`CryptoLib` is an experimental Lean library for building reusable, machine-checked
 cryptographic security proofs. The project aims to provide a small but coherent
 foundation for defining cryptographic schemes, security games, oracle access,
 exact cost semantics, certificate-backed PPT-machine interfaces, asymptotic
@@ -34,10 +34,11 @@ Lake available, build the library and all compile-time proof tests with:
 lake build
 ```
 
-The default targets are `Crypto`, `CryptoFirstOrder`, `CryptoConstruction`, and
-`CryptoTest`. To check the layers separately, use `lake build Crypto`,
-`lake build CryptoFirstOrder`, `lake build CryptoConstruction`, or
-`lake build CryptoTest`. The files under `CryptoTest/` are theorem-level
+The default targets are `CryptoLib.Core`, `CryptoLib.Program`,
+`CryptoLib.Instantiation`, and `CryptoLib.Test`. To check the layers
+separately, use `lake build CryptoLib.Core`, `lake build CryptoLib.Program`,
+`lake build CryptoLib.Instantiation`, or `lake build CryptoLib.Test`. The files
+under `CryptoLib/Test/` are theorem-level
 regression and smoke tests; a successful build is the test result.
 
 ## Organization
@@ -47,7 +48,7 @@ infrastructure; higher layers define cryptographic objects, assumptions,
 protocols, and proof organization.
 
 ```text
-Crypto/
+CryptoLib/Core/
   Basic.lean
   Infrastructure/
     Basic.lean
@@ -112,9 +113,9 @@ Crypto/
         Syntax.lean
         UC.lean
         Properties/
-CryptoFirstOrder/
+CryptoLib/Program/
   Basic.lean
-  Core.lean
+  CryptoLib.Core.lean
   Type.lean
   Signature.lean
   Algebra.lean
@@ -131,7 +132,7 @@ CryptoFirstOrder/
   Assumption/
     DL/
       DDH.lean
-CryptoConstruction/
+CryptoLib/Instantiation/
   Basic.lean
   Primitive/
     Encryption/
@@ -173,33 +174,33 @@ CryptoConstruction/
                 Security.lean
       SymmetricEncryption/
         OneTimePad/
-CryptoTest/
+CryptoLib/Test/
   FirstOrder.lean
   Assumption/
   Infrastructure/
   Primitive/
 ```
 
-### `Crypto.Infrastructure`
+### `CryptoLib.Core.Infrastructure`
 
 Reusable infrastructure shared by assumptions, primitives, and protocols.
 This layer contains asymptotic vocabulary, randomized computations, games,
 oracles, cost models, machine models, and generic game-based proof concepts.
 
-### `Crypto.Infrastructure.SecurityParameter`
+### `CryptoLib.Core.Infrastructure.SecurityParameter`
 
-`Crypto.SecPar` is defined at the root of Infrastructure. Computation, oracle,
+`CryptoLib.Core.SecPar` is defined at the root of Infrastructure. Computation, oracle,
 UC-session, and asymptotic modules may depend on it directly; none must import
 the asymptotic layer merely to name a security parameter.
 
-### `Crypto.Infrastructure.Probability`
+### `CryptoLib.Core.Infrastructure.Probability`
 
 Probability constructions that do not depend on costs, machines, or
 asymptotics live in an independent root layer. `Uniform.uniformPMF` is the
 current reusable construction. Algebra laws and cryptographic constructions
 may use this layer without pulling in a cost or complexity API.
 
-### `Crypto.Infrastructure.Asymptotic`
+### `CryptoLib.Core.Infrastructure.Asymptotic`
 
 Asymptotic vocabulary depending only on the root security parameter.
 
@@ -211,7 +212,7 @@ Asymptotic vocabulary depending only on the root security parameter.
 Files in this layer do not depend on probability, computation, cryptographic
 primitives, game-based security definitions, or machine models.
 
-### `Crypto.Infrastructure.Computation`
+### `CryptoLib.Core.Infrastructure.Computation`
 
 Reusable semantic infrastructure for cryptographic formalization.
 
@@ -263,7 +264,7 @@ Reusable semantic infrastructure for cryptographic formalization.
 This layer remains primitive-agnostic. It is the shared substrate for security
 games and construction-specific definitions.
 
-### `Crypto.Infrastructure.Complexity`
+### `CryptoLib.Core.Infrastructure.Complexity`
 
 Semantic complexity notions used by constructions and security games.
 
@@ -318,8 +319,8 @@ Semantic complexity notions used by constructions and security games.
   run. `PPTOracleMachine` itself likewise carries caller admission. Query
   counts are never inferred from cost or runtime.
 
-This layer may depend on `Crypto.Infrastructure.Asymptotic` and
-`Crypto.Infrastructure.Computation`, but should not depend on specific
+This layer may depend on `CryptoLib.Core.Infrastructure.Asymptotic` and
+`CryptoLib.Core.Infrastructure.Computation`, but should not depend on specific
 primitives or assumptions. The current annotation model is an explicit,
 trusted path-cost semantics: runtime and query certificates are connected to
 the annotated computation and oracle-program execution, rather than being
@@ -341,7 +342,7 @@ supplied program family.
 The general `Program` language remains an engineering-level higher-order
 syntax: values passed to `pure`, continuation functions, and branch conditions
 remain Lean terms, so `PPTMachine.ofBoundedProgram` still needs independent
-admission. The separate `CryptoFirstOrder` core removes those host
+admission. The separate `CryptoLib.Program` core removes those host
 continuations and derives operational admission internally for a fixed reified
 program. It is deliberately straight-line and has no recursion, loops, RAM, or
 encoded bit-level representation. A concrete interpretation must still justify
@@ -349,7 +350,7 @@ that its bottom algebra operations and declared primitive costs adequately
 model the intended platform; external backends use the explicit
 `ExternalValidCode` boundary.
 
-### `Crypto.Infrastructure.GameBased`
+### `CryptoLib.Core.Infrastructure.GameBased`
 
 Generic security notions that are not tied to one primitive.
 
@@ -370,7 +371,7 @@ Generic security notions that are not tied to one primitive.
 Primitive-specific games live under the corresponding primitive. This layer
 contains only shared, semantically meaningful game boundaries.
 
-### `Crypto.Infrastructure.UC`
+### `CryptoLib.Core.Infrastructure.UC`
 
 The UC layer is an exact, typed ITM execution stack rather than a wrapper around
 oracle games:
@@ -456,7 +457,7 @@ Concrete statements must instantiate the port schema, components, policy,
 initial configuration, exact kernel algebra, complexity certificates, and
 operational context simulations.
 
-### `Crypto.Assumption`
+### `CryptoLib.Core.Assumption`
 
 Computational assumptions, organized by family.
 
@@ -473,14 +474,15 @@ Their exact algebras contain no local upper bounds. A
 `ParamEfficiencyCertificate` packages `OperationBounds` for the same algebra
 and derives fixed-parameter challenge and sampling bounds. Family-level typed
 signatures dispatch setup and parameter-dependent operations selected by its
-result. DLog's complete sample and DDH's real and random samples are `Program`s
+result. DLog's complete sample and DDH's real and random samples are
+`CryptoLib.Core.Infrastructure.Computation.Program`s
 over those handlers. A family-level `EfficiencyCertificate` supplies global
 setup and sampling `CostBound` proofs. Consequently, assumptions and exact
 constructions such as ElGamal depend on the same native family algebra, while
 efficiency certificates only bound already-defined execution paths. These
 modules state the assumptions; they do not prove them.
 
-### `Crypto.Primitive`
+### `CryptoLib.Core.Primitive`
 
 Cryptographic primitives and their primitive-specific syntax, correctness, and
 security definitions.
@@ -495,7 +497,7 @@ The current encryption hierarchy contains:
 - `Primitive.Encryption.SymmetricEncryption.Properties`
 
 The main symmetric-encryption interface is
-`Crypto.Primitive.Encryption.SymmetricEncryption.Scheme M SecPar Param Key Message Ciphertext`.
+`CryptoLib.Core.Primitive.Encryption.SymmetricEncryption.Scheme M SecPar Param Key Message Ciphertext`.
 It is generic in its `CostModel`; `setup`, `keygen`, `encrypt`, and `decrypt`
 all return `RandCosted M`. `Key`, `Message`, and `Ciphertext` are indexed by
 the sampled public parameters. Correctness and security notions observe
@@ -506,19 +508,19 @@ ordinary values through `setupDist`, `keygenDist`, `encryptDist`, and
 exact zero advantage.
 
 The main asymmetric-encryption interface is
-`Crypto.Primitive.Encryption.AsymmetricEncryption.Scheme M SecPar Param PublicKey SecretKey Message Ciphertext`.
+`CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Scheme M SecPar Param PublicKey SecretKey Message Ciphertext`.
 It follows the same `RandCosted M` design for public parameters, key
 generation, public-key encryption, and secret-key decryption. Its IND-CPA
 definition remains an `Infrastructure.GameBased.OracleDistinguishing` problem
 over the cost-erased value distributions and keeps the same arbitrary PPT
 adversary domain.
 
-### `CryptoFirstOrder`
+### `CryptoLib.Program`
 
 The trusted first-order language and its reusable algebra adapters live
-together in the separate `CryptoFirstOrder` library. The core modules are
+together in the separate `CryptoLib.Program` library. The core modules are
 `Type`, `Signature`, `Algebra`, `Syntax`, `Builder`, `Semantics`, `Execution`,
-`Operation`, `Validation`, and `Bounds`; `CryptoFirstOrder.Core` aggregates
+`Operation`, `Validation`, and `Bounds`; `CryptoLib.Program.Core` aggregates
 exactly those modules. `Ty` contains base carriers, unit, booleans, and
 products; `Expr`, `Var`, and `Env` give a typed de Bruijn representation; and
 `Code` contains only return, pure let, primitive call, and represented branch
@@ -527,31 +529,32 @@ nodes. Code stores neither Lean continuations nor function-valued syntax.
 The adapter subtrees own generic object-language bases, interpretations,
 signatures, smart-operation embeddings, host-value lift/projection boundaries,
 and exact handler bridges. Assumption-specific modules such as
-`CryptoFirstOrder.Assumption.DL.DDH` may package reusable cost-erasure facts.
+`CryptoLib.Program.Assumption.DL.DDH` may package reusable cost-erasure facts.
 `ValidAlgebra` exposes the bottom operations as the primitive boundary while
 preventing an arbitrary sampler distribution from entering internal
 validation.
 
-Core modules depend only on lower `Crypto` cost and probability infrastructure;
+Core modules depend only on lower `CryptoLib.Core` cost and probability infrastructure;
 adapter modules may additionally depend on the corresponding abstract algebra
 or assumption definitions. The sole direct import in the other direction is
-`Crypto.Infrastructure.Complexity.Operational -> CryptoFirstOrder.Core`, which
+`CryptoLib.Core.Infrastructure.Complexity.Operational -> CryptoLib.Program.Core`, which
 keeps internally validated first-order admission as a closed `ValidCode`
-constructor without importing adapters. `CryptoFirstOrder` contains no
+constructor without importing adapters. `CryptoLib.Program` contains no
 construction algorithms, assembled schemes, security definitions, complexity
-certificates, or concrete backend choices. Import `CryptoFirstOrder.Core` for
-only the trusted language, `CryptoFirstOrder.Basic` for the core plus all
+certificates, or concrete backend choices. Import `CryptoLib.Program.Core` for
+only the trusted language, `CryptoLib.Program.Basic` for the core plus all
 current adapters, or a narrow module when defining a construction.
 
-### `CryptoConstruction`
+### `CryptoLib.Instantiation`
 
 Parameterized algorithms and protocol constructions live in the separate
-`CryptoConstruction` library. It depends on `Crypto` and `CryptoFirstOrder`;
+`CryptoLib.Instantiation` library. It depends on `CryptoLib.Core` and
+`CryptoLib.Program`;
 neither lower library imports it. The current constructions include a
 group-based one-time pad and ElGamal. They work over abstract cost-aware
 parameter families; the production package does not yet choose a concrete
 group representation or implementation backend. A future
-`CryptoInstantiation` library is reserved for such concrete choices.
+`CryptoLib.Backend` library is reserved for such concrete choices.
 The one-time pad exposes the finite nonempty additive group chosen for the
 security parameter, encrypts by addition, and decrypts by negation followed by
 addition.
@@ -573,14 +576,16 @@ and `Lemma/Efficiency.lean` exposes direct `exact` wrappers consumed by PPT
 closure. The original `Properties/INDCPA.lean` path remains the aggregate
 entry point.
 
-Import `CryptoConstruction.Basic` to obtain all current parameterized
-constructions. Importing `Crypto` or `Crypto.Primitive.Basic` exposes only the
+Import `CryptoLib.Instantiation.Basic` to obtain all current parameterized
+constructions. Importing `CryptoLib.Core` or `CryptoLib.Core.Primitive.Basic`
+exposes only the
 core definitions, assumptions, infrastructure, and generic properties;
-`CryptoFirstOrder.Basic` exposes adapters but no schemes.
+`CryptoLib.Program.Basic` exposes adapters but no schemes.
 
 Both construction-level `scheme` definitions directly inhabit this generic
 interface. OTP, DLog, DDH, and ElGamal each use one typed algebra as the only
-primitive execution source. Their decomposed algorithm bodies are `Program`s;
+primitive execution source. Their decomposed algorithm bodies are
+`CryptoLib.Program.Procedure`s;
 scheme fields run those programs directly, while an exact family setup is the
 primitive called by the family-level setup program where one is needed.
 Value-distribution equations used by correctness and security erase costs from
@@ -594,16 +599,16 @@ another cost semantics.
 The primitive-level `UC.lean` files are reserved for primitive-specific UC
 formulations, such as ideal functionalities or emulation statements for the
 corresponding primitive. The reusable UC execution and protocol machinery
-belongs in `Crypto.Infrastructure.UC`; primitive-level files should import and
+belongs in `CryptoLib.Core.Infrastructure.UC`; primitive-level files should import and
 instantiate that machinery only when they introduce concrete UC definitions.
 
 ## Import Policy
 
 `Basic.lean` files are aggregation modules for their own library layer. Import
 them when a caller wants that layer; otherwise prefer the narrow file that
-provides the needed definition. `Crypto.Basic` does not aggregate
-`CryptoFirstOrder.Basic` or its adapters; its operational-admission layer
-imports only `CryptoFirstOrder.Core`. `CryptoFirstOrder.Basic` never aggregates
+provides the needed definition. `CryptoLib.Core.Basic` does not aggregate
+`CryptoLib.Program.Basic` or its adapters; its operational-admission layer
+imports only `CryptoLib.Program.Core`. `CryptoLib.Program.Basic` never aggregates
 constructions.
 
 The enforced dependency direction is:
@@ -623,17 +628,17 @@ Asymptotic + Computation -> Complexity -> GameBased -> UC
 Probability ---------------------------------------> Assumption / Primitive
 Program / Oracle / GameBased / UC -----------------> Assumption / Primitive
 
-Crypto Cost / Probability -> CryptoFirstOrder core
-CryptoFirstOrder core -> Crypto Complexity.Operational
-Crypto definitions + CryptoFirstOrder core -> CryptoFirstOrder adapters
-  -> CryptoConstruction -> future CryptoInstantiation
+CryptoLib.Core Cost / Probability -> CryptoLib.Program core
+CryptoLib.Program core -> CryptoLib.Core Complexity.Operational
+CryptoLib.Core definitions + CryptoLib.Program core -> CryptoLib.Program adapters
+  -> CryptoLib.Instantiation -> future CryptoLib.Backend
 ```
 
 `SecurityParameter` and `Probability` are independent roots; in particular,
 neither imports asymptotics or computation. `scripts/check_infrastructure_imports.py`
 checks exact project-module resolution, the Infrastructure hierarchy, the
 first-order core order, the core-only operational bridge, and the
-`CryptoFirstOrder`/`CryptoConstruction`/`CryptoInstantiation` boundary; CI runs
+`CryptoLib.Program`/`CryptoLib.Instantiation`/`CryptoLib.Backend` boundary; CI runs
 it before Lean builds. Infrastructure subsystems additionally enforce their
 file-local orders, including Algebra, Program, Oracle, Complexity, GameBased,
 and the UC kernel stack.
@@ -659,24 +664,24 @@ and the UC kernel stack.
   files and generic theorems under `Properties/`.
 - Put the trusted first-order AST, interpreter, validation, bounds, Builder
   surface, reusable bases, signatures, operation embeddings, lift/projection
-  boundaries, and exact-algebra bridges under `CryptoFirstOrder/`. Do not put
+  boundaries, and exact-algebra bridges under `CryptoLib/Program/`. Do not put
   schemes, security properties, complexity certificates, or concrete backends
   there.
 - Put algorithms that construct abstract primitives or protocols over
   parameterized mathematical and cost-aware backends under
-  `CryptoConstruction/`.
+  `CryptoLib/Instantiation/`.
 - Within a named construction, use `Construction.lean` for its parameters and
-  algebra, `Scheme.lean` for the executable algorithm `Program`s and assembled
+  algebra, `Scheme.lean` for the executable algorithm `Procedure`s and assembled
   scheme, and `Complexity.lean` for budgets, bounded/timed wrappers, exact-cost
   results, and efficiency certificates. `Scheme.lean` must not import
   `Complexity.lean`. Put cost-erasure and value-distribution theorems in
   `Properties/Semantics.lean`; correctness and security properties depend on
   semantics rather than complexity evidence.
-- Reserve a future `CryptoInstantiation/` library for fixed representations,
+- Reserve a future `CryptoLib/Backend/` library for fixed representations,
   implementation backends, and their instance-specific cost certificates.
-- Use `CryptoFirstOrder.Core` when only the trusted language is required and
-  `CryptoFirstOrder.Basic` when all adapters are required. Import
-  `CryptoConstruction.Basic` explicitly for parameterized algorithms.
+- Use `CryptoLib.Program.Core` when only the trusted language is required and
+  `CryptoLib.Program.Basic` when all adapters are required. Import
+  `CryptoLib.Instantiation.Basic` explicitly for parameterized algorithms.
 
 When adding polymorphic Lean declarations, use descriptive universe names such
 as `uIn`, `uOut`, `uQuery`, `uResponse`, `uValue`, `uMapped`, `uScalar`,
@@ -701,14 +706,14 @@ first-order program whose semantics and cost are proved later.
   declaration types, and theorem behavior. Use a small `section` or a new
   variable declaration when one declaration needs different binder
   explicitness.
-- Keep imports fully qualified. In `CryptoConstruction` algorithm files, avoid
+- Keep imports fully qualified. In `CryptoLib.Instantiation` algorithm files, avoid
   ordinary broad `open` declarations; activate notation and scoped instances
   with narrow `open scoped` declarations instead. A proof-heavy file may use a
   narrow ordinary `open` when repeated qualification would obscure the proof.
   Do not introduce a private namespace alias merely to move the same verbosity
   elsewhere.
 - When cost-layer names recur in a primitive or proof file, a narrow
-  `open Crypto.Infrastructure.Computation.Cost` permits `CostModel`,
+  `open CryptoLib.Core.Infrastructure.Computation.Cost` permits `CostModel`,
   `RandCosted`, and `NatMeasure`. In a construction `Scheme.lean`, prefer one
   fully qualified `CostModel` in the shared `variable` block over a broad
   namespace opening or repeated fully qualified binders.
@@ -726,9 +731,9 @@ first-order program whose semantics and cost are proved later.
 - Keep public and secret keys as distinct roles. ElGamal key generation returns
   a structural pair, but the interface lists `publicKeyTy` and `secretKeyTy`
   separately rather than introducing a `keyPairTy` role.
-- Put reusable arity encoding in `CryptoFirstOrder`. New construction
-  declarations use `CryptoFirstOrder.Program.NAry` with a static list of
-  logical input roles, and `CryptoFirstOrder.Program.NAryPair` when the result
+- Put reusable arity encoding in `CryptoLib.Program`. New construction
+  declarations use `CryptoLib.Program.Procedure.NAry` with a static list of
+  logical input roles, and `CryptoLib.Program.Procedure.NAryPair` when the result
   contains two distinct roles. `Nullary`, `Unary`, `Binary`, `Ternary`, and `NullaryPair`
   remain compatibility abbreviations over this layer.
 - `Ty.tuple` compiles the static input list to the existing structural input:
@@ -738,19 +743,19 @@ first-order program whose semantics and cost are proved later.
 
 ### First-order construction syntax
 
-Construction algorithms use the scoped `CryptoFirstOrder.Builder` surface and
-compile immediately to the trusted `CryptoFirstOrder.Code` syntax. A typical
+Construction algorithms use the scoped `CryptoLib.Program.Builder` surface and
+compile immediately to the trusted `CryptoLib.Program.Code` syntax. A typical
 declaration has this shape:
 
 ```lean
-open scoped CryptoFirstOrder DDHGroup
+open scoped CryptoLib.Program DDHGroup
 
 variable
-  {M : Crypto.Infrastructure.Computation.Cost.CostModel.{uCost}}
+  {M : CryptoLib.Core.Infrastructure.Computation.Cost.CostModel.{uCost}}
   (pp : PublicParam.{uCost, uScalar, uGroup} M)
 
 def keygenProgram :
-    CryptoFirstOrder.Program.NAryPair
+    CryptoLib.Program.Procedure.NAryPair
       (Language.interpret pp) Language.signature
       []
       Language.publicKeyTy Language.secretKeyTy where
@@ -788,8 +793,9 @@ def keygenProgram :
   `ValueProjection`.
 - Write object-language products as `A ×ₜ B` in surface type declarations.
   The trusted structural core remains `Ty.prod`. Do not write a product merely
-  because a `Program` accepts several logical inputs; list their roles in
-  `Program.NAry`. A genuine value product, such as an ElGamal ciphertext, still
+  because a `Procedure` accepts several logical inputs; list their roles in
+  `CryptoLib.Program.Procedure.NAry`. A genuine value product, such as an
+  ElGamal ciphertext, still
   uses `×ₜ`.
 
 ### Sampling syntax
@@ -810,7 +816,7 @@ def keygenProgram :
 - `Construction.lean` owns construction-specific mathematical parameters and
   the authoritative exact algebra. Reusable base types, interpretations,
   signatures, operation embeddings, lift/projection boundaries, and handler
-  bridges belong in `CryptoFirstOrder`; `Construction.Language` should alias an
+  bridges belong in `CryptoLib.Program`; `Construction.Language` should alias an
   existing adapter and add only construction-specific semantic role names and
   bindings. Add a new reusable adapter instead of copying this wiring into a
   construction.
@@ -853,7 +859,7 @@ Use a fixed suffix vocabulary for game-based declarations.
   such as `OneTimeSecure`, `INDCPASecure`, or `Assumption` inside a specific
   assumption namespace.
 
-The generic type `Crypto.Infrastructure.Computation.Game` remains named `Game`;
+The generic type `CryptoLib.Core.Infrastructure.Computation.Game` remains named `Game`;
 the `SecurityGame` suffix is for concrete or template security experiments
 that instantiate a game-based notion.
 
@@ -873,7 +879,8 @@ dispatcher rather than metadata-only components.
 
 OTP, ElGamal, DLog, and DDH use the generic typed-algebra-to-`RandCosted`
 path, with efficiency bounds treated as certificates over those exact
-executions. All four use the same typed `Program` layer and none has an
+executions. All four use the same typed
+`CryptoLib.Core.Infrastructure.Computation.Program` layer and none has an
 alternate fixed-natural-cost API. The minimal first-order operational model now
 covers straight-line algebraic code and finite uniform sampling. The next
 useful refinements are iteration and representation-level machine costs,

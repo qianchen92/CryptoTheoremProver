@@ -55,7 +55,7 @@ subsystem order encoded by the checker.
 
 ## Locked decisions
 
-- `Crypto.SecPar` lives in `Crypto.Infrastructure.SecurityParameter`; neither
+- `CryptoLib.Core.SecPar` lives in `CryptoLib.Core.Infrastructure.SecurityParameter`; neither
   computation nor probability imports asymptotics.
 - Exact sequential cost is an ordered, potentially noncommutative additive
   monoid.  A worst-case capability reuses that exact order and supplies only a
@@ -140,7 +140,7 @@ component handler bounds + KernelAlgebra bounds
 | Probability | `Probability/Uniform.lean`, `Probability/Basic.lean`; old `Computation/Distribution.lean` removed | focused and consumer builds passed |
 | Cost | `Model -> Writer -> Randomized -> PathBound`; `Measure -> Projection` | `Cost.Basic` passed |
 | Algebra | `Signature -> Handler -> Laws/Bounds -> Operation`; shared `Parameter` | `Algebra.Basic` passed |
-| Program | `Syntax -> Semantics -> Execution/Bounds -> Basic` | `Program.Basic` passed, including execution/support iff |
+| Program | `Syntax -> Semantics -> Execution/Bounds -> Basic` | `CryptoLib.Program.Basic` passed, including execution/support iff |
 | Machine | unified dependent `ProbabilisticMachine`, annotation-level `TimedMachine`, and operationally admitted `PPTMachine` | `Complexity.Basic` passed; host-function bypass regressions included |
 | Program adapter | exact generic run retained; measurement used only in certificates | focused build passed |
 | GameBased | pure indistinguishability; separate distinguishing/search; old Reduction removed | non-Oracle `GameBased.Basic` passed |
@@ -153,8 +153,8 @@ component handler bounds + KernelAlgebra bounds
 | UC worlds/security | distinct wrappers, one shared corruption policy, intrinsic Boolean environment output, real/ideal wiring, common-fuel role independence, and Context step-to-run simulation | focused modules passed; policy and positive-fuel observation regressions included in final acceptance |
 | UC context | one typed `SystemHole.fill`, structural `ContextBuilder`, shared `plugPolicy`, role/port/configuration transport, operational simulation, identity/associativity, and `uc_compose` | production and positive-fuel structural regression passed |
 | UC layered | session-aware party addresses, total party/manager/boundary dispatcher, full-address MPC functionality, and one layered policy indexing both worlds | production bridge, four-role dispatch, and FIFO broadcast-handler exact-cost regression passed |
-| Removed empty surfaces | `GameBased.Reduction`, `ProofPattern.Basic`, empty `Crypto.Protocol.Basic` | source files removed; aggregate build and stale-name scan passed |
-| CI | import checker; explicit Linux Crypto/CryptoTest/default builds; Jekyll disabled; docgen on every push with Pages deployment only from `main` | workflow updated; latest baseline run `30867757068` is green; the unpushed migration awaits its own remote run |
+| Removed empty surfaces | `GameBased.Reduction`, `ProofPattern.Basic`, empty `CryptoLib.Core.Protocol.Basic` | source files removed; aggregate build and stale-name scan passed |
+| CI | import checker; explicit Linux `CryptoLib.Core`/`CryptoLib.Test`/default builds; Jekyll disabled; docgen on every push with Pages deployment only from `main` | workflow updated; latest baseline run `30867757068` is green; the unpushed migration awaits its own remote run |
 
 ## Semantic boundaries to audit
 
@@ -213,11 +213,11 @@ The following commands were executed in order from the final working tree:
 
 ```text
 python3 scripts/check_infrastructure_imports.py
-lake build Crypto
-lake build CryptoTest
+lake build CryptoLib.Core
+lake build CryptoLib.Test
 lake build
-rg -n '\b(sorry|admit)\b|^\s*axiom\b|\bunsafe\b' Crypto CryptoTest
-rg -n '^opaque .*Admissible' Crypto
+rg -n '\b(sorry|admit)\b|^\s*axiom\b|\bunsafe\b' CryptoLib/Core CryptoLib/Test
+rg -n '^opaque .*Admissible' CryptoLib/Core
 git diff --check
 git status --short
 ```
@@ -226,11 +226,11 @@ The final migrated working tree passed:
 
 - Project imports resolve with exact case, and the Infrastructure hierarchy has
   65 modules with no cycle or upward import.
-- `lake build Crypto`: 1803 jobs, no warnings.
-- `lake build CryptoTest`: 3228 jobs, no warnings.
+- `lake build CryptoLib.Core`: 1803 jobs, no warnings.
+- `lake build CryptoLib.Test`: 3228 jobs, no warnings.
 - `lake build`: 3252 jobs, no warnings.
-- no `sorry`, `admit`, explicit `axiom`, or `unsafe` in `Crypto` or
-  `CryptoTest`; the opaque admission relations expose the operational trust
+- no `sorry`, `admit`, explicit `axiom`, or `unsafe` in `CryptoLib/Core` or
+  `CryptoLib/Test`; the opaque admission relations expose the operational trust
   boundary but provide no global fact or generic host-function constructor.
 - no stale removed API in source or tests; the scan's only matches are this
   ledger's removal record and the theorem-neutral `INDCPA.lean` module name.

@@ -20,12 +20,14 @@ jobs:
       - name: Check Project import hierarchy
         run: python3 scripts/check_infrastructure_imports.py
       - uses: leanprover/lean-action@v1
-      - name: Build library target
-        run: lake build Crypto
-      - name: Build construction target
-        run: lake build CryptoConstruction
+      - name: Build core target
+        run: lake build CryptoLib.Core
+      - name: Build program target
+        run: lake build CryptoLib.Program
+      - name: Build instantiation target
+        run: lake build CryptoLib.Instantiation
       - name: Build theorem regression target
-        run: lake build CryptoTest
+        run: lake build CryptoLib.Test
       - name: Build default targets
         run: lake build
       # The upstream action generates API docs only for `push` events. Build

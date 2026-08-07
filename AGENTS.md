@@ -5,7 +5,7 @@
 - Prefer domain-specific top-level names over broad containers. Use names such
   as `Assumption`, `Primitive`, and `Protocol` for first-level cryptographic
   domains.
-- Put reusable infrastructure under `Crypto.Infrastructure`, using submodules
+- Put reusable infrastructure under `CryptoLib.Core.Infrastructure`, using submodules
   such as `Asymptotic`, `Computation`, `Complexity`, `GameBased`, and
   `UC`, and `ProofPattern` when they describe the actual role of the
   declarations.
@@ -19,22 +19,25 @@
 ## Library Layer Boundaries
 
 - Keep reusable infrastructure, assumptions, abstract primitive/protocol
-  syntax, generic security definitions, and generic properties in `Crypto`.
+  syntax, generic security definitions, and generic properties in
+  `CryptoLib.Core`.
 - Put the trusted first-order language, interpreter, validation, bounds,
   Builder surface, and reusable native-algebra bridges in the separate
-  `CryptoFirstOrder` library. It contains no construction algorithms,
+  `CryptoLib.Program` library. It contains no construction algorithms,
   assembled schemes, security definitions, complexity certificates, or
   concrete backend choices.
-- `CryptoFirstOrder.Core` aggregates only `Type`, `Signature`, `Algebra`,
+- `CryptoLib.Program.Core` aggregates only `Type`, `Signature`, `Algebra`,
   `Syntax`, `Builder`, `Semantics`, `Execution`, `Operation`, `Validation`, and
-  `Bounds`. Core modules may depend only on lower `Crypto` cost/probability
+  `Bounds`. Core modules may depend only on lower `CryptoLib.Core`
+  cost/probability
   infrastructure. Adapter modules may additionally depend on the abstract
   algebra or assumption definition they adapt.
 - Put parameterized algorithms that construct abstract primitives or protocols
-  in the separate `CryptoConstruction` library. It may depend on `Crypto` and
-  `CryptoFirstOrder` but must not depend on a concrete backend instantiation.
+  in the separate `CryptoLib.Instantiation` library. It may depend on
+  `CryptoLib.Core` and `CryptoLib.Program` but must not depend on a concrete
+  backend instantiation.
 - Within each named construction, keep parameter and algebra definitions in
-  `Construction.lean`, executable algorithm `Program`s and their assembled
+  `Construction.lean`, executable algorithm `Procedure`s and their assembled
   abstract object in `Scheme.lean`, and budgets, bounded/timed wrappers, exact
   cost results, and efficiency certificates in `Complexity.lean`.
 - `Scheme.lean` must not import `Complexity.lean`; complexity evidence depends
@@ -42,19 +45,19 @@
 - Put cost-erasure and value-distribution theorems in
   `Properties/Semantics.lean`. Correctness and security properties should
   depend on this semantic layer, not on `Complexity.lean`.
-- Reserve a future `CryptoInstantiation` library for fixed representations,
+- Reserve a future `CryptoLib.Backend` library for fixed representations,
   implementation backends, and their instance-specific cost certificates.
-- The only permitted direct `Crypto -> CryptoFirstOrder` import is
-  `Crypto.Infrastructure.Complexity.Operational -> CryptoFirstOrder.Core`.
+- The only permitted direct `CryptoLib.Core -> CryptoLib.Program` import is
+  `CryptoLib.Core.Infrastructure.Complexity.Operational -> CryptoLib.Program.Core`.
   This preserves the closed internally validated `ValidCode` constructor;
-  it must never import `CryptoFirstOrder.Basic` or an adapter subtree.
-- `CryptoFirstOrder` must not import `CryptoConstruction` or
-  `CryptoInstantiation`; `CryptoConstruction` must not import
-  `CryptoInstantiation`.
+  it must never import `CryptoLib.Program.Basic` or an adapter subtree.
+- `CryptoLib.Program` must not import `CryptoLib.Instantiation` or
+  `CryptoLib.Backend`; `CryptoLib.Instantiation` must not import
+  `CryptoLib.Backend`.
 - Each library's `Basic.lean` aggregates only that library. Import
-  `CryptoFirstOrder.Core` for only the trusted language,
-  `CryptoFirstOrder.Basic` for all adapters, and
-  `CryptoConstruction.Basic` explicitly for parameterized constructions.
+  `CryptoLib.Program.Core` for only the trusted language,
+  `CryptoLib.Program.Basic` for all adapters, and
+  `CryptoLib.Instantiation.Basic` explicitly for parameterized constructions.
 
 ## Lean Universe Names
 
@@ -102,7 +105,7 @@
   `section` or a separate variable declaration instead of changing the whole
   namespace.
 - Keep import paths fully qualified.
-- Avoid ordinary broad `open` declarations in `CryptoConstruction`, especially
+- Avoid ordinary broad `open` declarations in `CryptoLib.Instantiation`, especially
   in `Scheme.lean`. Remove unused ordinary opens. Prefer qualification at the
   declaration boundary and narrow `open scoped` declarations for DSL notation
   or scoped algebra/parameter instances.
@@ -111,7 +114,7 @@
   materially obscure the proof. Do not introduce a private namespace alias
   merely to relocate the same verbosity.
 - Where cost-layer names recur in a primitive or proof file, narrowly open
-  `Crypto.Infrastructure.Computation.Cost` and use `CostModel`, `RandCosted`,
+  `CryptoLib.Core.Infrastructure.Computation.Cost` and use `CostModel`, `RandCosted`,
   and `NatMeasure`. In a construction `Scheme.lean`, prefer one fully qualified
   `CostModel` in the shared variable block rather than a broad ordinary open or
   repeated fully qualified binders.
@@ -133,9 +136,9 @@
   the secret key as `sk`, and fresh encryption randomness as `r`. Keep semantic
   interface names such as `PublicKey`, `SecretKey`, `publicKeyTy`, and
   `secretKeyTy` unabbreviated.
-- Put reusable program-arity encoding in `CryptoFirstOrder`.
-  New construction declarations use `CryptoFirstOrder.Program.NAry` with a
-  static list of logical input roles, and `CryptoFirstOrder.Program.NAryPair`
+- Put reusable program-arity encoding in `CryptoLib.Program`.
+  New construction declarations use `CryptoLib.Program.Procedure.NAry` with a
+  static list of logical input roles, and `CryptoLib.Program.Procedure.NAryPair`
   for a result containing two distinct roles. Treat `Nullary`, `Unary`, `Binary`, `Ternary`,
   and `NullaryPair` as compatibility abbreviations rather than the primary
   construction style.
@@ -147,10 +150,10 @@
 ## First-Order Construction Surface
 
 - Activate construction syntax with
-  `open scoped CryptoFirstOrder`.
+  `open scoped CryptoLib.Program`.
 - Define straight-line construction algorithms with
   `first_order input do ...`. The Builder layer must lower immediately to the
-  trusted `CryptoFirstOrder.Code`; do not add a second algorithm AST or
+  trusted `CryptoLib.Program.Code`; do not add a second algorithm AST or
   semantics.
 - Match an `NAry` input list with Builder typed-context syntax. Use
   `first_order () do` for an empty list, `first_order input do` or
@@ -175,13 +178,13 @@
   `call operation with arguments` for primitives with no smart surface form.
 - Do not expose `Signature.inject`, `.inl`, `.inr`, or `ULift` manipulation in
   a `Scheme.lean` algorithm body. Put reusable typed signature embeddings and
-  lift/projection boundaries in `CryptoFirstOrder`; let smart constructors lower
+  lift/projection boundaries in `CryptoLib.Program`; let smart constructors lower
   to `Code.call`; and use `Builder.runCosted`, `ValueRepresentation`, and
   `ValueProjection` at the host-facing boundary.
 - Use the scoped notation `A ×ₜ B` for genuine object-language product types.
   Keep `.prod` as the trusted structural representation in generic core code.
   Do not expose a product solely because a program has several logical inputs;
-  list those roles in `Program.NAry` instead.
+  list those roles in `CryptoLib.Program.Procedure.NAry` instead.
 
 ## First-Order Sampling
 
@@ -198,13 +201,13 @@
 
 ## Construction File Style
 
-- In `CryptoFirstOrder`, define reusable object-language bases,
+- In `CryptoLib.Program`, define reusable object-language bases,
   interpretations, signatures, typed operation embeddings, host-value
   lift/projection boundaries, exact handler bridges, and bridge-specific
   semantic lemmas. Do not put construction algorithms or certificates there.
 - In `Construction.lean`, define construction-specific mathematical parameters
   and the authoritative exact algebra. Its `Language` namespace should reuse a
-  `CryptoFirstOrder` adapter and add only construction-specific semantic role
+  `CryptoLib.Program` adapter and add only construction-specific semantic role
   names and bindings. Add a reusable adapter instead of copying base,
   interpretation, signature, embedding, or handler wiring into a construction.
 - In `Scheme.lean`, define each executable algorithm exactly once with the
