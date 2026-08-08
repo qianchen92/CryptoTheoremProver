@@ -5,6 +5,7 @@ import CryptoLib.Test.Infrastructure.Computation.CostedOracle
 import CryptoLib.Test.Infrastructure.Computation.GenericCost
 import CryptoLib.Test.Infrastructure.GameBased.Hybrid
 import CryptoLib.Test.FirstOrder
+import CryptoLib.Test.Program.Transformations
 import CryptoLib.Test.Infrastructure.UC.Context
 import CryptoLib.Test.Infrastructure.UC.Kernel
 import CryptoLib.Test.Infrastructure.UC.Layered

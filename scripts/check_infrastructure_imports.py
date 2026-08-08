@@ -261,6 +261,14 @@ import Mathlib.Data.Nat.Basic
         "CryptoLib.Program.Bounds", "CryptoLib.Program.Type"
     ) is not None:
         errors.append("internal boundary regression: first-order downward import rejected")
+    if first_order_core_import_error(
+        "CryptoLib.Program.Semantics", "CryptoLib.Program.Transform.Rename"
+    ) is None:
+        errors.append("internal boundary regression: transform upward import accepted")
+    if first_order_core_import_error(
+        "CryptoLib.Program.Transform.Handler", "CryptoLib.Program.Semantics"
+    ) is not None:
+        errors.append("internal boundary regression: transform downward import rejected")
     if first_order_core_part("CryptoLib.Program.Algebra.AdditiveGroup") is not None:
         errors.append("internal boundary regression: adapter mistaken for core module")
     return errors
@@ -380,11 +388,13 @@ FIRST_ORDER_CORE_ORDER = {
     "Algebra": 2,
     "Syntax": 3,
     "Operation": 3,
-    "Builder": 4,
     "Semantics": 4,
-    "Validation": 4,
-    "Execution": 5,
-    "Bounds": 5,
+    "Transform": 5,
+    "Builder": 6,
+    "Validation": 6,
+    "Execution": 7,
+    "Bounds": 7,
+    "Trusted": 99,
     "Core": 99,
 }
 
@@ -394,9 +404,12 @@ def first_order_core_part(module: str) -> str | None:
     if not module.startswith(prefix):
         return None
     suffix = module.removeprefix(prefix)
-    if "." in suffix or suffix not in FIRST_ORDER_CORE_ORDER:
+    part = suffix.split(".", 1)[0]
+    if part == "Transform":
+        return part
+    if "." in suffix or part not in FIRST_ORDER_CORE_ORDER:
         return None
-    return suffix
+    return part
 
 
 def first_order_core_import_error(source: str, target: str) -> str | None:

@@ -262,7 +262,7 @@ namespace PPTAdmissible
 /--
 The sole public constructor for the controlled admission token.  Its result is
 indexed by the compiler's exact `close` run and runtime expression; callers
-cannot use it to admit a different host wrapper.
+cannot use it to justify a different host wrapper.
 -/
 theorem ofControlledOracleAdapter
     {M : CostModel.{uCost}} {measure : NatMeasure M}
