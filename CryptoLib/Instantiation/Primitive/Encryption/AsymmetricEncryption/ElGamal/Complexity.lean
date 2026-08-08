@@ -1,4 +1,3 @@
-import CryptoLib.Core.Infrastructure.Complexity.ProgramMachine
 import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal.Scheme
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
@@ -17,7 +16,7 @@ variable
     {Carrier : Type uGroup}
     (measure : NatMeasure M)
     (pp : PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
-    (certificate : CryptoLib.Core.Assumption.DL.DDH.ParamEfficiencyCertificate pp)
+    (certificate : CryptoLib.Assumption.DL.DDH.ParamEfficiencyCertificate pp)
 
 /-- Static key-generation budget: one scalar sample and one scalar action. -/
 def keygenBudget : M.Cost :=
@@ -43,7 +42,7 @@ private theorem scalarSampleOperationBound
   simpa [Language.algebra] using
     RandCosted.CostBound.weaken
       (certificate.bounds.cost_le
-        (CryptoLib.Core.Assumption.DL.DDH.Op.sampleScalar
+        (CryptoLib.Assumption.DL.DDH.Op.sampleScalar
           (math := pp.toDecisionalCyclicAction)))
       certificate.scalarSampleBudget_sound
 
@@ -56,7 +55,7 @@ private theorem smulOperationBound
   simpa [Language.algebra] using
     RandCosted.CostBound.weaken
       (certificate.bounds.cost_le
-        (CryptoLib.Core.Assumption.DL.DDH.Op.smul args.1.down args.2.down))
+        (CryptoLib.Assumption.DL.DDH.Op.smul args.1.down args.2.down))
       (certificate.smulBudget_sound args.1.down args.2.down)
 
 private theorem addOperationBound
@@ -68,7 +67,7 @@ private theorem addOperationBound
   simpa [Language.algebra] using
     RandCosted.CostBound.weaken
       (certificate.bounds.cost_le
-        (CryptoLib.Core.Assumption.DL.DDH.Op.add args.1.down args.2.down))
+        (CryptoLib.Assumption.DL.DDH.Op.add args.1.down args.2.down))
       (certificate.addBudget_sound args.1.down args.2.down)
 
 private theorem subOperationBound
@@ -80,7 +79,7 @@ private theorem subOperationBound
   simpa [Language.algebra] using
     RandCosted.CostBound.weaken
       (certificate.bounds.cost_le
-        (CryptoLib.Core.Assumption.DL.DDH.Op.sub args.1.down args.2.down))
+        (CryptoLib.Assumption.DL.DDH.Op.sub args.1.down args.2.down))
       (certificate.subBudget_sound args.1.down args.2.down)
 
 /-- The key-generation bound indexes the same first-order program body. -/
@@ -288,7 +287,7 @@ noncomputable def encryptTimedMachine
 
 @[simp] theorem encryptTimedMachine_runDist
     (F : Family M Parameter Scalar Carrier) (parameter : Parameter)
-    (certificate : CryptoLib.Core.Assumption.DL.DDH.ParamEfficiencyCertificate
+    (certificate : CryptoLib.Assumption.DL.DDH.ParamEfficiencyCertificate
       (F.publicParam parameter))
     (sec : CryptoLib.Core.SecPar) (input : Carrier × Carrier) :
     (encryptTimedMachine measure (F.publicParam parameter) certificate).runDist sec input =

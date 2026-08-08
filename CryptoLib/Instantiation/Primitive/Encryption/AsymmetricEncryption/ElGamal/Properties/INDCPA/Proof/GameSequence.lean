@@ -9,8 +9,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -25,7 +25,7 @@ transitions are definitional identities; the middle transition contains the
 DDH reduction. -/
 noncomputable def gameSequence
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier)))) :
@@ -38,7 +38,7 @@ noncomputable def gameSequence
 
 @[simp] theorem gameSequence_length
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier)))) :
@@ -47,7 +47,7 @@ noncomputable def gameSequence
 
 @[simp] theorem gameSequence_first
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier)))) :
@@ -57,7 +57,7 @@ noncomputable def gameSequence
 
 @[simp] theorem gameSequence_last
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier)))) :
@@ -69,7 +69,7 @@ noncomputable def gameSequence
 ElGamal hybrid sequence. -/
 theorem gameSequence_stepIndistinguishable
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
@@ -91,7 +91,7 @@ theorem gameSequence_stepIndistinguishable
 left and right ElGamal IND-CPA games are indistinguishable. -/
 theorem indCPA_indistinguishable_of_reductions
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
@@ -144,7 +144,7 @@ theorem indCPA_indistinguishable_of_reductions
 reduction advantages; the two outer sequence advantages are zero. -/
 theorem indCPAAdvantage_le_ddhAdvantages
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))

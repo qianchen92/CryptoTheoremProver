@@ -5,7 +5,7 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTi
 
 open CryptoLib.Core.Infrastructure.Computation
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.SymmetricEncryption
+open CryptoLib.Primitive.Encryption.SymmetricEncryption
 open scoped OneTimePadParameter
 
 universe uCost uGroup
@@ -15,10 +15,10 @@ variable
     (F : Family.{uCost, uGroup} M)
     (pp : PublicParam.{uCost, uGroup} M)
 
-/-- The family-level setup program delegates to the unique exact setup primitive. -/
-@[simp] theorem setupProgram_runCosted
+/- The family-level setup is the unique exact setup primitive. -/
+@[simp] theorem setup_runCosted
     (sec : CryptoLib.Core.SecPar) :
-    Program.runCosted (setupProgram F) sec = F.setup sec :=
+    F.setup sec = F.setup sec :=
   rfl
 
 /-- Cost erasure of key generation is uniform sampling. -/

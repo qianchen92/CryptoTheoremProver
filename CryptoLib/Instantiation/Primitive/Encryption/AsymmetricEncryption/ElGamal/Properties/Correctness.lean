@@ -1,5 +1,5 @@
 import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.Semantics
-import CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Properties.Correctness
+import CryptoLib.Primitive.Encryption.AsymmetricEncryption.Properties.Correctness
 import CryptoLib.Core.Infrastructure.Probability.Uniform
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
@@ -17,7 +17,7 @@ variable
 
 /-- Correctness of ElGamal under the scalar action law carried by public parameters. -/
 theorem correct :
-    CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Correct (scheme F) := by
+    CryptoLib.Primitive.Encryption.AsymmetricEncryption.Correct (scheme F) := by
   intro _sec pp pk sk message _hpp hkey
   let backend := F.publicParam pp
   letI : AddGroup Carrier := backend.addGroup

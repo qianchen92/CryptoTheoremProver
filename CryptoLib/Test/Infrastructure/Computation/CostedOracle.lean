@@ -6,9 +6,9 @@ namespace CryptoLib.Test.Infrastructure.Computation.CostedOracle
 open CryptoLib.Core.Infrastructure.Asymptotic
 open CryptoLib.Core.Infrastructure.Complexity
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Algebra
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.Computation.Oracle
+open CryptoLib.Oracle
+open CryptoLib.Oracle.Complexity
 
 inductive TestOracle where
   | bit
@@ -22,21 +22,16 @@ def testOracleSpec : OracleSpec where
     | .bit => Bool
 
 /-- Caller-side query issuance has one exact unit of cost. -/
-noncomputable def natIssueAlgebra :
-    CostedAlgebra CostModel.nat (QueryIssue.signature testOracleSpec) :=
-  QueryIssue.costAlgebra CostModel.nat testOracleSpec (fun _name _query => 1)
+noncomputable def natIssueCost :
+    (name : testOracleSpec.Name) → testOracleSpec.Query name → CostModel.nat.Cost :=
+  fun _name _query => 1
 
 /-- The exact issuance handler, not query syntax, is the cost source. -/
-example :
-    natIssueAlgebra.exec (.issue TestOracle.bit false) =
-      PMF.pure (⟨(), 1⟩ : Costed CostModel.nat Unit) :=
-  rfl
-
-noncomputable def oneQueryProgram : Oracle.Program natIssueAlgebra (ULift Bool) :=
+noncomputable def oneQueryProgram : Oracle.Program natIssueCost (ULift Bool) :=
   Oracle.Program.query TestOracle.bit false
 
 /-- Two adaptive calls; neither query constructor contains a cost annotation. -/
-noncomputable def twoQueryProgram : Oracle.Program natIssueAlgebra (ULift Bool) := do
+noncomputable def twoQueryProgram : Oracle.Program natIssueCost (ULift Bool) := do
   let first ← Oracle.Program.query TestOracle.bit false
   Oracle.Program.query TestOracle.bit first.down
 
@@ -75,14 +70,10 @@ example
 theorem queryProgram_localBound (oracleQuery : Bool) :
     Oracle.Program.LocalCostBound
       (Oracle.Program.query TestOracle.bit oracleQuery :
-        Oracle.Program natIssueAlgebra (ULift Bool)) 1 := by
+        Oracle.Program natIssueCost (ULift Bool)) 1 := by
   intro value cost trace execution
-  cases execution with
-  | query _ _ issueResult issueResult_mem _response =>
-      simp only [natIssueAlgebra, QueryIssue.costAlgebra,
-        RandCosted.liftCosted, PMF.mem_support_pure_iff] at issueResult_mem
-      subst issueResult
-      exact Nat.le_refl 1
+  cases execution
+  exact Nat.le_refl 1
 
 theorem oneQueryProgram_localBound :
     Oracle.Program.LocalCostBound oneQueryProgram 1 := by
@@ -91,7 +82,7 @@ theorem oneQueryProgram_localBound :
 theorem queryProgram_totalQueryBound (oracleQuery : Bool) :
     Oracle.Program.TotalQueryBound
       (Oracle.Program.query TestOracle.bit oracleQuery :
-        Oracle.Program natIssueAlgebra (ULift Bool)) 1 := by
+        Oracle.Program natIssueCost (ULift Bool)) 1 := by
   intro value cost trace execution
   cases execution
   exact Nat.le_refl 1
@@ -132,8 +123,7 @@ theorem runExact_eq_expected :
     Oracle.Program.runExactFromInit twoQueryProgram 0 costedEnv =
       PMF.pure expectedExactResult := by
   simp only [Oracle.Program.runExactFromInit, twoQueryProgram,
-    Oracle.Program.runExact, natIssueAlgebra,
-    QueryIssue.costAlgebra, costedEnv, PMF.pure_bind,
+    Oracle.Program.runExact, natIssueCost, costedEnv, PMF.pure_bind,
     Bool.not_false, Bool.not_true]
   change PMF.bind (PMF.pure _) _ = PMF.pure expectedExactResult
   rw [PMF.pure_bind]
@@ -170,7 +160,7 @@ example :
 
 /-! ## Input-dependent machine and implementation certificates -/
 
-noncomputable def inputProgram (twice : Bool) : Oracle.Program natIssueAlgebra (ULift Bool) :=
+noncomputable def inputProgram (twice : Bool) : Oracle.Program natIssueCost (ULift Bool) :=
   if twice then twoQueryProgram else oneQueryProgram
 
 theorem inputProgram_localBound (twice : Bool) :
@@ -188,7 +178,7 @@ noncomputable def inputTimedMachine :
     TimedOracleMachine CostModel.nat NatMeasure.nat
       (fun _sec => Bool) (fun _sec _input => Bool)
       (fun _sec _input => testOracleSpec) where
-  issueAlgebra := fun _sec _input => natIssueAlgebra
+  issueCost := fun _sec _input => natIssueCost
   program := fun _sec input => inputProgram input
   localBudget := fun _sec input => if input then 2 else 1
   queryBudget := fun _sec input _name => if input then 2 else 1
@@ -300,14 +290,16 @@ abbrev traceCostModel :=
 def traceCost (event : TraceEvent) : TraceCost :=
   CryptoLib.Test.Infrastructure.Computation.TraceCost.singleton event
 
-noncomputable def traceIssueAlgebra :
-    CostedAlgebra traceCostModel (QueryIssue.signature testOracleSpec) :=
-  QueryIssue.costAlgebra traceCostModel testOracleSpec fun name =>
+noncomputable def traceIssueCost :
+    (name : testOracleSpec.Name) → testOracleSpec.Query name → traceCostModel.Cost :=
+  fun name query =>
     match name with
-    | .bit => fun query : Bool =>
-        traceCost (if query then .localSecond else .localFirst)
+    | .bit =>
+        match query with
+        | true => traceCost .localSecond
+        | false => traceCost .localFirst
 
-noncomputable def orderedTwoQueryProgram : Oracle.Program traceIssueAlgebra (ULift Bool) := do
+noncomputable def orderedTwoQueryProgram : Oracle.Program traceIssueCost (ULift Bool) := do
   let first ← Oracle.Program.query TestOracle.bit false
   Oracle.Program.query TestOracle.bit first.down
 
@@ -329,8 +321,8 @@ example :
         ⟨ULift.up false,
           ⟨[.localFirst, .oracleFirst, .localSecond, .oracleSecond]⟩⟩ := by
   simp only [Oracle.Program.runCosted, Oracle.Program.runExactFromInit,
-    orderedTwoQueryProgram, Oracle.Program.runExact, traceIssueAlgebra,
-    QueryIssue.costAlgebra, orderedCostedEnv, traceCost, PMF.pure_bind,
+    orderedTwoQueryProgram, Oracle.Program.runExact, traceIssueCost,
+    orderedCostedEnv, traceCost, PMF.pure_bind,
     Bool.not_false, Bool.not_true, Bool.false_eq_true,
     if_false, if_true]
   change PMF.map _ (PMF.bind (PMF.pure _) _) = _

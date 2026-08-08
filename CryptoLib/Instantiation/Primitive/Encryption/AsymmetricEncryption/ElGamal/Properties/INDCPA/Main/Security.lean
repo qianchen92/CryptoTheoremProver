@@ -6,7 +6,7 @@ import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -23,7 +23,7 @@ the library; the caller supplies only the explicit reduction-efficiency data.
 -/
 theorem indCPASecure_of_ddh
     (F : Family M Parameter Scalar Carrier)
-    (hDDH : CryptoLib.Core.Assumption.DL.DDH.Assumption M measure F)
+    (hDDH : CryptoLib.Assumption.DL.DDH.Assumption M measure F)
     (efficiency : ReductionEfficiencyCertificate measure F) :
     INDCPASecure M measure (scheme F) := by
   intro adversary

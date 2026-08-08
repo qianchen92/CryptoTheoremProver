@@ -6,8 +6,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -21,8 +21,8 @@ variable
 noncomputable def semanticReductionGame
     (F : Family M Parameter Scalar Carrier)
     (sample : CryptoLib.Core.SecPar → PMF
-      (CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F))
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+      (CryptoLib.Assumption.DL.DDH.ChallengeInput F))
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -35,27 +35,27 @@ noncomputable def semanticReductionGame
 /-- Run the semantic reduction against genuine DDH tuples. -/
 noncomputable def realReductionGame
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.Computation.Game Bool :=
-  semanticReductionGame F (CryptoLib.Core.Assumption.DL.DDH.realSample F)
+  semanticReductionGame F (CryptoLib.Assumption.DL.DDH.realSample F)
     adversary rightMessage
 
 /-- Run the semantic reduction against random DDH tuples. -/
 noncomputable def randomReductionGame
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.Computation.Game Bool :=
-  semanticReductionGame F (CryptoLib.Core.Assumption.DL.DDH.randomSample F)
+  semanticReductionGame F (CryptoLib.Assumption.DL.DDH.randomSample F)
     adversary rightMessage
 
 /-- Public IND-CPA input assembled from a setup parameter and public key. -/

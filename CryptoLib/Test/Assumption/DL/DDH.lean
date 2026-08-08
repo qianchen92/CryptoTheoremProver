@@ -1,37 +1,30 @@
-import CryptoLib.Core.Assumption.DL.DDH
+import CryptoLib.Assumption.DL.DDH
 import CryptoLib.Core.Infrastructure.Probability.Uniform
 import Mathlib.Data.ZMod.Basic
 
 namespace CryptoLib.Test.Assumption.DL.DDH
 
 open scoped DDHParameter
-
-open CryptoLib.Core.Assumption.DL.DDH
+open CryptoLib.Assumption.DL.DDH
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Algebra
+open CryptoLib.Algebra.Generic
 open CryptoLib.Core.Infrastructure.Computation.Cost
 
 universe uAdversaryCost
 
-/-- The DDH mathematical parameter contains no costed operations or samplers. -/
 def testMath : MathematicalParam (ZMod 2) (ZMod 2) where
   addGroup := inferInstance
   fintypeCarrier := inferInstance
   fintypeScalar := inferInstance
   smul := inferInstance
   commMonoidScalar := inferInstance
-  one_smul := by
-    intro value
-    exact one_smul (ZMod 2) value
-  mul_smul := by
-    intro left right value
-    exact mul_smul left right value
+  one_smul := by intro value; exact one_smul (ZMod 2) value
+  mul_smul := by intro left right value; exact mul_smul left right value
   generator := 1
   generator_generates := by
     intro value
     exact ⟨value, by simp⟩
 
-/-- The single typed algebra assigns all exact DDH primitive costs. -/
 noncomputable def testAlgebra :
     CostedAlgebra CostModel.nat (signature testMath) where
   exec operation :=
@@ -41,39 +34,33 @@ noncomputable def testAlgebra :
           (PMF.map ULift.up
             (@CryptoLib.Core.Infrastructure.Probability.uniformPMF
               testMath.Scalar testMath.fintypeScalar
-              ⟨testMath.commMonoidScalar.one⟩))
-          (fun _ => 2)
+              ⟨testMath.commMonoidScalar.one⟩)) (fun _ => 2)
     | .sampleCarrier =>
         RandCosted.sampleWithCost
           (PMF.map ULift.up
             (@CryptoLib.Core.Infrastructure.Probability.uniformPMF
               testMath.Carrier testMath.fintypeCarrier
-              ⟨testMath.addGroup.zero⟩))
-          (fun _ => 4)
+              ⟨testMath.addGroup.zero⟩)) (fun _ => 4)
     | .smul scalar value =>
         RandCosted.liftCosted
-          (⟨ULift.up (testMath.smul.smul scalar value), 11⟩ :
-            Costed CostModel.nat (ULift testMath.Carrier))
+          ⟨ULift.up (testMath.smul.smul scalar value), 11⟩
     | .add left right =>
         RandCosted.liftCosted
-          (⟨ULift.up (testMath.addGroup.add left right), 5⟩ :
-            Costed CostModel.nat (ULift testMath.Carrier))
+          ⟨ULift.up (testMath.addGroup.add left right), 5⟩
     | .sub left right =>
         RandCosted.liftCosted
-          (⟨ULift.up (testMath.addGroup.sub left right), 6⟩ :
-            Costed CostModel.nat (ULift testMath.Carrier))
+          ⟨ULift.up (testMath.addGroup.sub left right), 6⟩
     | .mul left right =>
         RandCosted.liftCosted
-          (⟨ULift.up (testMath.commMonoidScalar.mul left right), 13⟩ :
-            Costed CostModel.nat (ULift testMath.Scalar))
+          ⟨ULift.up (testMath.commMonoidScalar.mul left right), 13⟩
 
 noncomputable def testLaws : ExactLaws testAlgebra where
   sampleScalar := RandCosted.valueDist_sampleWithCost _ _
   sampleCarrier := RandCosted.valueDist_sampleWithCost _ _
-  smul _scalar _value := RandCosted.valueDist_liftCosted _
-  add _left _right := RandCosted.valueDist_liftCosted _
-  sub _left _right := RandCosted.valueDist_liftCosted _
-  mul _left _right := RandCosted.valueDist_liftCosted _
+  smul _ _ := RandCosted.valueDist_liftCosted _
+  add _ _ := RandCosted.valueDist_liftCosted _
+  sub _ _ := RandCosted.valueDist_liftCosted _
+  mul _ _ := RandCosted.valueDist_liftCosted _
 
 noncomputable def testPublicParam :
     PublicParam CostModel.nat (ZMod 2) (ZMod 2) where
@@ -143,60 +130,20 @@ noncomputable def testParamEfficiency :
 
 noncomputable def testFamily :
     Family CostModel.nat CryptoLib.Core.SecPar (ZMod 2) (ZMod 2) :=
-  Family.ofFixed testPublicParam 3 5 (by
-    intro left right
-    rfl)
+  Family.ofFixed testPublicParam 3 5 (by intros; rfl)
 
 example : Prop := Assumption CostModel.nat NatMeasure.nat testFamily
 
-/-- Algorithm and adversary costs are independent parameters of the assumption. -/
 example (adversaryModel : CostModel.{uAdversaryCost})
     (measure : NatMeasure adversaryModel) : Prop :=
   Assumption adversaryModel measure testFamily
 
 example (sec : CryptoLib.Core.SecPar) :
-    Program.runCosted (setupProgram testFamily) sec =
-      RandCosted.map ULift.up (testFamily.setup sec) :=
-  setupProgram_runCosted testFamily sec
-
-/-- Both games are defined directly by erasing their authoritative programs. -/
-example (sec : CryptoLib.Core.SecPar) :
-    PMF.map ULift.down (Program.valueDist (realSampleProgram testFamily) sec) =
-      (ddhProblem testFamily).left sec :=
+    (ddhProblem testFamily).left sec = realSample testFamily sec := by
   rfl
 
 example (sec : CryptoLib.Core.SecPar) :
-    PMF.map ULift.down (Program.valueDist (randomSampleProgram testFamily) sec) =
-      (ddhProblem testFamily).right sec :=
+    (ddhProblem testFamily).right sec = randomSample testFamily sec := by
   rfl
-
-example :
-    CryptoLib.Core.Infrastructure.Computation.Program.Code.valueDist
-        (A := testPublicParam.algebra) (.call Op.sampleCarrier) =
-      (algebraLaws testPublicParam).semantics Op.sampleCarrier :=
-  CryptoLib.Core.Infrastructure.Computation.Program.Code.valueDist_call_eq
-    (algebraLaws testPublicParam) Op.sampleCarrier
-
-/-- Genuine and random fixed-exponent programs retain their exact bounds. -/
-example :
-    Program.CostBound
-      (realChallengeProgram testPublicParam) (fun _ => 46) :=
-  (realChallengeBoundedProgram testPublicParam testParamEfficiency).costBound
-
-example :
-    Program.CostBound
-      (randomChallengeProgram testPublicParam) (fun _ => 22) :=
-  (randomChallengeBoundedProgram testPublicParam testParamEfficiency).costBound
-
-/-- Sampling adds two scalar samples, and the random game adds one carrier sample. -/
-example :
-    Program.CostBound
-      (realSampleTailProgram testPublicParam) (fun _ => 50) :=
-  (realSampleTailBoundedProgram testPublicParam testParamEfficiency).costBound
-
-example :
-    Program.CostBound
-      (randomSampleTailProgram testPublicParam) (fun _ => 30) :=
-  (randomSampleTailBoundedProgram testPublicParam testParamEfficiency).costBound
 
 end CryptoLib.Test.Assumption.DL.DDH

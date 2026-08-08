@@ -7,8 +7,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -40,7 +40,7 @@ the semantic reduction induce exactly the same security game. -/
 private theorem concreteSecurityGame_eq_semantic
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -48,7 +48,7 @@ private theorem concreteSecurityGame_eq_semantic
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool)
     (sample : CryptoLib.Core.SecPar → PMF
-      (CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F))
+      (CryptoLib.Assumption.DL.DDH.ChallengeInput F))
     (htag : ∀ sec challenge, challenge ∈ (sample sec).support →
       F.parameterSec challenge.parameter = sec) :
     CryptoLib.Core.Infrastructure.GameBased.Distinguishing.securityGame sample
@@ -68,7 +68,7 @@ private theorem concreteSecurityGame_eq_semantic
 theorem concreteRealReductionGame_eq
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -76,18 +76,18 @@ theorem concreteRealReductionGame_eq
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.GameBased.Distinguishing.securityGame
-        (CryptoLib.Core.Assumption.DL.DDH.realSample F)
+        (CryptoLib.Assumption.DL.DDH.realSample F)
         (concreteDDHReductionPPT F efficiency adversary
           rightMessage).toProbabilisticMachine =
       realReductionGame F adversary.toOracleMachine rightMessage := by
   exact concreteSecurityGame_eq_semantic F efficiency adversary rightMessage
-    (CryptoLib.Core.Assumption.DL.DDH.realSample F)
-    (CryptoLib.Core.Assumption.DL.DDH.parameterSec_eq_of_mem_support_realSample F)
+    (CryptoLib.Assumption.DL.DDH.realSample F)
+    (CryptoLib.Assumption.DL.DDH.parameterSec_eq_of_mem_support_realSample F)
 
 theorem concreteRandomReductionGame_eq
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -95,12 +95,12 @@ theorem concreteRandomReductionGame_eq
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.GameBased.Distinguishing.securityGame
-        (CryptoLib.Core.Assumption.DL.DDH.randomSample F)
+        (CryptoLib.Assumption.DL.DDH.randomSample F)
         (concreteDDHReductionPPT F efficiency adversary
           rightMessage).toProbabilisticMachine =
       randomReductionGame F adversary.toOracleMachine rightMessage := by
   exact concreteSecurityGame_eq_semantic F efficiency adversary rightMessage
-    (CryptoLib.Core.Assumption.DL.DDH.randomSample F)
-    (CryptoLib.Core.Assumption.DL.DDH.parameterSec_eq_of_mem_support_randomSample F)
+    (CryptoLib.Assumption.DL.DDH.randomSample F)
+    (CryptoLib.Assumption.DL.DDH.parameterSec_eq_of_mem_support_randomSample F)
 
 end CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal

@@ -5,7 +5,7 @@ import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -19,7 +19,7 @@ variable
 /-- The real IND-CPA game and `G₀` are definitionally identical. -/
 theorem realGame_G₀_indistinguishable
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -32,12 +32,12 @@ theorem realGame_G₀_indistinguishable
 /-- `G₀` and `G₁` are computationally indistinguishable under DDH. -/
 theorem G₀_G₁_indistinguishable
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine M measure
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
-    (hDDH : CryptoLib.Core.Assumption.DL.DDH.Assumption M measure F)
+    (hDDH : CryptoLib.Assumption.DL.DDH.Assumption M measure F)
     (efficiency : ReductionEfficiencyCertificate measure F) :
     CryptoLib.Core.Infrastructure.GameBased.Indistinguishable
       (G₀ F adversary.toOracleMachine)
@@ -47,7 +47,7 @@ theorem G₀_G₁_indistinguishable
 /-- `G₁` and the random IND-CPA game are definitionally identical. -/
 theorem G₁_randomGame_indistinguishable
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec

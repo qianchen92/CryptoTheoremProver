@@ -5,7 +5,7 @@ import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -20,12 +20,12 @@ variable
 ElGamal hybrid transition. -/
 theorem ddhReduction_indistinguishable
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine M measure
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool)
-    (hDDH : CryptoLib.Core.Assumption.DL.DDH.Assumption M measure F)
+    (hDDH : CryptoLib.Assumption.DL.DDH.Assumption M measure F)
     (certificate : DDHReductionCertificate F measure adversary rightMessage) :
     CryptoLib.Core.Infrastructure.GameBased.Indistinguishable
       (realReductionGame F adversary.toOracleMachine rightMessage)

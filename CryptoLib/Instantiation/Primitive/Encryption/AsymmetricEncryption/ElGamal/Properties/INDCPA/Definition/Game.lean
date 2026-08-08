@@ -1,12 +1,12 @@
 import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal.Scheme
-import CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Properties.INDCPA
+import CryptoLib.Primitive.Encryption.AsymmetricEncryption.Properties.INDCPA
 
 /-! # Endpoint aliases for the ElGamal IND-CPA hybrid -/
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -19,7 +19,7 @@ variable
 /-- `G₀` is definitionally the real, left-message IND-CPA game. -/
 noncomputable def G₀
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -30,7 +30,7 @@ noncomputable def G₀
 /-- `G₁` is definitionally the random, right-message IND-CPA game. -/
 noncomputable def G₁
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec

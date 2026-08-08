@@ -1,6 +1,5 @@
-import CryptoLib.Core.Infrastructure.Computation.Algebra.Operation
+import CryptoLib.Algebra.Generic.Operation
 import CryptoLib.Core.Infrastructure.Computation.Cost.Randomized
-import CryptoLib.Core.Infrastructure.Computation.Program.Basic
 
 namespace CryptoLib.Test.Infrastructure.Computation.CostComposition
 
@@ -17,33 +16,6 @@ def sharedAddition : Costed CostModel.nat Nat := do
 
 @[simp] theorem sharedAddition_cost : sharedAddition.cost = 5 :=
   rfl
-
-/-- Addition is interpreted directly by a typed exact algebra. -/
-noncomputable def integerAddAlgebra :
-    CryptoLib.Core.Infrastructure.Computation.Algebra.CostedAlgebra
-      CostModel.nat
-      (CryptoLib.Core.Infrastructure.Computation.Algebra.AddOperation.signature Int) :=
-  CryptoLib.Core.Infrastructure.Computation.Algebra.AddOperation.algebra
-    CostModel.nat (fun _left _right => 1)
-
-/-- Scalar multiplication has an independent, operand-dependent exact algebra. -/
-noncomputable def integerSMulAlgebra :
-    CryptoLib.Core.Infrastructure.Computation.Algebra.CostedAlgebra
-      CostModel.nat
-      (CryptoLib.Core.Infrastructure.Computation.Algebra.SMulOperation.signature Nat Int) :=
-  CryptoLib.Core.Infrastructure.Computation.Algebra.SMulOperation.algebra
-    CostModel.nat (fun scalar _value => scalar)
-
-@[simp] theorem directIntegerAlgebra_costs :
-    CryptoLib.Core.Infrastructure.Computation.Program.Code.runCosted
-        (A := integerAddAlgebra) (.call (.add 2 3)) =
-          RandCosted.liftCosted
-            (⟨5, 1⟩ : Costed CostModel.nat Int) ∧
-      CryptoLib.Core.Infrastructure.Computation.Program.Code.runCosted
-        (A := integerSMulAlgebra) (.call (.smul 7 5)) =
-          RandCosted.liftCosted
-            (⟨35, 7⟩ : Costed CostModel.nat Int) :=
-  ⟨rfl, rfl⟩
 
 /-- `do` notation for `RandCosted` selects the writer bind and adds both path costs. -/
 noncomputable def twoStageRandomized : RandCosted CostModel.nat Nat := do

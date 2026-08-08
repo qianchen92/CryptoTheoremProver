@@ -1,11 +1,12 @@
-import CryptoLib.Core.Infrastructure.UC.Layered
+import CryptoLib.UC.Layered
 import Mathlib.Tactic
 
 namespace CryptoLib.Test.Infrastructure.UC.Layered
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.UC
-open CryptoLib.Core.Infrastructure.UC.Layered
+open CryptoLib.Protocol
+open CryptoLib.UC
+open CryptoLib.UC.Layered
 
 def params : Parameters where
   partiesPerLayer := 1
@@ -147,7 +148,7 @@ noncomputable def layeredConfiguration :
 
 noncomputable def observedBroadcastStep : PMF Nat :=
   RandCosted.costDist
-    (Kernel.stepOne (KernelAlgebra.zero CostModel.nat GlobalAddress)
+    (Kernel.stepOne (KernelCost.zero CostModel.nat GlobalAddress)
       (layeredNetwork 0) layeredConfiguration)
 
 example : observedBroadcastStep = PMF.pure 2 := by
@@ -156,8 +157,8 @@ example : observedBroadcastStep = PMF.pure 2 := by
     dispatchFamily, SystemComponents.toAddressedITM,
     broadcastManagerEmbed, QueuedActivation.resume,
     Kernel.stepOne, Kernel.activateHonest,
-    Kernel.processAction, Kernel.classify, KernelAlgebra.withCharge,
-    KernelAlgebra.charge, KernelAlgebra.zero, Configuration.dequeue,
+    Kernel.processAction, Kernel.classify, KernelCost.withCharge,
+    KernelCost.charge, KernelCost.zero, Configuration.dequeue,
     Configuration.get, Configuration.set, Configuration.record,
     RandCosted.costDist, RandCosted.liftCosted, RandCosted.pure,
     RandCosted.bind, Costed.bind, Costed.pure, PMF.pure_bind,

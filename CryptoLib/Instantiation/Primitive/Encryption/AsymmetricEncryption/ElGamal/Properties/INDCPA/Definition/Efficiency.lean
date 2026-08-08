@@ -7,7 +7,7 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
+open CryptoLib.Oracle
 
 universe uCost uParameter uScalar uGroup
 

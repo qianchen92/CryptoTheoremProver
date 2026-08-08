@@ -1,11 +1,10 @@
-import CryptoLib.Core.Infrastructure.UC.Kernel
+import CryptoLib.UC.Kernel
 import Mathlib.Tactic
 
 namespace CryptoLib.Test.Infrastructure.UC.Kernel
 
-open CryptoLib.Core.Infrastructure.Computation.Algebra
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.UC
+open CryptoLib.UC
 
 /-! ## Hierarchical session isolation -/
 
@@ -142,36 +141,33 @@ example :
 /-! ## Exact kernel charging and fuel semantics -/
 
 example :
-    KernelAlgebra.charge (KernelAlgebra.zero CostModel.nat Bool)
+    KernelCost.charge (KernelCost.zero CostModel.nat Bool)
         .dequeue [] =
       RandCosted.pure CostModel.nat () :=
   rfl
 
 example :
     RandCosted.CostBound
-      (KernelAlgebra.charge (KernelAlgebra.zero CostModel.nat Bool)
+      (KernelCost.charge (KernelCost.zero CostModel.nat Bool)
         .dequeue []) 0 := by
   exact RandCosted.CostBound.pure ()
 
-noncomputable def chargedKernelAlgebra :
-    KernelAlgebra CostModel.nat Bool where
-  exec operation :=
-    match operation with
-    | .perform _primitive _addresses =>
-        RandCosted.liftCosted (⟨(), 2⟩ : Costed CostModel.nat Unit)
+noncomputable def chargedKernelCost :
+    KernelCost CostModel.nat Bool :=
+  fun _primitive _addresses => 2
 
 example :
-    KernelAlgebra.charge chargedKernelAlgebra .route [false, true] =
+    KernelCost.charge chargedKernelCost .route [false, true] =
       RandCosted.liftCosted
         (⟨(), 2⟩ : Costed CostModel.nat Unit) :=
   rfl
 
 example :
     RandCosted.CostBound
-      (KernelAlgebra.charge chargedKernelAlgebra .route [false, true]) 2 := by
+      (KernelCost.charge chargedKernelCost .route [false, true]) 2 := by
   intro result hresult
   rw [show
-    KernelAlgebra.charge chargedKernelAlgebra .route [false, true] =
+    KernelCost.charge chargedKernelCost .route [false, true] =
       PMF.pure (⟨(), 2⟩ : Costed CostModel.nat Unit) by rfl] at hresult
   rw [PMF.mem_support_pure_iff] at hresult
   subst result
@@ -206,14 +202,14 @@ def expectedDeniedCorruption : Configuration toyFamily deniedPolicy 0 where
 
 /-- Even a denied request pays exactly one explicit state-read charge. -/
 theorem deniedCorruption_chargesReadState :
-    Kernel.processCorruption chargedKernelAlgebra (toyNetwork 0)
+    Kernel.processCorruption chargedKernelCost (toyNetwork 0)
         deniedCorruptionConfiguration false true =
       RandCosted.liftCosted
         (⟨expectedDeniedCorruption, 2⟩ :
           Costed CostModel.nat (Configuration toyFamily deniedPolicy 0)) := by
   simp only [deniedPolicy, CorruptionPolicy.incorruptible,
-    Kernel.processCorruption, KernelAlgebra.withCharge,
-    KernelAlgebra.charge, chargedKernelAlgebra,
+    Kernel.processCorruption, KernelCost.withCharge,
+    KernelCost.charge, chargedKernelCost,
     RandCosted.liftCosted, Configuration.record,
     deniedCorruptionConfiguration, List.nil_append, ↓reduceDIte,
     pure, RandCosted.pure, Costed.pure, PMF.pure_bind,
@@ -222,7 +218,7 @@ theorem deniedCorruption_chargesReadState :
   congr 1
 
 example :
-    Kernel.runCosted (KernelAlgebra.zero CostModel.nat Bool)
+    Kernel.runCosted (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) 0 initialConfiguration =
       RandCosted.pure CostModel.nat
         (Kernel.atFuelZero initialConfiguration) :=
@@ -269,12 +265,12 @@ def rejectedSendAsConfiguration : Configuration toyFamily toyPolicy 0 where
 
 /-- A static capability alone cannot authorize impersonation before corruption. -/
 theorem sendAsBeforeCorruption_rejected :
-    Kernel.processAction (KernelAlgebra.zero CostModel.nat Bool)
+    Kernel.processAction (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) beforeSendAsConfiguration true (by simp [beforeSendAsConfiguration])
         7 forgedAction =
       RandCosted.pure CostModel.nat rejectedSendAsConfiguration := by
   simp only [Kernel.processAction, forgedAction, Kernel.routeEmissionAs,
-    KernelAlgebra.withCharge, KernelAlgebra.charge, KernelAlgebra.zero,
+    KernelCost.withCharge, KernelCost.charge, KernelCost.zero,
     RandCosted.pure, RandCosted.liftCosted, Costed.pure,
     beforeSendAsConfiguration, Finset.notMem_empty, ↓reduceIte, pure,
     Configuration.record, List.nil_append, PMF.pure_bind, Costed.bind,
@@ -313,13 +309,13 @@ def authorizedSendAsConfiguration : Configuration toyFamily toyPolicy 0 where
 
 /-- After corruption, the same address-indexed capability authorizes that address only. -/
 theorem sendAsAfterCorruption_authorized :
-    Kernel.processAction (KernelAlgebra.zero CostModel.nat Bool)
+    Kernel.processAction (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) afterCorruptionConfiguration true
         (by simp [afterCorruptionConfiguration]) 7 forgedAction =
       RandCosted.pure CostModel.nat authorizedSendAsConfiguration := by
   simp [Kernel.processAction, Kernel.routeEmissionAs, Kernel.routeEmissionCore,
     Kernel.enqueueDirect,
-    KernelAlgebra.withCharge, KernelAlgebra.charge, KernelAlgebra.zero,
+    KernelCost.withCharge, KernelCost.charge, KernelCost.zero,
     Pure.pure, PMF.pure_bind, PMF.pure_map,
     RandCosted.liftCosted, RandCosted.pure, Costed.bind, Costed.pure,
     forgedAction, directEmission, toySchema,
@@ -367,12 +363,12 @@ def expectedCorruptedConfiguration : Configuration toyFamily toyPolicy 0 where
       simp [LocalStore.remove]
 
 theorem toyRequestStep_exact :
-    Kernel.stepOne (KernelAlgebra.zero CostModel.nat Bool)
+    Kernel.stepOne (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) initialConfiguration =
       RandCosted.pure CostModel.nat
         (KernelStepResult.progressed expectedRequestConfiguration) := by
   simp [Kernel.stepOne, Kernel.activateHonest, Kernel.processAction,
-    KernelAlgebra.withCharge, KernelAlgebra.charge, KernelAlgebra.zero,
+    KernelCost.withCharge, KernelCost.charge, KernelCost.zero,
     Bind.bind, Pure.pure, PMF.pure_bind, PMF.pure_map,
     RandCosted.liftCosted, RandCosted.pure,
     Costed.bind, Costed.pure,
@@ -387,12 +383,12 @@ theorem toyRequestStep_exact :
   congr 1
 
 theorem toyCorruptionStep_exact :
-    Kernel.stepOne (KernelAlgebra.zero CostModel.nat Bool)
+    Kernel.stepOne (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) expectedRequestConfiguration =
       RandCosted.pure CostModel.nat
         (KernelStepResult.progressed expectedCorruptedConfiguration) := by
   simp [Kernel.stepOne, Kernel.processCorruption, Kernel.corruptFromState,
-    KernelAlgebra.withCharge, KernelAlgebra.charge, KernelAlgebra.zero,
+    KernelCost.withCharge, KernelCost.charge, KernelCost.zero,
     Bind.bind, Pure.pure, PMF.pure_bind, PMF.pure_map,
     RandCosted.liftCosted, RandCosted.pure,
     Costed.bind, Costed.pure,
@@ -407,7 +403,7 @@ theorem toyCorruptionStep_exact :
 theorem toyCorruptionStep_cost_eq_zero (result : Costed CostModel.nat
     (KernelStepResult toyFamily toyPolicy 0))
     (hresult : result ∈
-      (Kernel.stepOne (KernelAlgebra.zero CostModel.nat Bool)
+      (Kernel.stepOne (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) expectedRequestConfiguration).support) :
     result.cost = 0 := by
   rw [toyCorruptionStep_exact, PMF.mem_support_pure_iff] at hresult
@@ -416,7 +412,7 @@ theorem toyCorruptionStep_cost_eq_zero (result : Costed CostModel.nat
 
 example :
     RandCosted.CostBound
-      (Kernel.stepOne (KernelAlgebra.zero CostModel.nat Bool)
+      (Kernel.stepOne (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) expectedRequestConfiguration) 0 := by
   intro result hresult
   exact Nat.le_of_eq (toyCorruptionStep_cost_eq_zero result hresult)
@@ -425,7 +421,7 @@ theorem toyStep_dynamicCorruption
     (result : Costed CostModel.nat
       (KernelStepResult toyFamily toyPolicy 0))
     (hresult : result ∈
-      (Kernel.stepOne (KernelAlgebra.zero CostModel.nat Bool)
+      (Kernel.stepOne (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) expectedRequestConfiguration).support) :
     ∃ configuration,
       result.val = KernelStepResult.progressed configuration ∧
@@ -476,13 +472,13 @@ Store absence triggers exact initialization (cost `3`) before leakage and the
 same corruption commit; it does not silently discard a permitted request.
 -/
 theorem dormantCorruptionStep_exact :
-    Kernel.stepOne (KernelAlgebra.zero CostModel.nat Bool)
+    Kernel.stepOne (KernelCost.zero CostModel.nat Bool)
         (toyNetwork 0) dormantRequestConfiguration =
       RandCosted.liftCosted
         (⟨KernelStepResult.progressed expectedDormantCorruption, 3⟩ :
           Costed CostModel.nat (KernelStepResult toyFamily toyPolicy 0)) := by
   simp [Kernel.stepOne, Kernel.processCorruption, Kernel.corruptFromState,
-    KernelAlgebra.withCharge, KernelAlgebra.charge, KernelAlgebra.zero,
+    KernelCost.withCharge, KernelCost.charge, KernelCost.zero,
     Bind.bind, Pure.pure, PMF.pure_bind, PMF.pure_map,
     RandCosted.liftCosted, RandCosted.pure,
     Costed.bind, Costed.pure,
@@ -498,13 +494,13 @@ With a cost-`2` kernel handler, the dormant path exposes its complete order:
 dequeue, read, initialize, component init (`3`), corrupt, and enqueue.
 -/
 theorem dormantCorruptionStep_charged_exact :
-    Kernel.stepOne chargedKernelAlgebra (toyNetwork 0)
+    Kernel.stepOne chargedKernelCost (toyNetwork 0)
         dormantRequestConfiguration =
       RandCosted.liftCosted
         (⟨KernelStepResult.progressed expectedDormantCorruption, 13⟩ :
           Costed CostModel.nat (KernelStepResult toyFamily toyPolicy 0)) := by
   simp [Kernel.stepOne, Kernel.processCorruption, Kernel.corruptFromState,
-    KernelAlgebra.withCharge, KernelAlgebra.charge, chargedKernelAlgebra,
+    KernelCost.withCharge, KernelCost.charge, chargedKernelCost,
     Bind.bind, Pure.pure, PMF.pure_bind, PMF.pure_map,
     RandCosted.liftCosted, RandCosted.pure,
     Costed.bind, Costed.pure,

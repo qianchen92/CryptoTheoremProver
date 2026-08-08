@@ -1,12 +1,12 @@
 import CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad.Properties.Semantics
-import CryptoLib.Core.Primitive.Encryption.SymmetricEncryption.Properties.OneTime
+import CryptoLib.Primitive.Encryption.SymmetricEncryption.Properties.OneTime
 import CryptoLib.Core.Infrastructure.Probability.Uniform
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 universe uCost uAdversaryCost uGroup
 
-open CryptoLib.Core.Primitive.Encryption.SymmetricEncryption
+open CryptoLib.Primitive.Encryption.SymmetricEncryption
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Probability
 open scoped OneTimePadParameter
@@ -76,7 +76,7 @@ theorem oneTimeEncryptionOracle_false_eq_true
 /-- The two one-time security games of the group one-time pad are identical. -/
 theorem oneTimeSecurityGame_false_eq_true
     (F : Family M)
-    (A : CryptoLib.Core.Infrastructure.Complexity.OracleMachine adversaryModel
+    (A : CryptoLib.Oracle.Complexity.OracleMachine adversaryModel
       (fun _ => PublicParam M)
       (fun _sec _input => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :
@@ -96,7 +96,7 @@ theorem oneTimeSecurityGame_false_eq_true
 /-- Every oracle machine has zero one-time advantage against the group one-time pad. -/
 theorem oneTimeAdvantage_eq_zero
     (F : Family M)
-    (A : CryptoLib.Core.Infrastructure.Complexity.OracleMachine adversaryModel
+    (A : CryptoLib.Oracle.Complexity.OracleMachine adversaryModel
       (fun _ => PublicParam M)
       (fun _sec _input => Bool)
       (oneTimeOracleSpec (fun pp => pp.Carrier) (fun pp => pp.Carrier))) :

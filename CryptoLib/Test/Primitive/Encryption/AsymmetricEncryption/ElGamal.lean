@@ -7,10 +7,11 @@ namespace CryptoLib.Test.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open CryptoLib.Core.Infrastructure.Computation
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.Computation.Oracle
+open CryptoLib.Oracle
+open CryptoLib.Oracle.Complexity
 open CryptoLib.Core.Infrastructure.Asymptotic
 open CryptoLib.Core.Infrastructure.Complexity
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 open CryptoLib.Program.Adapter.OneShotChoiceAdd
 open CryptoLib.Test.Assumption.DL
@@ -96,11 +97,7 @@ noncomputable def noQueryAdversary :
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := ZMod 2)) (Ciphertext (Carrier := ZMod 2))) where
-  issueAlgebra := fun sec input =>
-    QueryIssue.zeroCostAlgebra CostModel.nat
-      (indCPAOracleSpec
-        (Message (Carrier := ZMod 2)) (Ciphertext (Carrier := ZMod 2))
-        sec input)
+  issueCost := fun _sec _input _name _query => 0
   program := fun _sec _input => pure (ULift.up false)
 
 /-- The ElGamal security proof uses four games and therefore three hops. -/
@@ -152,14 +149,14 @@ example :
   rfl
 
 def validReductionChallenge :
-    CryptoLib.Core.Assumption.DL.DDH.ChallengeInput DDH.testFamily where
+    CryptoLib.Assumption.DL.DDH.ChallengeInput DDH.testFamily where
   parameter := 7
   left := 0
   right := 1
   shared := 1
 
 def invalidReductionChallenge :
-    CryptoLib.Core.Assumption.DL.DDH.ChallengeInput DDH.testFamily where
+    CryptoLib.Assumption.DL.DDH.ChallengeInput DDH.testFamily where
   parameter := 8
   left := 0
   right := 1
@@ -292,21 +289,19 @@ noncomputable def reductionTraceOperationalAdapter (rightMessage : Bool) :
         change 1 ≤ 3
         decide
 
-noncomputable def reductionTraceIssueAlgebra :
-    CryptoLib.Core.Infrastructure.Computation.Algebra.CostedAlgebra
-      reductionTraceCostModel
-      (QueryIssue.signature reductionTraceOracleSpec) :=
-  QueryIssue.costAlgebra reductionTraceCostModel reductionTraceOracleSpec
-    (fun name _query => by
-      cases name
-      exact reductionTraceCost .adversaryLocal)
+noncomputable def reductionTraceIssueCost :
+    (name : reductionTraceOracleSpec.Name) →
+      reductionTraceOracleSpec.Query name → reductionTraceCostModel.Cost :=
+  fun name _query =>
+    match name with
+    | .challenge => reductionTraceCost .adversaryLocal
 
 /-- One admitted-caller-shaped program issuing exactly one challenge query. -/
 noncomputable def reductionTraceCaller :
     OracleMachine reductionTraceCostModel
       (fun _sec => Unit) (fun _sec _input => Bool)
       (fun _sec _input => reductionTraceOracleSpec) where
-  issueAlgebra := fun _sec _input => reductionTraceIssueAlgebra
+  issueCost := fun _sec _input => reductionTraceIssueCost
   program := fun _sec _input => do
     let response ← Oracle.Program.query ReductionTraceOracle.challenge
       (false, true)
@@ -327,7 +322,7 @@ example :
     ↓reduceIte, FirstOrderOracleAdapter.runPrepare, runCosted_prepare,
     OracleMachine.runCosted, Oracle.Program.runCosted,
     FirstOrderOracleAdapter.oracleEnv, Oracle.Program.runExactFromInit,
-    reductionTraceCaller, reductionTraceIssueAlgebra, QueryIssue.costAlgebra,
+    reductionTraceCaller, reductionTraceIssueCost,
     Oracle.Program.runExact, runCosted_query_fresh, Costs.firstQuery,
     PMF.bind_map, PMF.pure_bind, Function.comp_apply, Costed.map_val,
     Option.map_some, Costed.map_cost, add_zero, Option.isSome_some]
@@ -369,7 +364,7 @@ example
     (rightMessage : Bool) :
     Nonempty
       (PPTMachine CostModel.nat NatMeasure.nat
-        (fun _sec => CryptoLib.Core.Assumption.DL.DDH.ChallengeInput DDH.testFamily)
+        (fun _sec => CryptoLib.Assumption.DL.DDH.ChallengeInput DDH.testFamily)
         (fun _sec _challenge => Bool)) :=
   ⟨concreteDDHReductionPPT DDH.testFamily testReductionEfficiency
     adversary rightMessage⟩

@@ -5,7 +5,7 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open scoped DDHParameter
 
 universe uCost uParameter uScalar uGroup
@@ -18,31 +18,10 @@ variable
     (F : Family M Parameter Scalar Carrier)
     (pp : PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
 
-@[simp] theorem setupProgram_runCosted
-    (sec : CryptoLib.Core.SecPar) :
-    Program.runCosted (setupProgram F) sec = RandCosted.map ULift.up (F.setup sec) :=
-  rfl
-
 @[simp] theorem scheme_setup_eq_family_setup
     (sec : CryptoLib.Core.SecPar) :
     (scheme F).setup sec = F.setup sec :=
-  by
-    change RandCosted.map ULift.down
-      (Program.runCosted (setupProgram F) sec) = F.setup sec
-    rw [setupProgram_runCosted]
-    change PMF.map (Costed.map ULift.down)
-      (PMF.map (Costed.map ULift.up) (F.setup sec)) = F.setup sec
-    rw [PMF.map_comp]
-    have mapIdentity :
-        (Costed.map (M := M)
-            (ULift.down : ULift.{max uScalar uGroup} Parameter → Parameter)) ∘
-          (Costed.map (M := M)
-            (ULift.up : Parameter → ULift.{max uScalar uGroup} Parameter)) =
-          (id : Costed M Parameter → Costed M Parameter) := by
-      funext result
-      cases result
-      rfl
-    rw [mapIdentity, PMF.map_id]
+  rfl
 
 /-- Erasing key-generation costs recovers ordinary ElGamal key generation. -/
 @[simp] theorem keygenProgram_valueDist
@@ -61,9 +40,9 @@ variable
     CryptoLib.Program.Signature.Embedding.inject,
     CryptoLib.Program.Code.valueDist_call,
     CryptoLib.Program.Expr.eval,
-    CryptoLib.Program.Assumption.DL.DDH.valueDist_exec_sampleScalar,
+    CryptoLib.Assumption.Program.DL.DDH.valueDist_exec_sampleScalar,
     CryptoLib.Program.Env.get,
-    CryptoLib.Program.Assumption.DL.DDH.valueDist_exec_smul,
+    CryptoLib.Assumption.Program.DL.DDH.valueDist_exec_smul,
     CryptoLib.Program.Code.valueDist_ret]
   change
     PMF.map (Language.keyPairDown pp)
@@ -101,10 +80,10 @@ variable
     CryptoLib.Program.Signature.Embedding.inject,
     CryptoLib.Program.Code.valueDist_call,
     CryptoLib.Program.Expr.eval,
-    CryptoLib.Program.Assumption.DL.DDH.valueDist_exec_sampleScalar,
+    CryptoLib.Assumption.Program.DL.DDH.valueDist_exec_sampleScalar,
     CryptoLib.Program.Env.get,
-    CryptoLib.Program.Assumption.DL.DDH.valueDist_exec_smul,
-    CryptoLib.Program.Assumption.DL.DDH.valueDist_exec_add,
+    CryptoLib.Assumption.Program.DL.DDH.valueDist_exec_smul,
+    CryptoLib.Assumption.Program.DL.DDH.valueDist_exec_add,
     CryptoLib.Program.Code.valueDist_ret]
   change
     PMF.map (Language.carrierPairDown pp)
@@ -145,8 +124,8 @@ variable
     CryptoLib.Program.Signature.Embedding.inject,
     CryptoLib.Program.Code.valueDist_call,
     CryptoLib.Program.Expr.eval, CryptoLib.Program.Env.get,
-    CryptoLib.Program.Assumption.DL.DDH.valueDist_exec_smul,
-    CryptoLib.Program.Assumption.DL.DDH.valueDist_exec_sub,
+    CryptoLib.Assumption.Program.DL.DDH.valueDist_exec_smul,
+    CryptoLib.Assumption.Program.DL.DDH.valueDist_exec_sub,
     CryptoLib.Program.Code.valueDist_ret, PMF.bind_pure]
   change
     PMF.map ULift.down

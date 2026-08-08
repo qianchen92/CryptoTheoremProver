@@ -1,4 +1,4 @@
-import CryptoLib.Core.Infrastructure.Computation.Oracle.DeferredSampling
+import CryptoLib.Oracle.DeferredSampling
 import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.INDCPA.Definition.ReductionGame
 
 /-! # Random-mask oracle and common hybrid-game definitions -/
@@ -7,8 +7,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open scoped DDHParameter
 
 universe uCost uParameter uScalar uGroup
@@ -101,7 +101,7 @@ noncomputable def indCPAUniformCiphertextOracle
 of which challenge message the adversary selected. -/
 noncomputable def randomHybridGame
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec

@@ -6,8 +6,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -26,7 +26,7 @@ to `concreteDDHReductionPPT` built from its stored efficiency certificate.
 structure DDHReductionCertificate
     (F : Family M Parameter Scalar Carrier)
     (measure : NatMeasure M)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine M measure
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -35,13 +35,13 @@ structure DDHReductionCertificate
   efficiency : ReductionEfficiencyCertificate measure F
   realGame_eq :
     CryptoLib.Core.Infrastructure.GameBased.Distinguishing.securityGame
-        (CryptoLib.Core.Assumption.DL.DDH.realSample F)
+        (CryptoLib.Assumption.DL.DDH.realSample F)
         (concreteDDHReductionPPT F efficiency adversary
           rightMessage).toProbabilisticMachine =
       realReductionGame F adversary.toOracleMachine rightMessage
   randomGame_eq :
     CryptoLib.Core.Infrastructure.GameBased.Distinguishing.securityGame
-        (CryptoLib.Core.Assumption.DL.DDH.randomSample F)
+        (CryptoLib.Assumption.DL.DDH.randomSample F)
         (concreteDDHReductionPPT F efficiency adversary
           rightMessage).toProbabilisticMachine =
       randomReductionGame F adversary.toOracleMachine rightMessage
@@ -55,7 +55,7 @@ distribution above.
 def DDHReductionPPTClosed
     (measure : NatMeasure M)
     (F : Family M Parameter Scalar Carrier) : Prop :=
-  ∀ adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+  ∀ adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -69,7 +69,7 @@ def DDHReductionPPTClosed
 noncomputable def ddhReductionCertificate
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)

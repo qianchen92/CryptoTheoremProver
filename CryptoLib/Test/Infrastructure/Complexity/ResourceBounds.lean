@@ -4,9 +4,9 @@ namespace CryptoLib.Test.Infrastructure.Complexity.ResourceBounds
 
 open CryptoLib.Core.Infrastructure.Complexity
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Algebra
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.Computation.Oracle
+open CryptoLib.Oracle
+open CryptoLib.Oracle.Complexity
 
 /-- A one-step machine used to ensure runtime bounds cover actual path annotations. -/
 noncomputable def oneStepMachine :
@@ -116,23 +116,19 @@ def testOracleSpec : OracleSpec where
   Response
     | .query => Unit
 
-noncomputable def issueAlgebra :
-    CostedAlgebra CostModel.nat (QueryIssue.signature testOracleSpec) :=
-  QueryIssue.costAlgebra CostModel.nat testOracleSpec (fun _name _query => 1)
+noncomputable def issueCost :
+    (name : testOracleSpec.Name) → testOracleSpec.Query name → CostModel.nat.Cost :=
+  fun _name _query => 1
 
-noncomputable def oneQueryProgram : Oracle.Program issueAlgebra (ULift Unit) :=
+noncomputable def oneQueryProgram : Oracle.Program issueCost (ULift Unit) :=
   Oracle.Program.query TestOracle.query ()
 
 theorem oneQueryProgram_localBound :
     Oracle.Program.LocalCostBound oneQueryProgram 1 := by
   intro value cost trace execution
   unfold oneQueryProgram at execution
-  cases execution with
-  | query _ _ issueResult issueResult_mem _response =>
-      simp only [issueAlgebra, QueryIssue.costAlgebra,
-        RandCosted.liftCosted, PMF.mem_support_pure_iff] at issueResult_mem
-      subst issueResult
-      exact Nat.le_refl 1
+  cases execution
+  exact Nat.le_refl 1
 
 theorem oneQueryProgram_totalQueryBound :
     Oracle.Program.TotalQueryBound oneQueryProgram 1 := by
@@ -145,21 +141,13 @@ theorem oneQueryProgram_totalQueryBound :
 theorem oneQueryProgram_not_zeroLocalBudget :
     ¬ Oracle.Program.LocalCostBound oneQueryProgram 0 := by
   intro hzero
-  have issue_mem :
-      (⟨(), 1⟩ : Costed CostModel.nat Unit) ∈
-        (issueAlgebra.exec (.issue TestOracle.query ())).support := by
-    change
-      (⟨(), 1⟩ : Costed CostModel.nat Unit) ∈
-        (PMF.pure (⟨(), 1⟩ : Costed CostModel.nat Unit)).support
-    rw [PMF.mem_support_pure_iff]
   have execution :
       Oracle.Program.PossibleExecution oneQueryProgram
         (ULift.up ()) 1 (QueryTrace.singleton TestOracle.query) := by
     exact
       Oracle.Program.PossibleExecution.query
-        (issueAlgebra := issueAlgebra)
-        TestOracle.query () (⟨(), 1⟩ : Costed CostModel.nat Unit)
-        issue_mem ()
+        (issueCost := issueCost)
+        TestOracle.query () ()
   have hbound :=
     hzero (ULift.up ()) 1 (QueryTrace.singleton TestOracle.query) execution
   exact Nat.not_succ_le_zero 0 hbound
@@ -181,13 +169,12 @@ def adaptiveOracleSpec : OracleSpec where
   Response
     | .bit => Bool
 
-noncomputable def adaptiveIssueAlgebra :
-    CostedAlgebra CostModel.nat (QueryIssue.signature adaptiveOracleSpec) :=
-  QueryIssue.costAlgebra CostModel.nat adaptiveOracleSpec
-    (fun _name _query => 1)
+noncomputable def adaptiveIssueCost :
+    (name : adaptiveOracleSpec.Name) → adaptiveOracleSpec.Query name → CostModel.nat.Cost :=
+  fun _name _query => 1
 
 noncomputable def adaptiveTwoQueryProgram :
-    Oracle.Program adaptiveIssueAlgebra (ULift Bool) := do
+    Oracle.Program adaptiveIssueCost (ULift Bool) := do
   let first ← Oracle.Program.query AdaptiveOracle.bit false
   Oracle.Program.query AdaptiveOracle.bit first.down
 
@@ -201,19 +188,15 @@ noncomputable def adaptiveOracleEnv : OracleEnv adaptiveOracleSpec where
 theorem adaptiveQuery_localBound (oracleQuery : Bool) :
     Oracle.Program.LocalCostBound
       (Oracle.Program.query AdaptiveOracle.bit oracleQuery :
-        Oracle.Program adaptiveIssueAlgebra (ULift Bool)) 1 := by
+        Oracle.Program adaptiveIssueCost (ULift Bool)) 1 := by
   intro value cost trace execution
-  cases execution with
-  | query _ _ issueResult issueResult_mem _response =>
-      simp only [adaptiveIssueAlgebra, QueryIssue.costAlgebra,
-        RandCosted.liftCosted, PMF.mem_support_pure_iff] at issueResult_mem
-      subst issueResult
-      exact Nat.le_refl 1
+  cases execution
+  exact Nat.le_refl 1
 
 theorem adaptiveQuery_totalBound (oracleQuery : Bool) :
     Oracle.Program.TotalQueryBound
       (Oracle.Program.query AdaptiveOracle.bit oracleQuery :
-        Oracle.Program adaptiveIssueAlgebra (ULift Bool)) 1 := by
+        Oracle.Program adaptiveIssueCost (ULift Bool)) 1 := by
   intro value cost trace execution
   cases execution
   exact Nat.le_refl 1
@@ -239,7 +222,7 @@ noncomputable def adaptiveTimedMachine :
     TimedOracleMachine CostModel.nat NatMeasure.nat
       (fun _sec => Unit) (fun _sec _input => Bool)
       (fun _sec _input => adaptiveOracleSpec) where
-  issueAlgebra := fun _sec _input => adaptiveIssueAlgebra
+  issueCost := fun _sec _input => adaptiveIssueCost
   program := fun _sec _input => adaptiveTwoQueryProgram
   localBudget := fun _sec _input => 2
   queryBudget := fun _sec _input _name => 2
@@ -266,7 +249,7 @@ theorem adaptiveRunExact_eq_expected :
       PMF.pure adaptiveExpectedResult := by
   simp only [OracleMachine.runExact, Oracle.Program.runExactFromInit,
     adaptiveTimedMachine, adaptiveTwoQueryProgram, Oracle.Program.runExact,
-    adaptiveIssueAlgebra, QueryIssue.costAlgebra, OracleEnv.zeroCost,
+    adaptiveIssueCost, OracleEnv.zeroCost,
     adaptiveOracleEnv, RandCosted.sampleZeroCost,
     RandCosted.sampleWithCost, PMF.pure_bind, PMF.pure_map,
     Bool.not_false, Bool.not_true]

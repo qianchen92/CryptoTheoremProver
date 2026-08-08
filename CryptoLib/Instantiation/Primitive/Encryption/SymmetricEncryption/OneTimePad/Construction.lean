@@ -1,15 +1,15 @@
 import CryptoLib.Core.Infrastructure.SecurityParameter
-import CryptoLib.Core.Infrastructure.Computation.Algebra.Parameter
-import CryptoLib.Core.Infrastructure.Computation.Algebra.Signature
-import CryptoLib.Core.Infrastructure.Computation.Algebra.Handler
-import CryptoLib.Core.Infrastructure.Computation.Algebra.Laws
+import CryptoLib.Algebra.Generic.Parameter
+import CryptoLib.Algebra.Generic.Signature
+import CryptoLib.Algebra.Generic.Handler
+import CryptoLib.Algebra.Generic.Laws
 import CryptoLib.Core.Infrastructure.Probability.Uniform
 import CryptoLib.Core.Infrastructure.Computation.Randomized
 import CryptoLib.Program.Algebra.AdditiveGroup
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
-open CryptoLib.Core.Infrastructure.Computation.Algebra
+open CryptoLib.Algebra.Generic
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open scoped CryptoLib.Program
 
@@ -19,7 +19,7 @@ variable {M : CostModel.{uCost}}
 
 /-- The mathematical finite additive group underlying an OTP instance. -/
 abbrev MathematicalParam :=
-  CryptoLib.Core.Infrastructure.Computation.Algebra.Parameter.AdditiveGroupParam.{uGroup}
+  CryptoLib.Algebra.Generic.Parameter.AdditiveGroupParam.{uGroup}
 
 /-- Exactly the primitive capabilities used by the one-time pad. -/
 inductive Operation (math : MathematicalParam.{uGroup}) :

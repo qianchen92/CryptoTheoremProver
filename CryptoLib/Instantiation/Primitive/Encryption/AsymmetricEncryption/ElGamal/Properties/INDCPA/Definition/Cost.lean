@@ -6,8 +6,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -23,14 +23,14 @@ retains the operational order `prepare ; adversary-local ; oracle queries`. -/
 def concreteReductionBudget
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.TimedOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.TimedOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F) : M.Cost :=
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F) : M.Cost :=
   if F.parameterSec challenge.parameter = sec then
     M.instAddMonoid.add
       (M.instAddMonoid.add efficiency.prepareCost M.instAddMonoid.zero)
@@ -46,7 +46,7 @@ def concreteReductionBudget
 branch. -/
 def concreteReductionRuntime
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.TimedOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.TimedOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)

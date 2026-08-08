@@ -3,8 +3,12 @@
 
 This check is intentionally independent of Lean's build graph. It enforces the
 Infrastructure hierarchy, the trusted `CryptoLib.Program` core order, and the
-package direction from `CryptoLib.Core` definitions through first-order adapters to
-`CryptoLib.Instantiation` realizations and future `CryptoLib.Backend` backends.
+package direction from `CryptoLib.Core` definitions through the sibling
+`CryptoLib.Algebra`, `CryptoLib.Program`, `CryptoLib.Oracle`, `CryptoLib.UC`,
+`CryptoLib.Assumption`, `CryptoLib.Primitive`, and `CryptoLib.Protocol` layers
+to `CryptoLib.Instantiation` realizations. `CryptoLib.Backend` remains a
+reserved future layer and is intentionally not part of the current default
+target set.
 Exact module-name membership additionally catches case mismatches that can pass
 on a case-insensitive macOS checkout but fail on GitHub's Linux runners.
 """
@@ -23,7 +27,13 @@ MODULE_RE = re.compile(r"^[A-Za-z0-9_.'-]+$")
 PREFIX = "CryptoLib.Core.Infrastructure."
 PROJECT_PACKAGES = (
     "CryptoLib.Core",
+    "CryptoLib.Algebra",
     "CryptoLib.Program",
+    "CryptoLib.Oracle",
+    "CryptoLib.UC",
+    "CryptoLib.Assumption",
+    "CryptoLib.Primitive",
+    "CryptoLib.Protocol",
     "CryptoLib.Instantiation",
     "CryptoLib.Backend",
     "CryptoLib.Test",
@@ -31,16 +41,30 @@ PROJECT_PACKAGES = (
 
 PRODUCTION_PACKAGE_LEVEL = {
     "CryptoLib.Core": 0,
-    "CryptoLib.Program": 1,
-    "CryptoLib.Instantiation": 2,
-    "CryptoLib.Backend": 3,
+    "CryptoLib.Algebra": 1,
+    "CryptoLib.Program": 2,
+    # These are sibling post-Program layers. UC and Protocol intentionally
+    # share a level because protocol components are built on UC ITMs while UC
+    # composition consumes those components.
+    "CryptoLib.Oracle": 3,
+    "CryptoLib.UC": 3,
+    "CryptoLib.Assumption": 3,
+    "CryptoLib.Primitive": 3,
+    "CryptoLib.Protocol": 3,
+    "CryptoLib.Instantiation": 4,
+    "CryptoLib.Backend": 5,
 }
 
 # The operational-admission layer consumes the trusted first-order core so that
 # internally validated reified code remains a closed constructor of `ValidCode`.
-# It must not import `CryptoLib.Program.Basic`, algebra adapters, or assumptions.
 ALLOWED_CROSS_PACKAGE_IMPORTS = {
     ("CryptoLib.Core.Infrastructure.Complexity.Operational", "CryptoLib.Program.Core"),
+    # Narrow complexity adapter/aggregation bridges. The generic machine core
+    # remains in Core, while oracle refinements live in Oracle.
+    ("CryptoLib.Core.Infrastructure.Complexity.Basic", "CryptoLib.Oracle.Complexity.Implementation"),
+    ("CryptoLib.Core.Infrastructure.Complexity.Basic", "CryptoLib.Oracle.Complexity.Machine"),
+    ("CryptoLib.Core.Infrastructure.Complexity.Operational", "CryptoLib.Oracle.Complexity.MachineCore"),
+    ("CryptoLib.Core.Infrastructure.GameBased.OracleDistinguishing", "CryptoLib.Oracle.Complexity.Machine"),
 }
 
 
@@ -116,7 +140,9 @@ def is_higher_level_project_import(module: str) -> bool:
 
 
 def is_allowed_cross_package_import(source: str, target: str) -> bool:
-    return (source, target) in ALLOWED_CROSS_PACKAGE_IMPORTS
+    if (source, target) in ALLOWED_CROSS_PACKAGE_IMPORTS:
+        return True
+    return False
 
 
 def project_import_hierarchy_error(source: str, target: str) -> str | None:
@@ -142,15 +168,15 @@ def parser_regression_errors() -> list[str]:
     """Keep the accepted Lean import forms and project boundary under test."""
 
     fixture = """\
-/- import CryptoLib.Core.Assumption.Hidden
+/- import CryptoLib.Assumption.Hidden
    /- nested import CryptoLib.Test.Hidden -/
 -/
-public import CryptoLib.Core.Infrastructure.SecurityParameter CryptoLib.Core.Primitive.Bad CryptoLib.Program.Algebra.Bad CryptoLib.Instantiation.Primitive.Bad -- tail
+public import CryptoLib.Core.Infrastructure.SecurityParameter CryptoLib.Primitive.Bad CryptoLib.Program.Algebra.Bad CryptoLib.Instantiation.Primitive.Bad -- tail
 import Mathlib.Data.Nat.Basic
 """
     expected = [
         "CryptoLib.Core.Infrastructure.SecurityParameter",
-        "CryptoLib.Core.Primitive.Bad",
+        "CryptoLib.Primitive.Bad",
         "CryptoLib.Program.Algebra.Bad",
         "CryptoLib.Instantiation.Primitive.Bad",
         "Mathlib.Data.Nat.Basic",
@@ -159,25 +185,27 @@ import Mathlib.Data.Nat.Basic
     parsed = imports_from_text(fixture)
     if parsed != expected:
         errors.append(f"internal import-parser regression: {parsed!r}")
-    if not is_higher_level_project_import("CryptoLib.Core.Primitive.Bad"):
-        errors.append("internal boundary regression: CryptoLib.Core.Primitive.Bad accepted")
+    if not is_higher_level_project_import("CryptoLib.Primitive.Bad"):
+        errors.append("internal boundary regression: CryptoLib.Primitive.Bad accepted")
     if not is_higher_level_project_import("CryptoLib.Test.Bad"):
         errors.append("internal boundary regression: CryptoLib.Test.Bad accepted")
     if not is_higher_level_project_import("CryptoLib.Instantiation.Primitive.Bad"):
         errors.append("internal boundary regression: CryptoLib.Instantiation accepted")
     if not is_higher_level_project_import("CryptoLib.Program.Algebra.Bad"):
         errors.append("internal boundary regression: CryptoLib.Program accepted")
-    if is_higher_level_project_import("CryptoLib.Core.Infrastructure.UC.Kernel"):
+    if is_higher_level_project_import("CryptoLib.Core.Infrastructure.Computation.Basic"):
         errors.append("internal boundary regression: Infrastructure rejected")
     if project_package("CryptoLib.Instantiation.Primitive.Basic") != "CryptoLib.Instantiation":
         errors.append("internal boundary regression: CryptoLib.Instantiation not recognized")
     if project_package("CryptoLib.Program.Algebra.Basic") != "CryptoLib.Program":
         errors.append("internal boundary regression: CryptoLib.Program not recognized")
+    if project_package("CryptoLib.Assumption.DL.DDH") != "CryptoLib.Assumption":
+        errors.append("internal boundary regression: CryptoLib.Assumption not recognized")
     if project_package("CryptoLib.Backend.Basic") != "CryptoLib.Backend":
         errors.append("internal boundary regression: CryptoLib.Backend not recognized")
     if project_import_hierarchy_error(
-        "CryptoLib.Core.Primitive.Encryption.Basic",
-        "CryptoLib.Program.Algebra.Basic",
+        "CryptoLib.Core.Infrastructure.Computation.Basic",
+        "CryptoLib.Program.Core",
     ) is None:
         errors.append("internal boundary regression: core-to-program accepted")
     if project_import_hierarchy_error(
@@ -196,6 +224,16 @@ import Mathlib.Data.Nat.Basic
     ) is None:
         errors.append("internal boundary regression: program-to-instantiation accepted")
     if project_import_hierarchy_error(
+        "CryptoLib.Program.Algebra.Basic",
+        "CryptoLib.Assumption.DL.DDH",
+    ) is None:
+        errors.append("internal boundary regression: program-to-assumption accepted")
+    if project_import_hierarchy_error(
+        "CryptoLib.Assumption.Program.DL.DDH",
+        "CryptoLib.Program.Algebra.ScalarAction",
+    ) is not None:
+        errors.append("internal boundary regression: assumption-to-program rejected")
+    if project_import_hierarchy_error(
         "CryptoLib.Core.Infrastructure.Computation.Basic",
         "CryptoLib.Instantiation.Primitive.Basic",
     ) is None:
@@ -212,9 +250,9 @@ import Mathlib.Data.Nat.Basic
         errors.append("internal boundary regression: instantiation-to-program rejected")
     if project_import_hierarchy_error(
         "CryptoLib.Program.Algebra.Basic",
-        "CryptoLib.Core.Primitive.Basic",
-    ) is not None:
-        errors.append("internal boundary regression: program-to-core rejected")
+        "CryptoLib.Primitive.Basic",
+    ) is None:
+        errors.append("internal boundary regression: program-to-primitive accepted")
     if first_order_core_import_error(
         "CryptoLib.Program.Type", "CryptoLib.Program.Signature"
     ) is None:
@@ -262,22 +300,6 @@ SUBSYSTEM_ORDER = {
         "Projection": 3,
         "Basic": 99,
     },
-    "Computation.Algebra": {
-        "Signature": 0,
-        "Handler": 1,
-        "Laws": 2,
-        "Bounds": 2,
-        "Parameter": 2,
-        "Operation": 3,
-        "Basic": 99,
-    },
-    "Computation.Program": {
-        "Syntax": 0,
-        "Semantics": 1,
-        "Execution": 2,
-        "Bounds": 2,
-        "Basic": 99,
-    },
     "Computation.Oracle": {
         "Spec": 0,
         "Trace": 1,
@@ -292,7 +314,6 @@ SUBSYSTEM_ORDER = {
         "CostBound": 0,
         "Operational": 1,
         "Machine": 2,
-        "ProgramMachine": 3,
         "OracleImplementation": 3,
         "OracleMachine": 4,
         "Basic": 99,
@@ -329,13 +350,11 @@ SUBSYSTEM_ORDER = {
 
 COMPUTATION_ALLOWED_IMPORTS = {
     "Cost": {"Cost"},
-    "Algebra": {"Cost", "Algebra"},
-    "Program": {"Cost", "Algebra", "Program"},
-    "Oracle": {"Cost", "Algebra", "Oracle"},
+    "Oracle": {"Cost", "Oracle"},
     "Randomized": {"Cost"},
     "Game": set(),
     "Basic": {
-        "Cost", "Algebra", "Program", "Oracle",
+        "Cost", "Oracle",
         "Randomized", "Game", "Basic",
     },
 }

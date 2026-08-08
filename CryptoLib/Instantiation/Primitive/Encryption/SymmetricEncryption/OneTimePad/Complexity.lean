@@ -1,12 +1,13 @@
-import CryptoLib.Core.Infrastructure.Complexity.ProgramMachine
-import CryptoLib.Core.Infrastructure.Computation.Algebra.Bounds
+import CryptoLib.Algebra.Generic.Bounds
+import CryptoLib.Core.Infrastructure.Complexity.Machine
+import CryptoLib.Program.Core
 import CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad.Scheme
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 open CryptoLib.Core.Infrastructure.Complexity
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Algebra
+open CryptoLib.Algebra.Generic
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open scoped OneTimePadParameter
 
@@ -157,7 +158,7 @@ def decryptBoundedProgram
 /-- Global setup efficiency for an OTP family. -/
 structure EfficiencyCertificate where
   setupBudget : CryptoLib.Core.SecPar → M.Cost
-  setupCostBound : Program.CostBound (setupProgram F) setupBudget
+  setupCostBound : ∀ sec, RandCosted.CostBound (F.setup sec) (setupBudget sec)
 
 variable (familyCertificate : EfficiencyCertificate F)
 
@@ -167,16 +168,15 @@ noncomputable def EfficiencyCertificate.ofFixed
   setupBudget := fun _sec => setupCost
   setupCostBound := by
     intro sec result hresult
-    simp only [setupProgram,
-      CryptoLib.Core.Infrastructure.Computation.Program.Code.runCosted, familyAlgebra,
-      Family.ofFixed, RandCosted.liftCosted, PMF.mem_support_pure_iff] at hresult
+    simp only [Family.ofFixed, RandCosted.liftCosted,
+      PMF.mem_support_pure_iff] at hresult
     subst result
     letI := M.instPartialOrder
     exact le_refl setupCost
 
 /-- The authoritative setup program satisfies the supplied global certificate. -/
 theorem setup_costBound
-    : Program.CostBound (setupProgram F) familyCertificate.setupBudget :=
+    : ∀ sec, RandCosted.CostBound (F.setup sec) (familyCertificate.setupBudget sec) :=
   familyCertificate.setupCostBound
 
 theorem keygenProgram_costBound

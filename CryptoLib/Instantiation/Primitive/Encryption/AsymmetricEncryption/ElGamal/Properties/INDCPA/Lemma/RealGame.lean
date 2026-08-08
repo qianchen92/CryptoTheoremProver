@@ -6,8 +6,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open scoped DDHParameter
 
 universe uCost uParameter uScalar uGroup
@@ -45,7 +45,7 @@ private theorem indCPAEncryptionOracle_eq_lazyReal
 
 private theorem runWithEnv_indCPAEncryptionOracle_eq_bind_fixedReal
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -64,7 +64,7 @@ private theorem runWithEnv_indCPAEncryptionOracle_eq_bind_fixedReal
   let pp := F.publicParam parameter
   letI : Nonempty Scalar := ⟨pp.commMonoidScalar.one⟩
   rw [indCPAEncryptionOracle_eq_lazyReal F sec parameter pk rightMessage]
-  unfold CryptoLib.Core.Infrastructure.Complexity.OracleMachine.runWithEnv
+  unfold CryptoLib.Oracle.Complexity.OracleMachine.runWithEnv
   simp only [indCPALazyRealOracle, indCPAFixedRealOracle]
   rw [OracleEnv.runWithEnv_withLazyOneShotSeed]
   rw [PMF.map_bind]
@@ -77,7 +77,7 @@ private theorem fixedRealOracle_eq_reductionOracle_realChallenge
         ((F.publicParam parameter).smul.smul a
           (F.publicParam parameter).generator) rightMessage b =
       reductionOracle F sec
-        (CryptoLib.Core.Assumption.DL.DDH.realChallenge F parameter a b)
+        (CryptoLib.Assumption.DL.DDH.realChallenge F parameter a b)
         rightMessage := by
   let pp := F.publicParam parameter
   letI : AddGroup Carrier := pp.addGroup
@@ -97,7 +97,7 @@ private theorem fixedRealOracle_eq_reductionOracle_realChallenge
   change Carrier × Carrier at query
   cases used
   · simp only [Bool.false_eq_true, ↓reduceIte,
-      CryptoLib.Core.Assumption.DL.DDH.realChallenge]
+      CryptoLib.Assumption.DL.DDH.realChallenge]
     calc
       _ = PMF.pure ((some (b • pp.generator,
           (if rightMessage then query.2 else query.1) +
@@ -118,7 +118,7 @@ private theorem fixedRealOracle_eq_reductionOracle_realChallenge
 ElGamal IND-CPA challenge game. -/
 theorem indCPASecurityGame_eq_realReductionGame
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -133,7 +133,7 @@ theorem indCPASecurityGame_eq_realReductionGame
       CryptoLib.Core.Infrastructure.GameBased.OracleDistinguishing.rightSecurityGame,
       CryptoLib.Core.Infrastructure.GameBased.OracleDistinguishing.securityGame,
       indCPAProblem, realReductionGame, semanticReductionGame,
-      CryptoLib.Core.Assumption.DL.DDH.realSample_eq, scheme_setupDist,
+      CryptoLib.Assumption.DL.DDH.realSample_eq, scheme_setupDist,
       scheme_keygenDist, semanticDDHReduction,
       PMF.bind_bind, PMF.pure_bind]
   all_goals

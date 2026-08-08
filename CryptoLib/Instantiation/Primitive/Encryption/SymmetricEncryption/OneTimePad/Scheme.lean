@@ -1,8 +1,7 @@
-import CryptoLib.Core.Infrastructure.Computation.Program.Basic
 import CryptoLib.Program.Builder
 import CryptoLib.Program.Semantics
 import CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad.Construction
-import CryptoLib.Core.Primitive.Encryption.SymmetricEncryption.Syntax
+import CryptoLib.Primitive.Encryption.SymmetricEncryption.Syntax
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
@@ -14,13 +13,6 @@ variable
   {M : CryptoLib.Core.Infrastructure.Computation.Cost.CostModel.{uCost}}
   (F : Family.{uCost, uGroup} M)
   (pp : PublicParam.{uCost, uGroup} M)
-
-/-- OTP setup as a typed family-level program. -/
-def setupProgram :
-    CryptoLib.Core.Infrastructure.Computation.Program
-      (familyAlgebra F) CryptoLib.Core.SecPar
-      (PublicParam.{uCost, uGroup} M) where
-  body sec := .call (.setup sec)
 
 /-- Uniform key generation over the parameter's sole exact algebra. -/
 def keygenProgram :
@@ -51,11 +43,10 @@ def decryptProgram :
 
 /-- The OTP scheme executes setup and its three parameter operations only through Programs. -/
 noncomputable def scheme (F : Family M) :
-    CryptoLib.Core.Primitive.Encryption.SymmetricEncryption.Scheme
+    CryptoLib.Primitive.Encryption.SymmetricEncryption.Scheme
       M CryptoLib.Core.SecPar (PublicParam M)
       (fun pp => pp.Carrier) (fun pp => pp.Carrier) (fun pp => pp.Carrier) where
-  setup := fun sec =>
-    CryptoLib.Core.Infrastructure.Computation.Program.runCosted (setupProgram F) sec
+  setup := fun sec => F.setup sec
   keygen := fun pp =>
     CryptoLib.Program.Procedure.runCosted
       (Language.algebra pp) (keygenProgram pp)

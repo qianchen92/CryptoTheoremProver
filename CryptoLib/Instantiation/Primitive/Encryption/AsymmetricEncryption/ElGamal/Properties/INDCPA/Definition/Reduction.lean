@@ -1,5 +1,5 @@
 import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal.Properties.INDCPA.Definition.Efficiency
-import CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Properties.INDCPA
+import CryptoLib.Primitive.Encryption.AsymmetricEncryption.Properties.INDCPA
 
 /-! # Executable DDH reduction definitions for ElGamal IND-CPA -/
 
@@ -7,8 +7,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open CryptoLib.Program.Adapter.OneShotChoiceAdd
 open scoped DDHParameter
 
@@ -24,7 +24,7 @@ variable
 def reductionPublicInput
     (F : Family M Parameter Scalar Carrier)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F) :
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F) :
     PublicInput Parameter (PublicKey (Carrier := Carrier)) sec where
   param := challenge.parameter
   publicKey := challenge.left
@@ -37,7 +37,7 @@ is one-time padded by the independent random DDH component.
 noncomputable def reductionOracle
     (F : Family M Parameter Scalar Carrier)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F)
     (rightMessage : Bool) :
     OracleEnv
       (indCPAOracleSpec
@@ -76,7 +76,7 @@ noncomputable def reductionPrepare
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F) :
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F) :
     RandCosted M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)) sec) :=
   RandCosted.map
@@ -101,7 +101,7 @@ noncomputable def costedReductionOracle
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F)
     (rightMessage : Bool) :
     CostedOracleEnv M
       (indCPAOracleSpec
@@ -128,14 +128,14 @@ and the exact query adapter in order; a malformed tag executes only reject.
 noncomputable def concreteDDHReduction
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.Complexity.ProbabilisticMachine M
-      (fun _sec => CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+      (fun _sec => CryptoLib.Assumption.DL.DDH.ChallengeInput F)
       (fun _sec _challenge => Bool) where
   run := fun sec challenge =>
     if F.parameterSec challenge.parameter = sec then
@@ -152,14 +152,14 @@ zero-cost machine.
 -/
 noncomputable def semanticDDHReduction
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F) : PMF Bool :=
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F) : PMF Bool :=
   adversary.runWithEnv sec (reductionPublicInput F sec challenge)
     (reductionOracle F sec challenge rightMessage)
 

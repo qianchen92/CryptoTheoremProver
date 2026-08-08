@@ -3,7 +3,6 @@ import CryptoLib.Test.Infrastructure.Complexity.ResourceBounds
 import CryptoLib.Test.Infrastructure.Computation.CostComposition
 import CryptoLib.Test.Infrastructure.Computation.CostedOracle
 import CryptoLib.Test.Infrastructure.Computation.GenericCost
-import CryptoLib.Test.Infrastructure.Computation.Program
 import CryptoLib.Test.Infrastructure.GameBased.Hybrid
 import CryptoLib.Test.FirstOrder
 import CryptoLib.Test.Infrastructure.UC.Context

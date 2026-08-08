@@ -1,6 +1,5 @@
 import CryptoLib.Core.Infrastructure.Complexity.CostBound
 import CryptoLib.Core.Infrastructure.Complexity.Operational
 import CryptoLib.Core.Infrastructure.Complexity.Machine
-import CryptoLib.Core.Infrastructure.Complexity.OracleImplementation
-import CryptoLib.Core.Infrastructure.Complexity.OracleMachine
-import CryptoLib.Core.Infrastructure.Complexity.ProgramMachine
+import CryptoLib.Oracle.Complexity.Implementation
+import CryptoLib.Oracle.Complexity.Machine

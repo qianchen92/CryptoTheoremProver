@@ -5,7 +5,8 @@ namespace CryptoLib.Core.Infrastructure.Complexity
 
 open CryptoLib.Core.Infrastructure.Computation
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.Computation.Oracle
+open CryptoLib.Oracle
+open CryptoLib.Oracle.Complexity
 
 universe uCost uIn uOut uMapped uFirstOrder uBase uValue uOp
   uClosedInput uCallerInput uOutput uOracle uQuery uResponse

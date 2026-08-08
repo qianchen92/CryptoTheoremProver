@@ -1,6 +1,7 @@
-import CryptoLib.Core.Infrastructure.Complexity.ProgramMachine
 import CryptoLib.Core.Infrastructure.Computation.Randomized
+import CryptoLib.Algebra.Generic.Basic
 import CryptoLib.Core.Infrastructure.Computation.Cost.Projection
+import CryptoLib.Core.Infrastructure.Complexity.Machine
 import CryptoLib.Test.Infrastructure.Computation.TraceCost
 import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Tactic
@@ -9,7 +10,7 @@ namespace CryptoLib.Test.Infrastructure.Computation.GenericCost
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Algebra
+open CryptoLib.Algebra.Generic
 open CryptoLib.Core.Infrastructure.Complexity
 
 /-- A word resource whose sequential composition records order. -/
@@ -145,38 +146,6 @@ noncomputable def vectorBounds : OperationBounds vectorAlgebra where
     rw [PMF.mem_support_pure_iff] at hresult
     subst result
     exact le_refl _
-
-noncomputable def vectorProgram : Program vectorAlgebra Nat Nat where
-  body input := .call (.tick input)
-
-noncomputable def vectorBoundedProgram :
-    Program.BoundedProgram (Input := Nat) (Output := Nat)
-      vectorBounds (fun _input : Nat => (2, 1)) where
-  program := vectorProgram
-  certificate input :=
-    Program.Code.Bound.call (bounds := vectorBounds) (.tick input)
-
-/-- The machine retains vector costs; `totalWork` is used only by its certificate. -/
-noncomputable def vectorTimedMachine :
-    TimedMachine stepsQueriesCostModel totalWork
-      (fun _sec => Nat) (fun _sec _input => Nat) :=
-  TimedMachine.ofBoundedProgram
-    totalWork
-    (fun _sec => vectorAlgebra)
-    (fun _sec => vectorBounds)
-    (fun _sec _input => (2, 1))
-    (fun _sec => 3)
-    (fun _sec => vectorBoundedProgram)
-    (by
-      intro sec input
-      exact Nat.le_refl 3)
-
-example (sec : CryptoLib.Core.SecPar) (input : Nat) :
-    RandCosted.valueDist (vectorTimedMachine.run sec input) =
-      Program.valueDist vectorProgram input := by
-  unfold vectorTimedMachine
-  rw [TimedMachine.valueDist_run_ofBoundedProgram]
-  rfl
 
 example : Costed.mapCost totalWork twoStage =
     (⟨7, 10⟩ : Costed CostModel.nat Nat) := rfl

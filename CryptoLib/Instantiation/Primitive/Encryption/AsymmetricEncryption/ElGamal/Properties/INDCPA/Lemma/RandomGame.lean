@@ -6,8 +6,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open scoped DDHParameter
 
 universe uCost uParameter uScalar uGroup
@@ -109,7 +109,7 @@ private theorem fixedRandomMaskOracle_eq_reductionOracle_randomChallenge
         ((F.publicParam parameter).smul.smul a
           (F.publicParam parameter).generator) rightMessage (b, z) =
       reductionOracle F sec
-        (CryptoLib.Core.Assumption.DL.DDH.randomChallenge F parameter a b z)
+        (CryptoLib.Assumption.DL.DDH.randomChallenge F parameter a b z)
         rightMessage := by
   dsimp [indCPAFixedRandomMaskOracle, OracleEnv.withFixedOneShotSeed,
     reductionOracle, indCPARandomMaskAnswer, indCPAAfterChallenge]
@@ -124,7 +124,7 @@ private theorem fixedRandomMaskOracle_eq_reductionOracle_randomChallenge
 
 private theorem runWithEnv_lazyRandomMaskOracle_eq_bind_fixedRandom
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -139,7 +139,7 @@ private theorem runWithEnv_lazyRandomMaskOracle_eq_bind_fixedRandom
   let pp := F.publicParam parameter
   letI : Nonempty (Scalar × Carrier) :=
     ⟨(pp.commMonoidScalar.one, pp.addGroup.zero)⟩
-  unfold CryptoLib.Core.Infrastructure.Complexity.OracleMachine.runWithEnv
+  unfold CryptoLib.Oracle.Complexity.OracleMachine.runWithEnv
   simp only [indCPALazyRandomMaskOracle, indCPAFixedRandomMaskOracle]
   rw [OracleEnv.runWithEnv_withLazyOneShotSeed]
   rw [PMF.map_bind]
@@ -148,7 +148,7 @@ private theorem runWithEnv_lazyRandomMaskOracle_eq_bind_fixedRandom
 message-independent random-ciphertext hybrid. -/
 theorem randomReductionGame_eq_randomHybridGame
     (F : Family M Parameter Scalar Carrier)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -158,7 +158,7 @@ theorem randomReductionGame_eq_randomHybridGame
       randomHybridGame F adversary := by
   funext sec
   simp only [randomReductionGame, semanticReductionGame,
-    CryptoLib.Core.Assumption.DL.DDH.randomSample_eq, semanticDDHReduction,
+    CryptoLib.Assumption.DL.DDH.randomSample_eq, semanticDDHReduction,
     randomHybridGame,
     PMF.bind_bind, PMF.pure_bind]
   congr 1

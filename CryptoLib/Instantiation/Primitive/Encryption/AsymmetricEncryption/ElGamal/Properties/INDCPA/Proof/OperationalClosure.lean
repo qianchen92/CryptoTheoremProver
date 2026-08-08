@@ -5,7 +5,7 @@ import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -20,7 +20,7 @@ variable
 noncomputable def concreteDDHReductionPPT
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -28,7 +28,7 @@ noncomputable def concreteDDHReductionPPT
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.Complexity.PPTMachine M measure
-      (fun _sec => CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+      (fun _sec => CryptoLib.Assumption.DL.DDH.ChallengeInput F)
       (fun _sec _challenge => Bool) :=
   CryptoLib.Core.Infrastructure.Complexity.PPTMachine.ofAdmittedTimedMachine
     (concreteDDHReductionTimed F efficiency adversary.toTimedOracleMachine

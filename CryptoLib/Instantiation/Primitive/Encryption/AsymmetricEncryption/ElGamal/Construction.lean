@@ -1,5 +1,5 @@
-import CryptoLib.Core.Assumption.DL.DDH
-import CryptoLib.Program.Assumption.DL.DDH
+import CryptoLib.Assumption.DL.DDH
+import CryptoLib.Assumption.Program.DL.DDH
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
@@ -15,11 +15,11 @@ variable
 
 /-- ElGamal parameter families are the underlying DLog/DDH families. -/
 abbrev Family :=
-  CryptoLib.Core.Assumption.DL.DDH.Family M Parameter Scalar Carrier
+  CryptoLib.Assumption.DL.DDH.Family M Parameter Scalar Carrier
 
 /-- The exact DDH backend selected by one ElGamal family parameter. -/
 abbrev PublicParam :=
-  CryptoLib.Core.Assumption.DL.DDH.PublicParam M Scalar Carrier
+  CryptoLib.Assumption.DL.DDH.PublicParam M Scalar Carrier
 
 variable {M Parameter Scalar Carrier}
 
@@ -38,7 +38,7 @@ abbrev Ciphertext (_parameter : Parameter) := Carrier × Carrier
 /- The scalar and group carriers available to reified ElGamal algorithms. -/
 namespace Language
 
-export CryptoLib.Program.Assumption.DL.DDH
+export CryptoLib.Assumption.Program.DL.DDH
   (Base scalarTy carrierTy interpret ScalarValue CarrierValue liftScalar
     liftCarrier carrierScalarPairDown carrierPairDown Operation signature algebra)
 
@@ -61,7 +61,7 @@ abbrev keyPairDown
 
 namespace Operation
 
-export CryptoLib.Program.Assumption.DL.DDH.Operation
+export CryptoLib.Assumption.Program.DL.DDH.Operation
   (sampleScalar smul add sub)
 
 end Operation

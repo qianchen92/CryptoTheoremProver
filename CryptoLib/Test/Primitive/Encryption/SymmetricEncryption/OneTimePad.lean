@@ -5,9 +5,9 @@ import Mathlib.Data.ZMod.Basic
 namespace CryptoLib.Test.Primitive.Encryption.SymmetricEncryption.OneTimePad
 
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Algebra
+open CryptoLib.Algebra.Generic
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.SymmetricEncryption
+open CryptoLib.Primitive.Encryption.SymmetricEncryption
 open CryptoLib.Instantiation.Primitive.Encryption.SymmetricEncryption.OneTimePad
 open scoped OneTimePadParameter
 
@@ -93,11 +93,6 @@ noncomputable def testFamily : Family CostModel.nat :=
 noncomputable def testEfficiency : EfficiencyCertificate testFamily :=
   EfficiencyCertificate.ofFixed testPublicParam 3
 
-/-- OTP setup is dispatched through the family-level typed program. -/
-example (sec : CryptoLib.Core.SecPar) :
-    Program.runCosted (setupProgram testFamily) sec = testFamily.setup sec :=
-  setupProgram_runCosted testFamily sec
-
 /-- The bounded wrapper indexes the same encryption program rather than copying it. -/
 example :
     (encryptBoundedProgram testPublicParam testParamEfficiency).program =
@@ -180,7 +175,7 @@ example
           Costed CostModel.nat testPublicParam.Carrier) :=
   by
     simp only [testPublicParam, testAlgebra, RandCosted.liftCosted,
-      scheme, setupProgram_runCosted, CryptoLib.Program.Procedure.runCosted,
+      scheme, CryptoLib.Program.Procedure.runCosted,
       Language.algebra, decryptProgram, CryptoLib.Program.Builder.SmartCode.neg,
       CryptoLib.Program.Builder.SmartCode.add, CryptoLib.Program.SmartOperation.neg,
       CryptoLib.Program.SmartOperation.add, CryptoLib.Program.Signature.inject,
@@ -216,11 +211,10 @@ example
     rw [inner, PMF.pure_map]
     rfl
 
-/-- The exact setup Program satisfies its separate global efficiency certificate. -/
+/- The exact setup primitive satisfies its separate global efficiency certificate. -/
 example (sec : CryptoLib.Core.SecPar)
     (result : Costed CostModel.nat (PublicParam CostModel.nat))
-    (hresult :
-      result ∈ (Program.runCosted (setupProgram testFamily) sec).support) :
+    (hresult : result ∈ (testFamily.setup sec).support) :
     result.cost ≤ 3 := by
   exact setup_costBound testFamily testEfficiency sec result hresult
 

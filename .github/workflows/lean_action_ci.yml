@@ -22,8 +22,20 @@ jobs:
       - uses: leanprover/lean-action@v1
       - name: Build core target
         run: lake build CryptoLib.Core
+      - name: Build algebra target
+        run: lake build CryptoLib.Algebra
       - name: Build program target
         run: lake build CryptoLib.Program
+      - name: Build oracle target
+        run: lake build CryptoLib.Oracle
+      - name: Build UC target
+        run: lake build CryptoLib.UC
+      - name: Build assumption target
+        run: lake build CryptoLib.Assumption
+      - name: Build primitive target
+        run: lake build CryptoLib.Primitive
+      - name: Build protocol target
+        run: lake build CryptoLib.Protocol
       - name: Build instantiation target
         run: lake build CryptoLib.Instantiation
       - name: Build theorem regression target

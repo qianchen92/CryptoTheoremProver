@@ -1,8 +1,10 @@
 name = "CryptoLib"
 version = "0.1.0"
 keywords = ["cryptography", "formal-verification", "lean"]
-defaultTargets = ["CryptoLib.Core", "CryptoLib.Program",
-  "CryptoLib.Instantiation", "CryptoLib.Test"]
+defaultTargets = ["CryptoLib.Core", "CryptoLib.Algebra", "CryptoLib.Program",
+  "CryptoLib.Oracle", "CryptoLib.UC", "CryptoLib.Assumption",
+  "CryptoLib.Primitive", "CryptoLib.Protocol", "CryptoLib.Instantiation",
+  "CryptoLib.Test"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -20,7 +22,25 @@ rev = "v4.29.0-rc1"
 name = "CryptoLib.Core"
 
 [[lean_lib]]
+name = "CryptoLib.Algebra"
+
+[[lean_lib]]
 name = "CryptoLib.Program"
+
+[[lean_lib]]
+name = "CryptoLib.Oracle"
+
+[[lean_lib]]
+name = "CryptoLib.UC"
+
+[[lean_lib]]
+name = "CryptoLib.Assumption"
+
+[[lean_lib]]
+name = "CryptoLib.Primitive"
+
+[[lean_lib]]
+name = "CryptoLib.Protocol"
 
 [[lean_lib]]
 name = "CryptoLib.Instantiation"

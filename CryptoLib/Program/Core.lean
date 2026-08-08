@@ -1,6 +1,7 @@
 import CryptoLib.Program.Type
 import CryptoLib.Program.Signature
 import CryptoLib.Program.Algebra
+import CryptoLib.Algebra.Generic.Basic
 import CryptoLib.Program.Syntax
 import CryptoLib.Program.Builder
 import CryptoLib.Program.Semantics

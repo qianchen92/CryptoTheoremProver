@@ -1,11 +1,12 @@
-import CryptoLib.Core.Infrastructure.UC.Context
+import CryptoLib.UC.Context
 import Mathlib.Tactic
 
 namespace CryptoLib.Test.Infrastructure.UC.Context
 
 open CryptoLib.Core.Infrastructure.Asymptotic
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.UC
+open CryptoLib.Protocol
+open CryptoLib.UC
 
 /-! ## A nontrivial role-preserving address transport -/
 
@@ -301,31 +302,31 @@ universe uTestValue
 @[simp] theorem zeroKernel_withCharge {Value : Type uTestValue}
     (primitive : KernelPrimitive) (addresses : List ToyAddress)
     (next : RandCosted unitCostModel Value) :
-    KernelAlgebra.withCharge
-        (KernelAlgebra.zero unitCostModel ToyAddress)
+    KernelCost.withCharge
+        (KernelCost.zero unitCostModel ToyAddress)
         primitive addresses next = next := by
-  unfold KernelAlgebra.withCharge KernelAlgebra.charge KernelAlgebra.zero
+  unfold KernelCost.withCharge KernelCost.charge KernelCost.zero
   exact RandCosted.pure_bind () (fun _unit => next)
 
 /-- A genuine kernel simulation whose commuting square is consumed at positive
 fuel, rather than a final-game equality postulated by the test. -/
 noncomputable def toyIdentitySimulation :
     KernelSimulation (AddressRenaming.identity ToyAddress)
-      (KernelAlgebra.zero unitCostModel ToyAddress) toyNetworkAdapter
+      (KernelCost.zero unitCostModel ToyAddress) toyNetworkAdapter
         outerInitial (fun _sec output => output.value)
-      (KernelAlgebra.zero unitCostModel ToyAddress) toyNetworkAdapter
+      (KernelCost.zero unitCostModel ToyAddress) toyNetworkAdapter
         outerInitial (fun _sec output => output.value) :=
   KernelSimulation.identity
-    (KernelAlgebra.zero unitCostModel ToyAddress) toyNetworkAdapter outerInitial
+    (KernelCost.zero unitCostModel ToyAddress) toyNetworkAdapter outerInitial
       (fun _sec output => output.value)
 
 example (sec : CryptoLib.Core.SecPar) :
     Kernel.decisionDist
-        (KernelAlgebra.zero unitCostModel ToyAddress)
+        (KernelCost.zero unitCostModel ToyAddress)
         (toyNetworkAdapter sec) (fun output => output.value) 1
         (outerInitial sec) =
       Kernel.decisionDist
-        (KernelAlgebra.zero unitCostModel ToyAddress)
+        (KernelCost.zero unitCostModel ToyAddress)
         (toyNetworkAdapter sec) (fun output => output.value) 1
         (outerInitial sec) :=
   toyIdentitySimulation.initial_decisionDist_commutes 1 sec
@@ -338,7 +339,7 @@ is `system false`.
 -/
 example (sec : CryptoLib.Core.SecPar) :
     Kernel.decisionDist
-        (KernelAlgebra.zero unitCostModel ToyAddress)
+        (KernelCost.zero unitCostModel ToyAddress)
         (toyNetworkAdapter sec) (fun output => output.value) 1
         (outerInitial sec) = PMF.pure true := by
   simp [Kernel.decisionDist, Kernel.runCosted, Kernel.stepOne,
@@ -356,7 +357,7 @@ example (sec : CryptoLib.Core.SecPar) :
 
 example (sec : CryptoLib.Core.SecPar) :
     Kernel.decisionDist
-        (KernelAlgebra.zero unitCostModel ToyAddress)
+        (KernelCost.zero unitCostModel ToyAddress)
         (toyNetworkAdapter sec) (fun output => !output.value) 1
         (innerInitial sec) = PMF.pure true := by
   simp [Kernel.decisionDist, Kernel.runCosted, Kernel.stepOne,
@@ -407,9 +408,8 @@ variable {family : ITMFamily unitCostModel ToyAddress toySchema}
 noncomputable def unitStepCertificate
     (network : (sec : CryptoLib.Core.SecPar) → NetworkAdapter family sec) :
     StepCostCertificate
-      (KernelAlgebra.zero unitCostModel ToyAddress) network where
+      (KernelCost.zero unitCostModel ToyAddress) network where
   component := unitComponentCertificate family
-  kernel := KernelAlgebra.zeroBounds unitCostModel ToyAddress
   atomBudget := fun _sec => ()
   zero_le_atomBudget := by
     intro sec
@@ -427,8 +427,7 @@ noncomputable def unitStepCertificate
     intro sec address
     exact unitCostModel.instPartialOrder.le_refl ()
   kernelBudget_le := by
-    intro sec Result operation
-    cases operation
+    intro sec primitive addresses
     exact unitCostModel.instPartialOrder.le_refl ()
 
 /--
@@ -449,7 +448,7 @@ class ToyExecutionAdmissionModel : Prop where
         (Output := fun sec _configuration =>
           Kernel.ExecutionResult family policy sec)
         (fun sec configuration =>
-          Kernel.runCosted (KernelAlgebra.zero unitCostModel ToyAddress)
+          Kernel.runCosted (KernelCost.zero unitCostModel ToyAddress)
             (network sec) 1 configuration)
         (fun _sec => 0)
 
@@ -462,7 +461,7 @@ noncomputable def deadlockPPTCertificate
     (queue_empty : ∀ sec, (initial sec).queue = [])
     (output_none : ∀ sec, (initial sec).output = none) :
     PPTExecutionCertificate unitNatMeasure
-      (KernelAlgebra.zero unitCostModel ToyAddress) network initial where
+      (KernelCost.zero unitCostModel ToyAddress) network initial where
   step := unitStepCertificate network
   activationLimit := fun _sec => 1
   stepRuntime := fun _sec => 0
@@ -476,7 +475,7 @@ noncomputable def deadlockPPTCertificate
     noTimeout := by
       intro sec result hresult
       have run_eq :
-          Kernel.runCosted (KernelAlgebra.zero unitCostModel ToyAddress)
+          Kernel.runCosted (KernelCost.zero unitCostModel ToyAddress)
               (network sec) 1 (initial sec) =
             RandCosted.pure unitCostModel
               ({ outcome := Kernel.ExecutionOutcome.deadlock
@@ -494,7 +493,7 @@ noncomputable def deadlockPPTCertificate
     stable := by
       intro sec extra
       have execution_eq (fuel : Nat) :
-          Kernel.runCosted (KernelAlgebra.zero unitCostModel ToyAddress)
+          Kernel.runCosted (KernelCost.zero unitCostModel ToyAddress)
               (network sec) (fuel + 1) (initial sec) =
             RandCosted.pure unitCostModel
               ({ outcome := Kernel.ExecutionOutcome.deadlock
@@ -564,7 +563,7 @@ noncomputable def observingWorld :
     RealWorld unitCostModel Unit Bool Unit Unit toySchema :=
   composeReal observingEnvironment observingProtocol observingAdversary
     observingNetwork CorruptionPolicy.incorruptible
-      (KernelAlgebra.zero unitCostModel ToyAddress) observingInitial
+      (KernelCost.zero unitCostModel ToyAddress) observingInitial
 
 noncomputable def environmentOwnedOutput (sec : CryptoLib.Core.SecPar) :
     MachineOutput observingWorld.family sec :=
@@ -665,10 +664,10 @@ noncomputable def realDeadlockData
       ClosedWorldAddress.environment) :
     RealExecutionData CorruptionPolicy.incorruptible environment
       observingProtocol adversary observingNetwork where
-  kernelAlgebra := KernelAlgebra.zero unitCostModel ToyAddress
+  kernelCost := KernelCost.zero unitCostModel ToyAddress
   initial := realDeadlockInitial adversary environment
   certificate := deadlockPPTCertificate
-    (fun sec => observingNetwork.adapter
+    (fun sec => CryptoLib.UC.Network.adapter observingNetwork
       (dispatchFamily environment.toEnvironment.machine
         observingProtocol.machine adversary.toAdversary.machine
         observingNetwork.machine) sec)
@@ -682,10 +681,10 @@ noncomputable def idealDeadlockData
       ClosedWorldAddress.environment) :
     IdealExecutionData CorruptionPolicy.incorruptible environment
       observingFunctionality simulator observingNetwork where
-  kernelAlgebra := KernelAlgebra.zero unitCostModel ToyAddress
+  kernelCost := KernelCost.zero unitCostModel ToyAddress
   initial := idealDeadlockInitial simulator environment
   certificate := deadlockPPTCertificate
-    (fun sec => observingNetwork.adapter
+    (fun sec => CryptoLib.UC.Network.adapter observingNetwork
       (dispatchFamily environment.toEnvironment.machine
         observingFunctionality.machine simulator.toSimulator.machine
         observingNetwork.machine) sec)

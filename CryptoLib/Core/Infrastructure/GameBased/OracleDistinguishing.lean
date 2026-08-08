@@ -1,11 +1,11 @@
-import CryptoLib.Core.Infrastructure.Complexity.OracleMachine
+import CryptoLib.Oracle.Complexity.Machine
 import CryptoLib.Core.Infrastructure.GameBased.Indistinguishability
 import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 namespace CryptoLib.Core.Infrastructure.GameBased.OracleDistinguishing
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.Computation.Oracle
+open CryptoLib.Oracle
 
 universe uCost uIn uOracle uQuery uResponse uState
 
@@ -36,7 +36,7 @@ noncomputable def securityGame
     (env :
       (sec : CryptoLib.Core.SecPar) → (input : Input sec) →
         OracleEnv.{uOracle, uQuery, uResponse, uState} (Spec sec input))
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M Input
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M Input
       (fun _sec _input => Bool) Spec) :
     CryptoLib.Core.Infrastructure.Computation.Game Bool :=
   fun sec =>
@@ -46,7 +46,7 @@ noncomputable def securityGame
 /-- The left-side oracle distinguishing game. -/
 noncomputable def leftSecurityGame
     (problem : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M Input
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M Input
       (fun _sec _input => Bool) Spec) :
     CryptoLib.Core.Infrastructure.Computation.Game Bool :=
   securityGame problem problem.leftEnv adversary
@@ -54,7 +54,7 @@ noncomputable def leftSecurityGame
 /-- The right-side oracle distinguishing game. -/
 noncomputable def rightSecurityGame
     (problem : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M Input
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M Input
       (fun _sec _input => Bool) Spec) :
     CryptoLib.Core.Infrastructure.Computation.Game Bool :=
   securityGame problem problem.rightEnv adversary
@@ -72,7 +72,7 @@ def Hard
         OracleSpec.{uOracle, uQuery, uResponse}}
     (problem : Problem.{uIn, uOracle, uQuery, uResponse, uState} Input Spec) :
     Prop :=
-  ∀ adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+  ∀ adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       adversaryModel measure Input (fun _sec _input => Bool) Spec,
     CryptoLib.Core.Infrastructure.GameBased.Indistinguishable
       (leftSecurityGame problem adversary.toOracleMachine)

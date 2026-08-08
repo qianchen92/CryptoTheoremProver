@@ -5,7 +5,7 @@ import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 
 universe uCost uParameter uScalar uGroup
 
@@ -20,7 +20,7 @@ variable
 theorem concreteDDHReductionTimed_runtime_proof
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.TimedOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.TimedOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -35,7 +35,7 @@ theorem concreteDDHReductionTimed_runtime_proof
 theorem reductionOperationalAdapter_close_proof
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
@@ -49,7 +49,7 @@ theorem reductionOperationalAdapter_close_proof
 theorem reductionOperationalAdapter_closedRuntime_proof
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.TimedOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.TimedOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -65,7 +65,7 @@ theorem reductionOperationalAdapter_closedRuntime_proof
 theorem concreteReductionRuntime_isPoly_proof
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -87,7 +87,7 @@ theorem concreteReductionRuntime_isPoly_proof
 theorem concreteDDHReduction_admission_proof
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.PPTOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.PPTOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)

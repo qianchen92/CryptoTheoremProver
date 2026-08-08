@@ -1,7 +1,7 @@
 import CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal.Construction
 import CryptoLib.Program.Builder
 import CryptoLib.Program.Semantics
-import CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Syntax
+import CryptoLib.Primitive.Encryption.AsymmetricEncryption.Syntax
 
 namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGamal
 
@@ -16,16 +16,6 @@ variable
   {Carrier : Type uGroup}
   (F : Family M Parameter Scalar Carrier)
   (pp : PublicParam.{uCost, uScalar, uGroup} M Scalar Carrier)
-
-/--
-ElGamal's construction-local setup program delegates to the authoritative DDH
-family setup rather than defining a second parameter-generation algorithm.
--/
-def setupProgram :
-    CryptoLib.Core.Infrastructure.Computation.Program
-      (CryptoLib.Core.Assumption.DL.DDH.familyAlgebra F) CryptoLib.Core.SecPar
-      (ULift.{max uScalar uGroup} Parameter) :=
-  CryptoLib.Core.Assumption.DL.DDH.setupProgram F
 
 /-- ElGamal key generation over the DDH parameter's sole exact algebra. -/
 def keygenProgram :
@@ -61,16 +51,13 @@ def decryptProgram :
 
 /-- ElGamal executes setup, key generation, encryption, and decryption only through Programs. -/
 noncomputable def scheme :
-    CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Scheme
+    CryptoLib.Primitive.Encryption.AsymmetricEncryption.Scheme
       M CryptoLib.Core.SecPar Parameter
       (PublicKey (Carrier := Carrier))
       (SecretKey (Scalar := Scalar))
       (Message (Carrier := Carrier))
       (Ciphertext (Carrier := Carrier)) where
-  setup := fun sec =>
-    CryptoLib.Core.Infrastructure.Computation.Cost.RandCosted.map ULift.down
-      (CryptoLib.Core.Infrastructure.Computation.Program.runCosted
-        (setupProgram F) sec)
+  setup := fun sec => F.setup sec
   keygen := fun parameter =>
     let pp := F.publicParam parameter
     CryptoLib.Program.Builder.runCosted

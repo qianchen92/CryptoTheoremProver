@@ -1,14 +1,15 @@
 import CryptoLib.Program.Core
 import CryptoLib.Core.Infrastructure.Computation.Cost.Measure
 import CryptoLib.Core.Infrastructure.Computation.Randomized
-import CryptoLib.Core.Infrastructure.Complexity.OracleMachineCore
+import CryptoLib.Oracle.Complexity.MachineCore
 import CryptoLib.Core.Infrastructure.SecurityParameter
 
 namespace CryptoLib.Core.Infrastructure.Complexity
 
 open CryptoLib.Core.Infrastructure.Computation
 open CryptoLib.Core.Infrastructure.Computation.Cost
-open CryptoLib.Core.Infrastructure.Computation.Oracle
+open CryptoLib.Oracle
+open CryptoLib.Oracle.Complexity
 
 universe uArtifact uClaim uCost uValue uBase uOp uClosedInput uCallerInput uOutput
   uOracle uQuery uResponse

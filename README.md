@@ -34,10 +34,15 @@ Lake available, build the library and all compile-time proof tests with:
 lake build
 ```
 
-The default targets are `CryptoLib.Core`, `CryptoLib.Program`,
-`CryptoLib.Instantiation`, and `CryptoLib.Test`. To check the layers
-separately, use `lake build CryptoLib.Core`, `lake build CryptoLib.Program`,
-`lake build CryptoLib.Instantiation`, or `lake build CryptoLib.Test`. The files
+The default targets are `CryptoLib.Core`, `CryptoLib.Algebra`, `CryptoLib.Program`, `CryptoLib.Oracle`,
+`CryptoLib.UC`, `CryptoLib.Assumption`, `CryptoLib.Primitive`,
+`CryptoLib.Protocol`, `CryptoLib.Instantiation`, and `CryptoLib.Test`. To
+check the layers separately, use `lake build CryptoLib.Core`,
+`lake build CryptoLib.Algebra`, `lake build CryptoLib.Program`,
+`lake build CryptoLib.Oracle`, `lake build CryptoLib.UC`,
+`lake build CryptoLib.Assumption`, `lake build CryptoLib.Primitive`,
+`lake build CryptoLib.Protocol`, `lake build CryptoLib.Instantiation`, or
+`lake build CryptoLib.Test`. The files
 under `CryptoLib/Test/` are theorem-level
 regression and smoke tests; a successful build is the test result.
 
@@ -62,48 +67,78 @@ CryptoLib/Core/
     Computation/
       Cost/          # Model -> Writer -> Randomized -> PathBound
                      # Model -> Measure; PathBound + Measure -> Projection
-      Algebra/       # Signature -> Handler -> Laws / Bounds -> Operation
-      Program/       # Syntax -> Semantics -> Execution / Bounds
-      Oracle/        # Spec -> Trace -> Program -> Handler -> Interpreter
-                     #      -> Bounds -> Composition
       Randomized.lean
       Game.lean
       Basic.lean
     Complexity/
       CostBound.lean
       Machine.lean
-      ProgramMachine.lean
-      OracleImplementation.lean
-      OracleMachine.lean
       Basic.lean
     GameBased/
       Advantage.lean
       Indistinguishability.lean
       Distinguishing.lean
-      OracleDistinguishing.lean
       Search.lean
       Hybrid.lean
       Basic.lean
-    UC/
-      Session.lean
-      Port.lean
-      Message.lean
-      ITM.lean
-      Corruption.lean
-      Configuration.lean
-      Kernel.lean
-      Complexity.lean
-      Protocol.lean
-      Functionality.lean
-      Composition.lean
-      Execution.lean
-      Security.lean
-      Context.lean
-      Layered.lean
-      Basic.lean
-  Assumption/
-    DL/
-  Primitive/
+CryptoLib/Algebra/
+  Basic.lean
+  Generic/
+    Parameter.lean
+    Signature.lean
+    Handler.lean
+    Laws.lean
+    Bounds.lean
+    Operation.lean
+CryptoLib/Program/
+  Core.lean
+  Type.lean
+  Signature.lean
+  Algebra.lean       # AST/runtime algebra bridge
+  Syntax.lean
+  Builder.lean
+  Semantics.lean
+  Execution.lean
+  Operation.lean
+  Validation.lean
+  Bounds.lean
+CryptoLib/Oracle/
+  Basic.lean
+  Spec.lean
+  Trace.lean
+  Program.lean
+  Handler.lean
+  Interpreter.lean
+  Bounds.lean
+  Composition.lean
+  Complexity/
+    Implementation.lean
+    MachineCore.lean
+    Machine.lean
+CryptoLib/UC/
+  Basic.lean
+  Session.lean
+  Port.lean
+  Message.lean
+  ITM.lean
+  Corruption.lean
+  Configuration.lean
+  Kernel.lean
+  Complexity.lean
+  Composition.lean
+  Execution.lean
+  Security.lean
+  Context.lean
+  Layered.lean
+CryptoLib/Assumption/
+  Basic.lean
+  DL/
+    Parameter.lean
+    DLog.lean
+    DDH.lean
+  Program/
+    DL/DDH.lean
+CryptoLib/Primitive/
     Encryption/
       AsymmetricEncryption/
         Syntax.lean
@@ -113,25 +148,10 @@ CryptoLib/Core/
         Syntax.lean
         UC.lean
         Properties/
-CryptoLib/Program/
+CryptoLib/Protocol/
   Basic.lean
-  CryptoLib.Core.lean
-  Type.lean
-  Signature.lean
-  Algebra.lean
-  Syntax.lean
-  Builder.lean
-  Semantics.lean
-  Execution.lean
-  Operation.lean
-  Validation.lean
-  Bounds.lean
-  Algebra/
-    AdditiveGroup.lean
-    ScalarAction.lean
-  Assumption/
-    DL/
-      DDH.lean
+  Components.lean
+  Functionality.lean
 CryptoLib/Instantiation/
   Basic.lean
   Primitive/
@@ -183,9 +203,11 @@ CryptoLib/Test/
 
 ### `CryptoLib.Core.Infrastructure`
 
-Reusable infrastructure shared by assumptions, primitives, and protocols.
-This layer contains asymptotic vocabulary, randomized computations, games,
-oracles, cost models, machine models, and generic game-based proof concepts.
+Reusable foundational infrastructure shared by all higher layers. This layer
+contains security parameters, probability, randomized computations, games,
+cost models, machine models, asymptotics, and generic game-based proof
+concepts. Oracle and UC semantics are sibling top-level layers rather than
+subdirectories of Core.
 
 ### `CryptoLib.Core.Infrastructure.SecurityParameter`
 
@@ -227,34 +249,14 @@ Reusable semantic infrastructure for cryptographic formalization.
   projections preserve value distributions. `CostModel.nat` and
   `NatMeasure.nat` are ordinary concrete choices, not compatibility aliases or
   a second API.
-- `Computation.Algebra` defines result-indexed `Signature`s and
-  `CostedAlgebra M S` in the order
-  `Signature -> Handler -> Laws / Bounds -> Operation`. Pure signatures do not
-  depend on PMFs or costs. `CostedAlgebra.exec` is the sole exact primitive
-  interpreter; `AlgebraLaws` specify cost-erased mathematics and distributions,
-  while `OperationBounds` independently certifies upper bounds. Typed signature
-  sums and result indices support heterogeneous and dependent operations.
-  Sampling likewise has one exact handler, a separate uniformity law, and a
-  separate bound. No operation-cost typeclass supplies a second exact cost.
-- `Program A Input Output` is a typed heterogeneous algebraic program language.
-  Its modules are `Syntax`, `Semantics`, `Execution`, and `Bounds`.
-  `runCosted` is the only execution semantics and `valueDist` only erases that
-  result. Structural `Execution` is proved equivalent to membership in
-  `runCosted.support`. `BoundedProgram` stores the same `Program` plus an
-  input-dependent certificate; sequencing uses ordered addition and a branch
-  uses either an explicit common upper bound or `WorstCaseCostModel.sup`.
-- `Computation.Oracle` follows
-  `Spec -> Trace -> Program -> Handler -> Interpreter -> Bounds -> Composition`.
-  `Program` contains only syntax: a query constructor carries no cost. Exact
-  `QueryIssue` constructors and `CostedOracleEnv` live in `Handler`, while path
-  certificates first appear in `Bounds`. The result-indexed issue algebra is
-  the sole source of caller-side issue cost, while `CostedOracleEnv` is the sole
-  exact implemented-oracle handler. `Program.runExact` is the only structural
-  interpreter. Exact cost, local cost, implemented-oracle cost, and query trace
-  are separate projections; `runCosted`, ordinary `runWithEnv`, and trace views
-  are maps or erasures of that run. Ordinary environments enter through a
-  named zero-cost lift. `PossibleExecution` deliberately overapproximates
-  responses, and only interpreter support implies a possible execution.
+- `CryptoLib.Program` is the separate trusted first-order AST. Its
+  `Code` interpreter is the only execution path for reified straight-line
+  programs; cost erasure and bounds are derived from that same code.
+- Oracle semantics follows `Spec -> Trace -> Handler -> Interpreter -> Bounds
+  -> Composition` in `CryptoLib.Oracle`. Its query syntax contains no cost. A
+  direct dependent `issueCost` function is the sole source of caller-side
+  issue cost, while `CostedOracleEnv` is the sole exact implemented-oracle
+  handler.
 - `Randomized` packages security-parameter-indexed `RandCosted M`
   computations. Probability semantics is always obtained by erasing the exact
   cost from that same computation.
@@ -298,26 +300,15 @@ Semantic complexity notions used by constructions and security games.
   below the PPT boundary, but cannot preserve or manufacture operational
   admission; there is no parallel ordinary/dependent or deterministic/decider
   hierarchy.
-- `ProgramMachine` retains the program's native cost model. `NatMeasure` is
-  used only to prove a uniform runtime and never rewrites the exact result into
-  a natural-cost computation. Because the current program syntax is
-  higher-order, `PPTMachine.ofBoundedProgram` also requires independent
-  admission for its exact run.
-- `OracleImplementation -> TimedOracleImplementation ->
-  PPTOracleImplementation` certifies the authoritative `CostedOracleEnv`, its
-  input-dependent query budget, measured uniform query runtime, repeat-cost
-  monotonicity, and polynomiality.
-- `OracleMachine -> TimedOracleMachine -> PPTOracleMachine` stores one oracle
-  program and independently certifies input-dependent local work, per-name
-  query counts, total query count, uniform local runtime, and uniform total
-  query runtime. Composition constructs one ordinary machine with exact budget
-  `localBudget + repeatCost totalQueryBudget envBudget` and runtime
-  `localRuntime + totalQueryRuntime * envRuntime`. `CostExchange` is requested
-  only by the exact theorem that regroups interleaved work;
-  `NatMeasure.map_nsmul` proves the measured theorem, and the PPT constructor
-  requires both polynomial closure and independent admission of the closed
-  run. `PPTOracleMachine` itself likewise carries caller admission. Query
-  counts are never inferred from cost or runtime.
+- `TimedMachine.ofFirstOrderProgram` and `PPTMachine.ofFirstOrderCode` bridge
+  the trusted first-order program layer to the machine/admission hierarchy.
+  `NatMeasure` is used only to prove a uniform runtime and never rewrites the
+  exact result into a natural-cost computation.
+- Oracle-specific implementation and machine certificates live in
+  `CryptoLib.Oracle.Complexity`, where they refine this generic machine core.
+  `OracleMachine -> TimedOracleMachine -> PPTOracleMachine` stores one oracle
+  program and independently certifies local work, query counts, and runtimes;
+  query counts are never inferred from cost or runtime.
 
 This layer may depend on `CryptoLib.Core.Infrastructure.Asymptotic` and
 `CryptoLib.Core.Infrastructure.Computation`, but should not depend on specific
@@ -330,24 +321,15 @@ denotation equation, and claim equation indexed by the same execution and
 claimed runtime. Internal `ValidCode` constructors are restricted to the
 canonical first-order interpreter; the generic library provides no constructor
 for arbitrary host functions.
-For `Program` computations, costs are generated by the selected algebra handler
-and accumulated by the interpreter; callers do not attach a total
-cost after defining the algorithm. Exact handlers, cost-erased algebra laws,
-and operation bounds are separate records. A `BoundedProgram` derives an
-input-dependent bound compositionally from the primitive bounds; the machine
-constructor statically relates its runtime field to the measured budget. It
-does not synthesize a closed-form security-parameter bound independently of the
-supplied program family.
-
-The general `Program` language remains an engineering-level higher-order
-syntax: values passed to `pure`, continuation functions, and branch conditions
-remain Lean terms, so `PPTMachine.ofBoundedProgram` still needs independent
-admission. The separate `CryptoLib.Program` core removes those host
-continuations and derives operational admission internally for a fixed reified
-program. It is deliberately straight-line and has no recursion, loops, RAM, or
-encoded bit-level representation. A concrete interpretation must still justify
-that its bottom algebra operations and declared primitive costs adequately
-model the intended platform; external backends use the explicit
+For `RandCosted` computations, costs are generated by the selected algebra
+handler and accumulated by the computation itself; callers do not attach a
+total cost after defining the algorithm. Exact handlers, cost-erased algebra
+laws, and operation bounds are separate records. The trusted first-order
+`CryptoLib.Program` layer reifies straight-line code and derives operational
+admission internally for a fixed program. It has no recursion, loops, RAM, or
+encoded bit-level representation. A concrete interpretation must still
+justify that its bottom algebra operations and declared primitive costs
+adequately model the intended platform; external backends use the explicit
 `ExternalValidCode` boundary.
 
 ### `CryptoLib.Core.Infrastructure.GameBased`
@@ -371,7 +353,21 @@ Generic security notions that are not tied to one primitive.
 Primitive-specific games live under the corresponding primitive. This layer
 contains only shared, semantically meaningful game boundaries.
 
-### `CryptoLib.Core.Infrastructure.UC`
+### `CryptoLib.Algebra`
+
+The algebra layer contains reusable result-indexed signatures, exact cost
+handlers, algebra laws, operation bounds, and generic algebraic operations.
+It depends only on Core cost/probability infrastructure. It is independent of
+oracle and UC semantics; those layers use their own explicit cost functions.
+
+### `CryptoLib.Oracle`
+
+Oracle specifications, traces, handlers, interpreters, deferred sampling,
+composition, and oracle-specific complexity certificates live here. Oracle
+programs charge through a direct `issueCost` function and do not depend on the
+generic Algebra layer.
+
+### `CryptoLib.UC`
 
 The UC layer is an exact, typed ITM execution stack rather than a wrapper around
 oracle games:
@@ -403,7 +399,7 @@ Session -> Port -> Message -> ITM -> Corruption -> Configuration
   leakage handler, removes honest state, marks the address corrupted, and
   queues a typed leakage activation for adversarial control.
 - `Kernel` charges dequeue, initialization, state access, routing, enqueue,
-  erasure, corruption, and finish through a typed `KernelAlgebra`. Its sole
+  erasure, corruption, and finish through a direct `KernelCost` function. Its sole
   fuel-bounded `runCosted` activates at most one ITM per step and returns
   output, timeout, or deadlock. Timeout and deadlock map to `false`; neither a
   cost certificate nor a fuel certificate is inspected by the runner.
@@ -454,12 +450,18 @@ Session -> Port -> Message -> ITM -> Corruption -> Configuration
 
 This remains infrastructure rather than a catalog of completed UC protocols.
 Concrete statements must instantiate the port schema, components, policy,
-initial configuration, exact kernel algebra, complexity certificates, and
+initial configuration, exact kernel cost function, complexity certificates, and
 operational context simulations.
 
-### `CryptoLib.Core.Assumption`
+### `CryptoLib.Assumption`
 
 Computational assumptions, organized by family.
+
+`CryptoLib.Assumption` is a sibling library above both `CryptoLib.Core` and
+`CryptoLib.Program`. Its mathematical families use the reusable Core
+infrastructure, while the library-level aggregation also includes the
+first-order Program adapters needed to expose executable algebra handlers.
+`CryptoLib.Core` and `CryptoLib.Program` do not import this layer.
 
 Discrete logarithm and DDH live directly in `Assumption.DL.DLog` and
 `Assumption.DL.DDH`. They share a cyclic-action parameter layer, while the
@@ -474,15 +476,17 @@ Their exact algebras contain no local upper bounds. A
 `ParamEfficiencyCertificate` packages `OperationBounds` for the same algebra
 and derives fixed-parameter challenge and sampling bounds. Family-level typed
 signatures dispatch setup and parameter-dependent operations selected by its
-result. DLog's complete sample and DDH's real and random samples are
-`CryptoLib.Core.Infrastructure.Computation.Program`s
-over those handlers. A family-level `EfficiencyCertificate` supplies global
-setup and sampling `CostBound` proofs. Consequently, assumptions and exact
+result. DLog's complete sample and DDH's real and random samples are now
+expressed directly as probability computations over those handlers.
+Executable straight-line programs live only in `CryptoLib.Program`; assumption
+adapters that connect those programs to DDH live under
+`CryptoLib.Assumption.Program`. Cost certificates are attached where an
+executable construction needs them. Consequently, assumptions and exact
 constructions such as ElGamal depend on the same native family algebra, while
 efficiency certificates only bound already-defined execution paths. These
 modules state the assumptions; they do not prove them.
 
-### `CryptoLib.Core.Primitive`
+### `CryptoLib.Primitive`
 
 Cryptographic primitives and their primitive-specific syntax, correctness, and
 security definitions.
@@ -497,7 +501,7 @@ The current encryption hierarchy contains:
 - `Primitive.Encryption.SymmetricEncryption.Properties`
 
 The main symmetric-encryption interface is
-`CryptoLib.Core.Primitive.Encryption.SymmetricEncryption.Scheme M SecPar Param Key Message Ciphertext`.
+`CryptoLib.Primitive.Encryption.SymmetricEncryption.Scheme M SecPar Param Key Message Ciphertext`.
 It is generic in its `CostModel`; `setup`, `keygen`, `encrypt`, and `decrypt`
 all return `RandCosted M`. `Key`, `Message`, and `Ciphertext` are indexed by
 the sampled public parameters. Correctness and security notions observe
@@ -508,53 +512,66 @@ ordinary values through `setupDist`, `keygenDist`, `encryptDist`, and
 exact zero advantage.
 
 The main asymmetric-encryption interface is
-`CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption.Scheme M SecPar Param PublicKey SecretKey Message Ciphertext`.
+`CryptoLib.Primitive.Encryption.AsymmetricEncryption.Scheme M SecPar Param PublicKey SecretKey Message Ciphertext`.
 It follows the same `RandCosted M` design for public parameters, key
 generation, public-key encryption, and secret-key decryption. Its IND-CPA
-definition remains an `Infrastructure.GameBased.OracleDistinguishing` problem
+definition remains a
+`CryptoLib.Core.Infrastructure.GameBased.OracleDistinguishing` problem
 over the cost-erased value distributions and keeps the same arbitrary PPT
 adversary domain.
 
 ### `CryptoLib.Program`
 
-The trusted first-order language and its reusable algebra adapters live
-together in the separate `CryptoLib.Program` library. The core modules are
+The trusted first-order language lives in the separate `CryptoLib.Program`
+library. The core modules are
 `Type`, `Signature`, `Algebra`, `Syntax`, `Builder`, `Semantics`, `Execution`,
 `Operation`, `Validation`, and `Bounds`; `CryptoLib.Program.Core` aggregates
-exactly those modules. `Ty` contains base carriers, unit, booleans, and
-products; `Expr`, `Var`, and `Env` give a typed de Bruijn representation; and
-`Code` contains only return, pure let, primitive call, and represented branch
-nodes. Code stores neither Lean continuations nor function-valued syntax.
+the AST-facing modules, while the sibling `CryptoLib.Algebra.Generic` contains
+the lower-level result-indexed `Signature`, exact `CostedAlgebra`,
+`AlgebraLaws`, `OperationBounds`, and reusable primitive operations. `Ty`
+contains base carriers, unit, booleans, and products; `Expr`, `Var`, and `Env`
+give a typed de Bruijn representation; and `Code` contains only return, pure
+let, primitive call, and represented branch nodes. Code stores neither Lean
+continuations nor function-valued syntax.
 
 The adapter subtrees own generic object-language bases, interpretations,
 signatures, smart-operation embeddings, host-value lift/projection boundaries,
-and exact handler bridges. Assumption-specific modules such as
-`CryptoLib.Program.Assumption.DL.DDH` may package reusable cost-erasure facts.
+and exact handler bridges. Assumption-specific adapters live in
+`CryptoLib.Assumption.Program`, rather than in the trusted Program core.
 `ValidAlgebra` exposes the bottom operations as the primitive boundary while
 preventing an arbitrary sampler distribution from entering internal
 validation.
 
-Core modules depend only on lower `CryptoLib.Core` cost and probability infrastructure;
-adapter modules may additionally depend on the corresponding abstract algebra
-or assumption definitions. The sole direct import in the other direction is
-`CryptoLib.Core.Infrastructure.Complexity.Operational -> CryptoLib.Program.Core`, which
-keeps internally validated first-order admission as a closed `ValidCode`
-constructor without importing adapters. `CryptoLib.Program` contains no
-construction algorithms, assembled schemes, security definitions, complexity
+The Algebra layer depends only on Core cost/probability infrastructure.
+Oracle and UC infrastructure deliberately do not depend on that Algebra layer:
+they use explicit cost functions and retain only their own computation and
+protocol semantics. The operational-admission bridge separately imports
+`CryptoLib.Program.Core`; neither bridge imports Program adapters or Assumption.
+Assumption-specific adapters are kept in `CryptoLib.Assumption`.
+`CryptoLib.Program` contains no construction algorithms, assembled schemes,
+security definitions, complexity
 certificates, or concrete backend choices. Import `CryptoLib.Program.Core` for
-only the trusted language, `CryptoLib.Program.Basic` for the core plus all
-current adapters, or a narrow module when defining a construction.
+only the trusted AST, `CryptoLib.Algebra.Generic.Basic` for the generic
+algebra layer, `CryptoLib.Program.Basic` for the AST plus current adapters, or
+a narrow module when defining a construction.
+
+### `CryptoLib.Protocol`
+
+Protocol-layer components are the UC roles that are shared by real and ideal
+world composition: addressed environments, protocols, adversaries,
+simulators, networks, and ideal functionalities. This package depends on the
+generic UC ITM types but not on the Algebra layer.
 
 ### `CryptoLib.Instantiation`
 
 Parameterized algorithms and protocol constructions live in the separate
-`CryptoLib.Instantiation` library. It depends on `CryptoLib.Core` and
-`CryptoLib.Program`;
+`CryptoLib.Instantiation` library. It depends on `CryptoLib.Core`,
+`CryptoLib.Program`, and `CryptoLib.Assumption`;
 neither lower library imports it. The current constructions include a
 group-based one-time pad and ElGamal. They work over abstract cost-aware
 parameter families; the production package does not yet choose a concrete
-group representation or implementation backend. A future
-`CryptoLib.Backend` library is reserved for such concrete choices.
+group representation or implementation backend. A future `CryptoLib.Backend`
+library is reserved for such concrete choices.
 The one-time pad exposes the finite nonempty additive group chosen for the
 security parameter, encrypts by addition, and decrypts by negation followed by
 addition.
@@ -577,17 +594,18 @@ closure. The original `Properties/INDCPA.lean` path remains the aggregate
 entry point.
 
 Import `CryptoLib.Instantiation.Basic` to obtain all current parameterized
-constructions. Importing `CryptoLib.Core` or `CryptoLib.Core.Primitive.Basic`
-exposes only the
-core definitions, assumptions, infrastructure, and generic properties;
-`CryptoLib.Program.Basic` exposes adapters but no schemes.
+constructions. Importing `CryptoLib.Core` exposes only foundational definitions
+and infrastructure; `CryptoLib.Primitive.Basic` exposes primitive interfaces
+and their generic properties. `CryptoLib.Assumption.Basic` exposes assumption
+families and their Program adapters; `CryptoLib.Program.Basic` exposes the
+trusted language and generic adapters but no assumptions or schemes.
 
 Both construction-level `scheme` definitions directly inhabit this generic
 interface. OTP, DLog, DDH, and ElGamal each use one typed algebra as the only
 primitive execution source. Their decomposed algorithm bodies are
 `CryptoLib.Program.Procedure`s;
-scheme fields run those programs directly, while an exact family setup is the
-primitive called by the family-level setup program where one is needed.
+scheme fields run those programs directly, while an exact family setup remains
+the family primitive rather than a second AST program.
 Value-distribution equations used by correctness and security erase costs from
 that execution. OTP has no dummy scalar capability. ElGamal reuses the DDH
 family algebra and setup rather than defining a second arithmetic
@@ -599,17 +617,20 @@ another cost semantics.
 The primitive-level `UC.lean` files are reserved for primitive-specific UC
 formulations, such as ideal functionalities or emulation statements for the
 corresponding primitive. The reusable UC execution and protocol machinery
-belongs in `CryptoLib.Core.Infrastructure.UC`; primitive-level files should import and
+belongs in `CryptoLib.UC`; primitive-level files should import and
 instantiate that machinery only when they introduce concrete UC definitions.
 
 ## Import Policy
 
 `Basic.lean` files are aggregation modules for their own library layer. Import
 them when a caller wants that layer; otherwise prefer the narrow file that
-provides the needed definition. `CryptoLib.Core.Basic` does not aggregate
-`CryptoLib.Program.Basic` or its adapters; its operational-admission layer
-imports only `CryptoLib.Program.Core`. `CryptoLib.Program.Basic` never aggregates
-constructions.
+provides the needed definition. `CryptoLib.Core.Basic` imports only Core
+infrastructure; it does not aggregate `CryptoLib.Program.Basic`,
+`CryptoLib.Assumption.Basic`, or constructions. Its operational-admission
+layer imports `CryptoLib.Program.Core`.
+`CryptoLib.Program.Basic` never aggregates assumptions or constructions.
+`CryptoLib.Assumption.Basic` is the aggregation point for assumption families
+and their Program adapters.
 
 The enforced dependency direction is:
 
@@ -621,44 +642,48 @@ Cost.Model -> Cost.Writer -> Cost.Randomized -> Cost.PathBound
 Cost.Model -> Cost.Measure
 Cost.PathBound + Cost.Measure -> Cost.Projection
 
-Cost -> Algebra -> Program
-SecurityParameter + Cost + Algebra -> Oracle
-Asymptotic + Computation -> Complexity -> GameBased -> UC
+Core -> Algebra -> Program
+Core -> Oracle
+Core -> UC -> Protocol
+Core + Algebra + Program -> Assumption / Primitive
+Core + Algebra + Program + Assumption + Primitive -> Instantiation
 
-Probability ---------------------------------------> Assumption / Primitive
-Program / Oracle / GameBased / UC -----------------> Assumption / Primitive
-
-CryptoLib.Core Cost / Probability -> CryptoLib.Program core
 CryptoLib.Program core -> CryptoLib.Core Complexity.Operational
-CryptoLib.Core definitions + CryptoLib.Program core -> CryptoLib.Program adapters
-  -> CryptoLib.Instantiation -> future CryptoLib.Backend
+Oracle and UC use explicit cost/protocol semantics and do not depend on the
+generic Algebra layer.
 ```
 
 `SecurityParameter` and `Probability` are independent roots; in particular,
 neither imports asymptotics or computation. `scripts/check_infrastructure_imports.py`
 checks exact project-module resolution, the Infrastructure hierarchy, the
-first-order core order, the core-only operational bridge, and the
-`CryptoLib.Program`/`CryptoLib.Instantiation`/`CryptoLib.Backend` boundary; CI runs
+first-order core order, the Core-to-Program operational bridge, and the
+Core/Algebra/Program/Oracle/UC/Assumption/Primitive/Protocol/Instantiation
+package boundary; CI runs
 it before Lean builds. Infrastructure subsystems additionally enforce their
-file-local orders, including Algebra, Program, Oracle, Complexity, GameBased,
-and the UC kernel stack.
+file-local orders, including Program, Oracle, Complexity, GameBased, and the
+UC kernel stack.
 
 ## Adding New Material
 
-- Put infrastructure code under `Infrastructure`.
+- Put foundational infrastructure code under `CryptoLib/Core/Infrastructure/`.
 - Put only `SecPar` in `Infrastructure.SecurityParameter`; put polynomial and
   negligible predicates in `Infrastructure.Asymptotic`.
 - Put cost-independent PMF constructions in `Infrastructure.Probability`.
-- Put reusable game, oracle, computation, cost, or algebra semantics in
-  the corresponding ordered sublayer of `Infrastructure.Computation`.
-- Put exact/runtime/polynomial certificates, unified dependent machines,
-  program-to-machine adapters, and oracle implementation/machine certificates
-  in `Infrastructure.Complexity`.
+- Put reusable game, computation, and cost semantics in the corresponding
+  ordered sublayer of `CryptoLib/Core/Infrastructure/`.
+- Put oracle specifications, handlers, interpreters, and oracle complexity in
+  `CryptoLib/Oracle/`.
+- Put the generic result-indexed Algebra (`Signature`, `CostedAlgebra`, laws,
+  bounds, and primitive operations) under `CryptoLib/Algebra/Generic/`.
+- Put exact/runtime/polynomial certificates and unified dependent machines in
+  `CryptoLib/Core/Infrastructure/Complexity/`; put oracle implementation and
+  machine certificates in `CryptoLib/Oracle/Complexity/`.
 - Put generic advantage, indistinguishability, hybrid, distinguishing, oracle
-  distinguishing, and search notions in `Infrastructure.GameBased`.
+  distinguishing, and search notions in `CryptoLib/Core/Infrastructure/GameBased/`.
 - Put reusable typed ITM, corruption, FIFO-kernel, closed-world, UC-security,
-  context-composition, and layered-MPC definitions in `Infrastructure.UC`.
-- Put assumption families in `Assumption/<family>/`.
+  context-composition, and layered-MPC definitions in `CryptoLib/UC/`.
+- Put assumption families in `CryptoLib/Assumption/<family>/`; keep any
+  assumption-specific Program adapters under `CryptoLib/Assumption/Program/`.
 - Put primitive-specific abstract syntax, correctness, and security games in
   `Primitive/<kind>/<primitive>/`, with `Syntax.lean` and `UC.lean` as direct
   files and generic theorems under `Properties/`.
@@ -870,7 +895,7 @@ and certificate hierarchy. There is one dependent machine core, one exact
 Program interpreter, and one structural Oracle interpreter. Oracle local cost,
 per-name queries, total queries, implementation cost, measured runtime, and
 polynomial closure form one certificate chain. The UC layer has a typed FIFO
-kernel, exact kernel algebra, dynamic corruption, real/ideal world wiring,
+kernel, exact kernel cost function, dynamic corruption, real/ideal world wiring,
 PPT-certified roles, common-fuel execution, standard UC quantifiers, and an
 operationally certified context-composition theorem. Its public Boolean game
 is fixed by the typed environment output, real and ideal executions share one
@@ -879,9 +904,10 @@ dispatcher rather than metadata-only components.
 
 OTP, ElGamal, DLog, and DDH use the generic typed-algebra-to-`RandCosted`
 path, with efficiency bounds treated as certificates over those exact
-executions. All four use the same typed
-`CryptoLib.Core.Infrastructure.Computation.Program` layer and none has an
-alternate fixed-natural-cost API. The minimal first-order operational model now
+executions. Executable first-order code is defined only in
+`CryptoLib.Program`; mathematical assumption definitions remain separate from
+the AST, while their Program adapters live in `CryptoLib.Assumption`. The
+minimal first-order operational model now
 covers straight-line algebraic code and finite uniform sampling. The next
 useful refinements are iteration and representation-level machine costs,
 concrete protocol instantiations of the UC kernel and context interface, and an

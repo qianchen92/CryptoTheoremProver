@@ -7,8 +7,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open CryptoLib.Program.Adapter.OneShotChoiceAdd
 open scoped DDHParameter
 
@@ -26,7 +26,7 @@ admission premise. -/
 noncomputable def concreteDDHReductionTimed
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.TimedOracleMachine
+    (adversary : CryptoLib.Oracle.Complexity.TimedOracleMachine
       M measure
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
@@ -34,7 +34,7 @@ noncomputable def concreteDDHReductionTimed
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.Complexity.TimedMachine M measure
-      (fun _sec => CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+      (fun _sec => CryptoLib.Assumption.DL.DDH.ChallengeInput F)
       (fun _sec _challenge => Bool) where
   toProbabilisticMachine :=
     concreteDDHReduction F efficiency adversary.toOracleMachine rightMessage
@@ -116,7 +116,7 @@ noncomputable def reductionOperationalAdapter
     (efficiency : ReductionEfficiencyCertificate measure F)
     (rightMessage : Bool) :
     CryptoLib.Core.Infrastructure.Complexity.FirstOrderOracleAdapter M measure
-      (fun _sec => CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+      (fun _sec => CryptoLib.Assumption.DL.DDH.ChallengeInput F)
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec => Bool)
       (indCPAOracleSpec

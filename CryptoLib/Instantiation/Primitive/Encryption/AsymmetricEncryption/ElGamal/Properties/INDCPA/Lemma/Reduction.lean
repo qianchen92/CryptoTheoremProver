@@ -6,8 +6,8 @@ namespace CryptoLib.Instantiation.Primitive.Encryption.AsymmetricEncryption.ElGa
 
 open CryptoLib.Core.Infrastructure.Computation.Cost
 open CryptoLib.Core.Infrastructure.Computation
-open CryptoLib.Core.Infrastructure.Computation.Oracle
-open CryptoLib.Core.Primitive.Encryption.AsymmetricEncryption
+open CryptoLib.Oracle
+open CryptoLib.Primitive.Encryption.AsymmetricEncryption
 open CryptoLib.Program.Adapter.OneShotChoiceAdd
 open scoped DDHParameter
 
@@ -24,7 +24,7 @@ variable
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F) :
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F) :
     reductionPrepare F efficiency sec challenge =
       RandCosted.liftCosted
         (⟨reductionPublicInput F sec challenge,
@@ -56,7 +56,7 @@ variable
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F) :
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F) :
     RandCosted.valueDist (reductionPrepare F efficiency sec challenge) =
       PMF.pure (reductionPublicInput F sec challenge) := by
   unfold reductionPrepare
@@ -86,7 +86,7 @@ variable
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F)
     (rightMessage : Bool) :
     (costedReductionOracle F efficiency sec challenge rightMessage).erase =
       reductionOracle F sec challenge rightMessage := by
@@ -103,7 +103,7 @@ theorem costedReductionOracle_queryCostBoundAt
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F)
     (rightMessage : Bool)
     (htag : F.parameterSec challenge.parameter = sec) :
     (costedReductionOracle F efficiency sec challenge rightMessage).QueryCostBoundAt
@@ -144,14 +144,14 @@ theorem costedReductionOracle_queryCostBoundAt
 @[simp] theorem concreteDDHReduction_runDist
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F) :
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F) :
     (concreteDDHReduction F efficiency adversary rightMessage).runDist
         sec challenge =
       if F.parameterSec challenge.parameter = sec then
@@ -173,14 +173,14 @@ theorem costedReductionOracle_queryCostBoundAt
 theorem concreteDDHReduction_runDist_eq_semantic
     (F : Family M Parameter Scalar Carrier)
     (efficiency : ReductionEfficiencyCertificate measure F)
-    (adversary : CryptoLib.Core.Infrastructure.Complexity.OracleMachine M
+    (adversary : CryptoLib.Oracle.Complexity.OracleMachine M
       (PublicInput Parameter (PublicKey (Carrier := Carrier)))
       (fun _sec _input => Bool)
       (indCPAOracleSpec
         (Message (Carrier := Carrier)) (Ciphertext (Carrier := Carrier))))
     (rightMessage : Bool)
     (sec : CryptoLib.Core.SecPar)
-    (challenge : CryptoLib.Core.Assumption.DL.DDH.ChallengeInput F)
+    (challenge : CryptoLib.Assumption.DL.DDH.ChallengeInput F)
     (htag : F.parameterSec challenge.parameter = sec) :
     (concreteDDHReduction F efficiency adversary rightMessage).runDist
         sec challenge =
